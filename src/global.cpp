@@ -47,7 +47,6 @@ void set_program_directory() {
 #define NOMINMAX
 #define WIN32LEANANDMEAN
 #include <windows.h>
-#define PATH_MAX MAX_PATH
 #else
 #include <unistd.h>
 #endif
@@ -62,7 +61,7 @@ static int64_t get_raw_program_name(char* buffer, size_t cap) {
 
 static bool get_program_name(cz::Allocator allocator, cz::String* program_name) {
     program_name->len = 0;
-    program_name->reserve_exact(allocator, PATH_MAX);
+    program_name->reserve_exact(allocator, 256);
 
     while (1) {
         int64_t count = get_raw_program_name(program_name->buffer, program_name->cap);
