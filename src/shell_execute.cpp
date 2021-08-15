@@ -360,6 +360,8 @@ static void generate_environment(void* out_arg,
     *out = table.buffer;
 #else
     char*** out = (char***)out_arg;
+    table.reserve(cz::heap_allocator(), 1);
+    table.push(nullptr);
     *out = table.clone(temp_allocator).elems;
 #endif
 }
