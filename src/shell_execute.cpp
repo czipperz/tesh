@@ -312,7 +312,7 @@ static void push_environment(cz::Vector<char*>* table, cz::Str key, cz::Str valu
     entry.null_terminate();
 
     table->reserve(cz::heap_allocator(), 1);
-    table->push(entry);
+    table->push(entry.buffer);
 }
 #endif
 
