@@ -2,7 +2,8 @@
 
 This repository provides a base project for C++ projects.
 
-It is licensed under the MIT license so you may use any license in the project you create.
+This repository is licensed under GPL3.  If you wish to
+purchase a different license, email czipperz AT gmail DOT com.
 
 Features:
 * CMake build script.
