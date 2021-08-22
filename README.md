@@ -45,18 +45,20 @@ git submodule update
 3. After building, MYPROJECT can be ran via `./build/release/MYPROJECT`.
 
 ## Optimizing
-We use Tracy to optimize MYPROJECT.  See the
-[manual](https://bitbucket.com/wolfpld/tracy/downloads/tracy.pdf) for more information.
 
-To prepare we have to build MYPROJECT with Tracy enabled and also build Tracy's
-profiler.  Once both are built, we then run the profiler and MYPROJECT at the same time.
+You can use Tracy to profile your project.  See [the Tracy manual] for more information.
+
+[the Tracy manual]: https://bitbucket.com/wolfpld/tracy/downloads/tracy.pdf
+
+First we have to build the Tracy configuration of MYPROJECT and build the Tracy
+profiler.  Then run the profiler, and finally run the Tracy build of MYPROJECT.
 
 Build MYPROJECT with Tracy enabled:
 ```
 ./build-tracy
 ```
 
-Build `tracy/profiler` by following the instructions in the Tracy manual.  On *nix:
+Build `tracy/profiler` by following the instructions in the Tracy manual.  For example, on *nix:
 ```
 cd tracy/profiler/build/unix
 make release
@@ -64,7 +66,7 @@ make release
 
 Then we run Tracy:
 ```
-./tracy/profiler/build/unix/Tracy-release
+./tracy/profiler/build/unix/Tracy-release &
 ```
 
 Then run MYPROJECT with Tracy enabled.  Run it as the
