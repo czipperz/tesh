@@ -16,6 +16,14 @@ Getting started:
 2. Change all instances of `MYPROJECTURL` with the url of your project.
 3. Change all instances of `MYPROJECT` with the name of your project.
 4. Delete this part of the readme.
+5. Relicense the project.
+
+The template project builds a program.  To make a library:
+1. Change step 3 of the build instructions below.
+2. Delete or rewrite the Optimizing section.
+3. Make the following changes to `CMakeLists.txt`:
+   a. Remove all lines including `PROGRAM_NAME`.
+   b. Change `LIBRARY_NAME` to `${PROJECT_NAME}` (no `-test` suffix).
 
 ## Building
 
