@@ -7,7 +7,6 @@ build
 
 # Generated files
 valgrind.txt
-CMakeSettings.json
 compile_commands.json
 GPATH
 GRTAGS
