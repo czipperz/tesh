@@ -16,8 +16,8 @@ Getting started:
 1. Clone the repository by following step 1 of [Building](#Building).
 2. Change all instances of `MYPROJECTURL` with the url of your project.
 3. Change all instances of `MYPROJECT` with the name of your project.
-4. Delete this part of the readme.
-5. Relicense the project.
+4. Update `cz` submodule.
+5. Delete this part of the readme.
 
 The template project builds a program.  To make a library:
 1. Change step 3 of the build instructions below.
