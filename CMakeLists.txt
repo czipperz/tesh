@@ -7,11 +7,26 @@ project(MYPROJECT)
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# Build main executable.
+set(PROGRAM_NAME ${PROJECT_NAME})
+set(LIBRARY_NAME ${PROJECT_NAME}-lib)
+set(TEST_PROGRAM_NAME ${PROJECT_NAME}-test)
+
+# Build wrapper executable.
+add_executable(${PROGRAM_NAME} main.cpp)
+target_link_libraries(${PROGRAM_NAME} ${LIBRARY_NAME} cz tracy)
+
+# Add test program.
+if (MYPROJECT_BUILD_TESTS)
+    file(GLOB_RECURSE TEST_SRCS tests/*.cpp)
+    add_executable(${TEST_PROGRAM_NAME} ${TEST_SRCS})
+    target_include_directories(${TEST_PROGRAM_NAME} PUBLIC cz/test_base)
+    target_link_libraries(${TEST_PROGRAM_NAME} ${LIBRARY_NAME} cz tracy)
+    target_link_libraries(${TEST_PROGRAM_NAME} czt)
+endif()
+
+# Build library with all actual code.
 file(GLOB_RECURSE SRCS src/*.cpp)
-add_executable(${PROJECT_NAME} ${SRCS})
-target_link_libraries(${PROJECT_NAME} cz)
-target_link_libraries(${PROJECT_NAME} tracy)
+add_library(${LIBRARY_NAME} ${SRCS})
 
 # Run GNU Global if it is available.
 if (WIN32)
