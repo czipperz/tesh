@@ -11,6 +11,9 @@ set(PROGRAM_NAME ${PROJECT_NAME})
 set(LIBRARY_NAME ${PROJECT_NAME}-lib)
 set(TEST_PROGRAM_NAME ${PROJECT_NAME}-test)
 
+set(CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake ${CMAKE_MODULE_PATH})
+include(cmake/SetupSDL2.cmake)
+
 # Build wrapper executable.
 add_executable(${PROGRAM_NAME} main.cpp)
 target_link_libraries(${PROGRAM_NAME} ${LIBRARY_NAME} cz tracy)

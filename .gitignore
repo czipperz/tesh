@@ -11,3 +11,8 @@ compile_commands.json
 GPATH
 GRTAGS
 GTAGS
+
+# Downloaded files
+SDL
+IMG
+TTF
