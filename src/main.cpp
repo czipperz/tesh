@@ -165,8 +165,20 @@ static void render_prompt(SDL_Surface* window_surface, Render_State* rend, Promp
         render_prompt_char(window_surface, rend, font_height, &point, c);
     }
     for (size_t i = 0; i < prompt->text.len; ++i) {
+        if (prompt->cursor == i) {
+            SDL_Rect fill_rect = {point.x, point.y, 2, font_height};
+            uint32_t foreground = SDL_MapRGB(window_surface->format, rend->prompt_fg_color.r,
+                                             rend->prompt_fg_color.g, rend->prompt_fg_color.b);
+            SDL_FillRect(window_surface, &fill_rect, foreground);
+        }
         char c = prompt->text[i];
         render_prompt_char(window_surface, rend, font_height, &point, c);
+    }
+    if (prompt->cursor == prompt->text.len) {
+        SDL_Rect fill_rect = {point.x, point.y, 2, font_height};
+        uint32_t foreground = SDL_MapRGB(window_surface->format, rend->prompt_fg_color.r,
+                                         rend->prompt_fg_color.g, rend->prompt_fg_color.b);
+        SDL_FillRect(window_surface, &fill_rect, foreground);
     }
 }
 
