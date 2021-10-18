@@ -123,31 +123,42 @@ static void render_frame(SDL_Window* window, Render_State* rend, Buffer_State* b
     }
 }
 
-static bool process_events(Buffer_State* buf, Render_State* rend) {
+static int process_events(Buffer_State* buf, Render_State* rend) {
     ZoneScoped;
 
+    int num_events = 0;
     for (SDL_Event event; SDL_PollEvent(&event);) {
         switch (event.type) {
         case SDL_QUIT:
-            return true;
+            return -1;
+
+        case SDL_WINDOWEVENT:
+            // TODO: handle these events.
+            ++num_events;
+            break;
 
         case SDL_KEYDOWN:
             if (event.key.keysym.sym == SDLK_ESCAPE)
-                return true;
-            if (event.key.keysym.sym == SDLK_RETURN)
+                return -1;
+            if (event.key.keysym.sym == SDLK_RETURN) {
                 append_text(buf, "\n");
+                ++num_events;
+            }
             if (event.key.keysym.sym == SDLK_BACKSPACE) {
-                if (buf->char_index > 0)
+                if (buf->char_index > 0) {
                     --buf->char_index;
+                    ++num_events;
+                }
             }
             break;
 
         case SDL_TEXTINPUT:
             append_text(buf, event.text.text);
+            ++num_events;
             break;
         }
     }
-    return false;
+    return num_events;
 }
 
 #ifdef _WIN32
@@ -194,10 +205,12 @@ int actual_main(int argc, char** argv) {
     while (1) {
         uint32_t start_frame = SDL_GetTicks();
 
-        if (process_events(&buf, &rend))
+        int status = process_events(&buf, &rend);
+        if (status < 0)
             break;
 
-        render_frame(window, &rend, &buf);
+        if (status > 0)
+            render_frame(window, &rend, &buf);
 
         const uint32_t frame_length = 1000 / 60;
         uint32_t wanted_end = start_frame + frame_length;
