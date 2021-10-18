@@ -273,6 +273,18 @@ static int process_events(Backlog_State* backlog, Prompt_State* prompt, Render_S
                     ++num_events;
                 }
             }
+            if (event.key.keysym.sym == SDLK_LEFT) {
+                if (prompt->cursor > 0) {
+                    --prompt->cursor;
+                    ++num_events;
+                }
+            }
+            if (event.key.keysym.sym == SDLK_RIGHT) {
+                if (prompt->cursor < prompt->text.len) {
+                    ++prompt->cursor;
+                    ++num_events;
+                }
+            }
             break;
 
         case SDL_TEXTINPUT: {
