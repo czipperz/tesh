@@ -1,8 +1,8 @@
 # On Windows we download these manually.
 if (WIN32)
-    set(SDL2_DIR SDL)
-    set(SDL2_IMAGE_PATH IMG)
-    set(SDL2_TTF_PATH TTF)
+    set(SDL2_DIR ${CMAKE_SOURCE_DIR}/SDL)
+    set(SDL2_IMAGE_PATH ${CMAKE_SOURCE_DIR}/IMG)
+    set(SDL2_TTF_PATH ${CMAKE_SOURCE_DIR}/TTF)
 endif()
 
 find_package(SDL2 REQUIRED)
