@@ -53,7 +53,7 @@ static SDL_Surface* rasterize_character_cached(Render_State* rend, char ch) {
 static void append_text(Buffer_State* buf, cz::Str text) {
     uint64_t overhang = INNER_INDEX(buf->char_index + text.len);
     uint64_t inner = INNER_INDEX(buf->char_index);
-    if (overhang <= text.len) {
+    if (overhang < text.len) {
         uint64_t underhang = text.len - overhang;
         if (underhang > 0) {
             memcpy(buf->buffers.last() + inner, text.buffer + 0, underhang);
@@ -171,6 +171,13 @@ const int font_size = 12;
 int actual_main(int argc, char** argv) {
     Render_State rend = {};
     Buffer_State buf = {};
+
+    {
+        buf.buffers.reserve(cz::heap_allocator(), 1);
+        char* buffer = (char*)cz::heap_allocator().alloc({4096, 1});
+        CZ_ASSERT(buffer);
+        buf.buffers.push(buffer);
+    }
 
     if (SDL_Init(SDL_INIT_VIDEO) != 0) {
         fprintf(stderr, "SDL_Init failed: %s\n", SDL_GetError());
