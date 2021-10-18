@@ -14,6 +14,10 @@ struct Render_State {
     uint64_t render_start = 0;
     SDL_Color background_color;
     SDL_Color foreground_color;
+
+    bool complete_redraw;
+    uint64_t end_buffers_index;
+    SDL_Rect end_buffers_point;
 };
 
 struct Buffer_State {
@@ -75,32 +79,34 @@ static void render_characters(SDL_Surface* window_surface, Render_State* rend, B
     ZoneScoped;
     int font_height = rasterize_character_cached(rend, 'a')->h;
 
-    SDL_Rect point = {};
-    for (uint64_t i = rend->render_start; i < buf->char_index; ++i) {
+    SDL_Rect* point = &rend->end_buffers_point;
+    uint64_t i = rend->end_buffers_index;
+    for (; i < buf->char_index; ++i) {
         char c = buf->buffers[OUTER_INDEX(i)][INNER_INDEX(i)];
 
         if (c == '\n') {
-            point.x = 0;
-            point.y += font_height;
+            point->x = 0;
+            point->y += font_height;
             continue;
         }
 
         SDL_Surface* s = rasterize_character_cached(rend, c);
-        if (point.x + s->w > window_surface->w) {
-            point.x = 0;
-            point.y += font_height;
+        if (point->x + s->w > window_surface->w) {
+            point->x = 0;
+            point->y += font_height;
         }
         // Beyond bottom of screen.
-        if (point.y >= window_surface->h)
+        if (point->y >= window_surface->h)
             break;
 
         {
             ZoneScopedN("blit_character");
-            SDL_BlitSurface(s, NULL, window_surface, &point);
+            SDL_BlitSurface(s, NULL, window_surface, point);
         }
 
-        point.x += s->w;
+        point->x += s->w;
     }
+    rend->end_buffers_index = i;
 }
 
 static void render_frame(SDL_Window* window, Render_State* rend, Buffer_State* buf) {
@@ -110,17 +116,25 @@ static void render_frame(SDL_Window* window, Render_State* rend, Buffer_State* b
 
     uint32_t background = SDL_MapRGB(window_surface->format, rend->background_color.r,
                                      rend->background_color.g, rend->background_color.b);
-    {
+    if (rend->complete_redraw) {
         ZoneScopedN("draw_background");
         SDL_FillRect(window_surface, NULL, background);
+
+        rend->end_buffers_index = rend->render_start;
+        rend->end_buffers_point = {};
     }
 
     render_characters(window_surface, rend, buf);
 
-    {
+    if (rend->complete_redraw) {
+        ZoneScopedN("update_window_surface");
+        SDL_UpdateWindowSurface(window);
+    } else {
         ZoneScopedN("update_window_surface");
         SDL_UpdateWindowSurface(window);
     }
+
+    rend->complete_redraw = false;
 }
 
 static int process_events(Buffer_State* buf, Render_State* rend) {
@@ -134,6 +148,7 @@ static int process_events(Buffer_State* buf, Render_State* rend) {
 
         case SDL_WINDOWEVENT:
             // TODO: handle these events.
+            rend->complete_redraw = true;
             ++num_events;
             break;
 
@@ -171,6 +186,8 @@ const int font_size = 12;
 int actual_main(int argc, char** argv) {
     Render_State rend = {};
     Buffer_State buf = {};
+
+    rend.complete_redraw = true;
 
     {
         buf.buffers.reserve(cz::heap_allocator(), 1);
@@ -215,6 +232,10 @@ int actual_main(int argc, char** argv) {
         int status = process_events(&buf, &rend);
         if (status < 0)
             break;
+
+        // TODO: remove this test.
+        append_text(&buf, "sandwichsandwichsandwichsandwich");
+        status = 1;
 
         if (status > 0)
             render_frame(window, &rend, &buf);
