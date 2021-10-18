@@ -4,6 +4,6 @@ set -e
 
 cd "$(dirname "$0")"
 
-./run-build.sh build/debug Debug -DMYPROJECT_BUILD_TESTS=1
+./run-build.sh build/debug Debug -DTESH_BUILD_TESTS=1
 
 ./build/debug/*-test --use-colour=no

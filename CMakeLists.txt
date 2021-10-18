@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.3)
 
 # TODO: rename me!
-project(MYPROJECT)
+project(TESH)
 
 # Force c++11.
 set(CMAKE_CXX_STANDARD 11)
@@ -19,7 +19,7 @@ add_executable(${PROGRAM_NAME} main.cpp)
 target_link_libraries(${PROGRAM_NAME} ${LIBRARY_NAME} cz tracy)
 
 # Add test program.
-if (MYPROJECT_BUILD_TESTS)
+if (TESH_BUILD_TESTS)
     file(GLOB_RECURSE TEST_SRCS tests/*.cpp)
     add_executable(${TEST_PROGRAM_NAME} ${TEST_SRCS})
     target_include_directories(${TEST_PROGRAM_NAME} PUBLIC src cz/test_base)

@@ -21,7 +21,7 @@ int actual_main(int argc, char** argv) {
     CZ_DEFER(TTF_Quit());
 
     SDL_Window* window =
-        SDL_CreateWindow("MYPROJECT", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 800, 800,
+        SDL_CreateWindow("tesh", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 800, 800,
                          SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE);
     if (!window) {
         fprintf(stderr, "SDL_CreateWindow failed: %s\n", SDL_GetError());
