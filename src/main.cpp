@@ -541,6 +541,18 @@ static int process_events(Backlog_State* backlog,
                 rend->complete_redraw = true;
                 ++num_events;
             }
+            if (mod == KMOD_CTRL && event.key.keysym.sym == SDLK_v) {
+                uint64_t lines = 20;
+                scroll_down(rend, backlog, lines);
+                rend->complete_redraw = true;
+                ++num_events;
+            }
+            if (mod == KMOD_ALT && event.key.keysym.sym == SDLK_v) {
+                uint64_t lines = 20;
+                scroll_up(rend, backlog, lines);
+                rend->complete_redraw = true;
+                ++num_events;
+            }
         } break;
 
         case SDL_TEXTINPUT: {
