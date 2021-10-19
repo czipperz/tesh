@@ -282,7 +282,7 @@ static void set_backlog_process(Backlog_State* backlog, uint64_t process_id) {
     backlog->last_process_id = process_id;
 }
 
-static void append_text(Backlog_State* backlog, cz::Str text, uint64_t process_id) {
+static void append_text(Backlog_State* backlog, uint64_t process_id, cz::Str text) {
     if (process_id != backlog->last_process_id)
         set_backlog_process(backlog, process_id);
 
@@ -350,7 +350,7 @@ static bool read_process_data(Process_State* proc, Backlog_State* backlog) {
             result = process->out.read_text(buffer, sizeof(buffer), &process->out_carry);
             if (result <= 0)
                 break;
-            append_text(backlog, {buffer, (size_t)result}, process->id);
+            append_text(backlog, process->id, {buffer, (size_t)result});
             changes = true;
         }
 
@@ -403,13 +403,13 @@ static int process_events(Backlog_State* backlog,
             if (event.key.keysym.sym == SDLK_ESCAPE)
                 return -1;
             if (event.key.keysym.sym == SDLK_RETURN) {
-                append_text(backlog, "\n", -1);
-                append_text(backlog, prompt->prefix, prompt->process_id);
-                append_text(backlog, prompt->text, prompt->process_id);
-                append_text(backlog, "\n", prompt->process_id);
+                append_text(backlog, -1, "\n");
+                append_text(backlog, prompt->process_id, prompt->prefix);
+                append_text(backlog, prompt->process_id, prompt->text);
+                append_text(backlog, prompt->process_id, "\n");
 
                 if (!run_line(proc, prompt->text, prompt->process_id)) {
-                    append_text(backlog, "Error: failed to execute\n", prompt->process_id);
+                    append_text(backlog, prompt->process_id, "Error: failed to execute\n");
                 }
 
                 prompt->text.len = 0;
