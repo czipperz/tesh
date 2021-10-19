@@ -409,6 +409,7 @@ static void scroll_down(Render_State* rend, Backlog_State* backlog, uint64_t lin
 
 static void scroll_up(Render_State* rend, Backlog_State* backlog, uint64_t lines) {
     // Scroll up.
+    ++lines;
     uint64_t* line_start = &rend->backlog_scroll_screen_start;
     uint64_t cursor = *line_start;
     while (lines > 0 && cursor > 0) {
