@@ -5,6 +5,7 @@
 #include <Tracy.hpp>
 #include <cz/defer.hpp>
 #include <cz/heap.hpp>
+#include <cz/process.hpp>
 #include <cz/string.hpp>
 #include <cz/vector.hpp>
 
@@ -55,6 +56,18 @@ struct Prompt_State {
     cz::String text;
     size_t cursor;
     uint64_t process_id;
+};
+
+struct Process_Info {
+    uint64_t id;
+    cz::Process handle;
+    cz::Output_File in;
+    cz::Input_File out;
+    cz::Carriage_Return_Carry out_carry;
+};
+
+struct Process_State {
+    cz::Vector<Process_Info> processes;
 };
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -294,10 +307,74 @@ static void append_text(Backlog_State* backlog, cz::Str text, uint64_t process_i
 }
 
 ///////////////////////////////////////////////////////////////////////////////
-// Process user events
+// Process control
 ///////////////////////////////////////////////////////////////////////////////
 
-static int process_events(Backlog_State* backlog, Prompt_State* prompt, Render_State* rend) {
+static bool run_line(Process_State* proc, cz::Str line, uint64_t id) {
+    Process_Info process = {};
+    process.id = id;
+
+    cz::Process_Options options;
+    cz::Process_IO io;
+    if (!cz::create_process_pipes(&io, &options))
+        return false;
+    CZ_DEFER(options.close_all());
+
+    process.in = io.std_in;
+    process.out = io.std_out;
+
+    if (!process.in.set_non_blocking())
+        return false;
+    if (!process.out.set_non_blocking())
+        return false;
+
+    if (!process.handle.launch_script(line, options)) {
+        process.in.close();
+        process.out.close();
+        return false;
+    }
+
+    proc->processes.reserve(cz::heap_allocator(), 1);
+    proc->processes.push(process);
+    return true;
+}
+
+static bool read_process_data(Process_State* proc, Backlog_State* backlog) {
+    static char buffer[4096];
+    bool changes = false;
+    for (size_t i = 0; i < proc->processes.len; ++i) {
+        Process_Info* process = &proc->processes[i];
+
+        int64_t result = 0;
+        while (1) {
+            result = process->out.read_text(buffer, sizeof(buffer), &process->out_carry);
+            if (result <= 0)
+                break;
+            append_text(backlog, {buffer, (size_t)result}, process->id);
+            changes = true;
+        }
+
+        if (result == 0) {
+            int exit_code = 1;
+            if (process->handle.try_join(&exit_code)) {
+                process->in.close();
+                process->out.close();
+                proc->processes.remove(i);
+                --i;
+            }
+        }
+    }
+    return changes;
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// User events
+///////////////////////////////////////////////////////////////////////////////
+
+static int process_events(Backlog_State* backlog,
+                          Prompt_State* prompt,
+                          Render_State* rend,
+                          Process_State* proc) {
     ZoneScoped;
 
     int num_events = 0;
@@ -328,9 +405,12 @@ static int process_events(Backlog_State* backlog, Prompt_State* prompt, Render_S
             if (event.key.keysym.sym == SDLK_RETURN) {
                 append_text(backlog, "\n", -1);
                 append_text(backlog, prompt->prefix, prompt->process_id);
-                prompt->text.reserve(cz::heap_allocator(), 1);
-                prompt->text.push('\n');
                 append_text(backlog, prompt->text, prompt->process_id);
+                append_text(backlog, "\n", prompt->process_id);
+
+                if (!run_line(proc, prompt->text, prompt->process_id)) {
+                    append_text(backlog, "Error: failed to execute\n", prompt->process_id);
+                }
 
                 prompt->text.len = 0;
                 prompt->cursor = 0;
@@ -399,6 +479,7 @@ int actual_main(int argc, char** argv) {
     Render_State rend = {};
     Backlog_State backlog = {};
     Prompt_State prompt = {};
+    Process_State proc = {};
 
     prompt.prefix = "$ ";
     rend.complete_redraw = true;
@@ -445,9 +526,12 @@ int actual_main(int argc, char** argv) {
     while (1) {
         uint32_t start_frame = SDL_GetTicks();
 
-        int status = process_events(&backlog, &prompt, &rend);
+        int status = process_events(&backlog, &prompt, &rend, &proc);
         if (status < 0)
             break;
+
+        if (read_process_data(&proc, &backlog))
+            status = 1;
 
         if (status > 0)
             render_frame(window, &rend, &backlog, &prompt);
