@@ -502,6 +502,11 @@ static int process_events(Backlog_State* backlog,
                 prompt->cursor = prompt->text.len;
                 ++num_events;
             }
+            if (mod == KMOD_CTRL && event.key.keysym.sym == SDLK_l) {
+                rend->backlog_scroll_screen_start = backlog->length;
+                rend->complete_redraw = true;
+                ++num_events;
+            }
         } break;
 
         case SDL_TEXTINPUT: {
