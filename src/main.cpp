@@ -259,12 +259,10 @@ static void render_frame(SDL_Window* window,
     render_backlog(window_surface, rend, backlog);
     render_prompt(window_surface, rend, prompt);
 
-    if (rend->complete_redraw) {
+    {
+        const SDL_Rect rects[] = {{0, 0, window_surface->w, window_surface->h}};
         ZoneScopedN("update_window_surface");
-        SDL_UpdateWindowSurface(window);
-    } else {
-        ZoneScopedN("update_window_surface");
-        SDL_UpdateWindowSurface(window);
+        SDL_UpdateWindowSurfaceRects(window, rects, CZ_DIM(rects));
     }
 
     rend->complete_redraw = false;
