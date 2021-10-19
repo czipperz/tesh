@@ -589,6 +589,40 @@ static int process_events(Backlog_State* backlog,
                 rend->complete_redraw = true;
                 ++num_events;
             }
+            if (mod == (KMOD_CTRL | KMOD_ALT) && event.key.keysym.sym == SDLK_b) {
+                size_t event_index = 0;
+                while (event_index < backlog->events.len &&
+                       backlog->events[event_index].index < rend->backlog_scroll_screen_start) {
+                    ++event_index;
+                }
+                while (event_index-- > 0) {
+                    Backlog_Event* event = &backlog->events[event_index];
+                    if (event->type == BACKLOG_EVENT_START_PROMPT) {
+                        rend->backlog_scroll_screen_start = backlog->events[event_index].index;
+                        rend->complete_redraw = true;
+                        ++num_events;
+                        break;
+                    }
+                }
+            }
+            if (mod == (KMOD_CTRL | KMOD_ALT) && event.key.keysym.sym == SDLK_f) {
+                size_t event_index = 0;
+                while (event_index < backlog->events.len &&
+                       backlog->events[event_index].index <= rend->backlog_scroll_screen_start) {
+                    ++event_index;
+                }
+                for (; event_index < backlog->events.len; ++event_index) {
+                    Backlog_Event* event = &backlog->events[event_index];
+                    if (event->type == BACKLOG_EVENT_START_PROMPT) {
+                        rend->backlog_scroll_screen_start = backlog->events[event_index].index;
+                        break;
+                    }
+                }
+                if (event_index >= backlog->events.len)
+                    rend->backlog_scroll_screen_start = backlog->length;
+                rend->complete_redraw = true;
+                ++num_events;
+            }
         } break;
 
         case SDL_TEXTINPUT: {
