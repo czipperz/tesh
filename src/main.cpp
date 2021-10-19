@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <Tracy.hpp>
 #include <cz/defer.hpp>
+#include <cz/env.hpp>
 #include <cz/heap.hpp>
 #include <cz/process.hpp>
 #include <cz/string.hpp>
@@ -696,6 +697,8 @@ int actual_main(int argc, char** argv) {
 
     rend.backlog_fg_color = {0xdd, 0xdd, 0xdd, 0xff};
     rend.prompt_fg_color = {0x77, 0xf9, 0xff, 0xff};
+
+    cz::env::set("PAGER", "cat");
 
     while (1) {
         uint32_t start_frame = SDL_GetTicks();
