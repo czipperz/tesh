@@ -392,6 +392,33 @@ static bool read_process_data(Process_State* proc, Backlog_State* backlog) {
 // User events
 ///////////////////////////////////////////////////////////////////////////////
 
+static void scroll_down(Render_State* rend, Backlog_State* backlog, uint64_t lines) {
+    uint64_t* line_start = &rend->backlog_scroll_screen_start;
+    uint64_t cursor = *line_start;
+    while (lines > 0 && cursor < backlog->length) {
+        char c = backlog->buffers[OUTER_INDEX(cursor)][INNER_INDEX(cursor)];
+        ++cursor;
+        if (c == '\n') {
+            *line_start = cursor;
+            --lines;
+        }
+    }
+}
+
+static void scroll_up(Render_State* rend, Backlog_State* backlog, uint64_t lines) {
+    // Scroll up.
+    uint64_t* line_start = &rend->backlog_scroll_screen_start;
+    uint64_t cursor = *line_start;
+    while (lines > 0 && cursor > 0) {
+        --cursor;
+        char c = backlog->buffers[OUTER_INDEX(cursor)][INNER_INDEX(cursor)];
+        if (c == '\n') {
+            *line_start = cursor + 1;
+            --lines;
+        }
+    }
+}
+
 static int process_events(Backlog_State* backlog,
                           Prompt_State* prompt,
                           Render_State* rend,
@@ -539,34 +566,13 @@ static int process_events(Backlog_State* backlog,
             event.wheel.x *= 10;
 
             if (event.wheel.y < 0) {
-                // Scroll down.
-                uint64_t* line_start = &rend->backlog_scroll_screen_start;
-                uint64_t cursor = *line_start;
-                while (event.wheel.y < 0 && cursor < backlog->length) {
-                    char c = backlog->buffers[OUTER_INDEX(cursor)][INNER_INDEX(cursor)];
-                    ++cursor;
-                    if (c == '\n') {
-                        *line_start = cursor;
-                        ++event.wheel.y;
-                    }
-                }
-                rend->complete_redraw = true;
-                ++num_events;
+                scroll_down(rend, backlog, -event.wheel.y);
             } else {
-                // Scroll up.
-                uint64_t* line_start = &rend->backlog_scroll_screen_start;
-                uint64_t cursor = *line_start;
-                while (event.wheel.y > 0 && cursor > 0) {
-                    --cursor;
-                    char c = backlog->buffers[OUTER_INDEX(cursor)][INNER_INDEX(cursor)];
-                    if (c == '\n') {
-                        *line_start = cursor + 1;
-                        --event.wheel.y;
-                    }
-                }
-                rend->complete_redraw = true;
-                ++num_events;
+                scroll_up(rend, backlog, event.wheel.y);
             }
+
+            rend->complete_redraw = true;
+            ++num_events;
         } break;
         }
     }
