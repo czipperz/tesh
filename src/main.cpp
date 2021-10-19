@@ -14,6 +14,7 @@
 
 struct Render_State {
     TTF_Font* font;
+    int font_height;
     SDL_Surface* backlog_cache[256];
     SDL_Surface* prompt_cache[256];
 
@@ -80,7 +81,6 @@ static void render_backlog(SDL_Surface* window_surface,
                            Render_State* rend,
                            Backlog_State* backlog) {
     ZoneScoped;
-    int font_height = TTF_FontLineSkip(rend->font);
     SDL_Rect* point = &rend->backlog_end_point;
     uint64_t i = rend->backlog_end_index;
     for (; i < backlog->length; ++i) {
@@ -88,7 +88,7 @@ static void render_backlog(SDL_Surface* window_surface,
 
         if (c == '\n') {
             point->x = 0;
-            point->y += font_height;
+            point->y += rend->font_height;
             continue;
         }
 
@@ -96,7 +96,7 @@ static void render_backlog(SDL_Surface* window_surface,
             rasterize_character_cached(rend, rend->backlog_cache, c, rend->backlog_fg_color);
         if (point->x + s->w > window_surface->w) {
             point->x = 0;
-            point->y += font_height;
+            point->y += rend->font_height;
         }
         // Beyond bottom of screen.
         if (point->y >= window_surface->h)
@@ -105,7 +105,7 @@ static void render_backlog(SDL_Surface* window_surface,
         if (point->x == 0) {
             uint32_t background = SDL_MapRGB(window_surface->format, rend->backlog_bg_color.r,
                                              rend->backlog_bg_color.g, rend->backlog_bg_color.b);
-            SDL_Rect fill_rect = {0, point->y, window_surface->w, font_height};
+            SDL_Rect fill_rect = {0, point->y, window_surface->w, rend->font_height};
             SDL_FillRect(window_surface, &fill_rect, background);
         }
 
@@ -121,19 +121,18 @@ static void render_backlog(SDL_Surface* window_surface,
 
 static void render_prompt_char(SDL_Surface* window_surface,
                                Render_State* rend,
-                               int font_height,
                                SDL_Rect* point,
                                char c) {
     if (c == '\n') {
         point->x = 0;
-        point->y += font_height;
+        point->y += rend->font_height;
         return;
     }
 
     SDL_Surface* s = rasterize_character_cached(rend, rend->prompt_cache, c, rend->prompt_fg_color);
     if (point->x + s->w > window_surface->w) {
         point->x = 0;
-        point->y += font_height;
+        point->y += rend->font_height;
     }
     // Beyond bottom of screen.
     if (point->y >= window_surface->h)
@@ -149,11 +148,10 @@ static void render_prompt_char(SDL_Surface* window_surface,
 
 static void render_prompt(SDL_Surface* window_surface, Render_State* rend, Prompt_State* prompt) {
     ZoneScoped;
-    int font_height = TTF_FontLineSkip(rend->font);
 
     SDL_Rect point = rend->backlog_end_point;
     point.x = 0;
-    point.y += font_height;
+    point.y += rend->font_height;
 
     SDL_Rect prompt_rect = {0, point.y, window_surface->w, window_surface->h - point.y};
     uint32_t background = SDL_MapRGB(window_surface->format, rend->prompt_bg_color.r,
@@ -162,20 +160,20 @@ static void render_prompt(SDL_Surface* window_surface, Render_State* rend, Promp
 
     for (size_t i = 0; i < prompt->prefix.len; ++i) {
         char c = prompt->prefix[i];
-        render_prompt_char(window_surface, rend, font_height, &point, c);
+        render_prompt_char(window_surface, rend, &point, c);
     }
     for (size_t i = 0; i < prompt->text.len; ++i) {
         if (prompt->cursor == i) {
-            SDL_Rect fill_rect = {point.x - 1, point.y, 2, font_height};
+            SDL_Rect fill_rect = {point.x - 1, point.y, 2, rend->font_height};
             uint32_t foreground = SDL_MapRGB(window_surface->format, rend->prompt_fg_color.r,
                                              rend->prompt_fg_color.g, rend->prompt_fg_color.b);
             SDL_FillRect(window_surface, &fill_rect, foreground);
         }
         char c = prompt->text[i];
-        render_prompt_char(window_surface, rend, font_height, &point, c);
+        render_prompt_char(window_surface, rend, &point, c);
     }
     if (prompt->cursor == prompt->text.len) {
-        SDL_Rect fill_rect = {point.x - 1, point.y, 2, font_height};
+        SDL_Rect fill_rect = {point.x - 1, point.y, 2, rend->font_height};
         uint32_t foreground = SDL_MapRGB(window_surface->format, rend->prompt_fg_color.r,
                                          rend->prompt_fg_color.g, rend->prompt_fg_color.b);
         SDL_FillRect(window_surface, &fill_rect, foreground);
@@ -355,6 +353,8 @@ int actual_main(int argc, char** argv) {
         return 1;
     }
     CZ_DEFER(TTF_CloseFont(rend.font));
+
+    rend.font_height = TTF_FontLineSkip(rend.font);
 
     rend.backlog_bg_color = {0x22, 0x22, 0x22, 0xff};
     rend.backlog_fg_color = {0xdd, 0xdd, 0xdd, 0xff};
