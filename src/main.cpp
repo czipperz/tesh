@@ -653,6 +653,13 @@ static int process_events(Backlog_State* backlog,
                 rend->complete_redraw = true;
                 ++num_events;
             }
+            if (mod == KMOD_ALT && event.key.keysym.sym == SDLK_GREATER) {
+                rend->backlog_scroll_screen_start = backlog->length;
+                uint64_t lines = (cz::max)(screen_lines(rend), (uint64_t)3) - 3;
+                scroll_up(rend, backlog, lines);
+                rend->complete_redraw = true;
+                ++num_events;
+            }
             if (mod == (KMOD_CTRL | KMOD_ALT) && event.key.keysym.sym == SDLK_b) {
                 size_t event_index = 0;
                 while (event_index < backlog->events.len &&
