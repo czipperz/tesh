@@ -384,7 +384,14 @@ static int process_events(Backlog_State* backlog,
             return -1;
 
         case SDL_WINDOWEVENT:
-            // TODO: handle these events.
+            // Ignore mouse window events.
+            if (event.window.event == SDL_WINDOWEVENT_ENTER ||
+                event.window.event == SDL_WINDOWEVENT_LEAVE ||
+                event.window.event == SDL_WINDOWEVENT_FOCUS_GAINED ||
+                event.window.event == SDL_WINDOWEVENT_FOCUS_LOST) {
+                continue;
+            }
+
             rend->complete_redraw = true;
             ++num_events;
             break;
