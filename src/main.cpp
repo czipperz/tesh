@@ -137,7 +137,7 @@ static void render_prompt_char(SDL_Surface* window_surface,
     }
     // Beyond bottom of screen.
     if (point->y >= window_surface->h)
-        CZ_PANIC("unimplemented");
+        return;
 
     {
         ZoneScopedN("blit_character");
