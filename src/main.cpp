@@ -507,6 +507,7 @@ static int process_events(Backlog_State* backlog,
                 if (prompt->cursor > 0) {
                     --prompt->cursor;
                     prompt->text.remove(prompt->cursor);
+                    ensure_prompt_on_screen(rend, backlog);
                     ++num_events;
                 }
             }
@@ -514,6 +515,7 @@ static int process_events(Backlog_State* backlog,
                 (mod == KMOD_CTRL && event.key.keysym.sym == SDLK_b)) {
                 if (prompt->cursor > 0) {
                     --prompt->cursor;
+                    ensure_prompt_on_screen(rend, backlog);
                     ++num_events;
                 }
             }
@@ -521,6 +523,7 @@ static int process_events(Backlog_State* backlog,
                 (mod == KMOD_CTRL && event.key.keysym.sym == SDLK_f)) {
                 if (prompt->cursor < prompt->text.len) {
                     ++prompt->cursor;
+                    ensure_prompt_on_screen(rend, backlog);
                     ++num_events;
                 }
             }
@@ -533,6 +536,7 @@ static int process_events(Backlog_State* backlog,
                     prompt->text.reserve(cz::heap_allocator(), hist.len);
                     prompt->text.append(hist);
                     prompt->cursor = prompt->text.len;
+                    ensure_prompt_on_screen(rend, backlog);
                     ++num_events;
                 }
             }
@@ -547,15 +551,18 @@ static int process_events(Backlog_State* backlog,
                         prompt->text.append(hist);
                     }
                     prompt->cursor = prompt->text.len;
+                    ensure_prompt_on_screen(rend, backlog);
                     ++num_events;
                 }
             }
             if (mod == KMOD_ALT && event.key.keysym.sym == SDLK_a) {
                 prompt->cursor = 0;
+                ensure_prompt_on_screen(rend, backlog);
                 ++num_events;
             }
             if (mod == KMOD_ALT && event.key.keysym.sym == SDLK_e) {
                 prompt->cursor = prompt->text.len;
+                ensure_prompt_on_screen(rend, backlog);
                 ++num_events;
             }
             if (mod == KMOD_CTRL && event.key.keysym.sym == SDLK_l) {
