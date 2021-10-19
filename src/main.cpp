@@ -248,8 +248,7 @@ static void render_prompt(SDL_Surface* window_surface, Render_State* rend, Promp
     }
 
     SDL_Rect fill_rect = {point.x, point.y, window_surface->w - point.x, rend->font_height};
-    uint32_t foreground = SDL_MapRGB(window_surface->format, 0, 0, 0);
-    SDL_FillRect(window_surface, &fill_rect, foreground);
+    SDL_FillRect(window_surface, &fill_rect, background);
 
     if (prompt->cursor == prompt->text.len) {
         SDL_Rect fill_rect = {point.x - 1, point.y, 2, rend->font_height};
