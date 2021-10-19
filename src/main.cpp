@@ -56,6 +56,8 @@ struct Prompt_State {
     cz::String text;
     size_t cursor;
     uint64_t process_id;
+    uint64_t history_counter;
+    cz::Vector<cz::Str> history;
 };
 
 struct Process_Info {
@@ -412,6 +414,10 @@ static int process_events(Backlog_State* backlog,
                     append_text(backlog, prompt->process_id, "Error: failed to execute\n");
                 }
 
+                prompt->history.reserve(cz::heap_allocator(), 1);
+                prompt->history.push(prompt->text.clone(cz::heap_allocator()));
+                prompt->history_counter = prompt->history.len;
+
                 prompt->text.len = 0;
                 prompt->cursor = 0;
                 ++prompt->process_id;
@@ -435,6 +441,32 @@ static int process_events(Backlog_State* backlog,
                 (mod == KMOD_CTRL && event.key.keysym.sym == SDLK_f)) {
                 if (prompt->cursor < prompt->text.len) {
                     ++prompt->cursor;
+                    ++num_events;
+                }
+            }
+            if ((mod == 0 && event.key.keysym.sym == SDLK_UP) ||
+                (mod == KMOD_ALT && event.key.keysym.sym == SDLK_p)) {
+                if (prompt->history_counter > 0) {
+                    --prompt->history_counter;
+                    prompt->text.len = 0;
+                    cz::Str hist = prompt->history[prompt->history_counter];
+                    prompt->text.reserve(cz::heap_allocator(), hist.len);
+                    prompt->text.append(hist);
+                    prompt->cursor = prompt->text.len;
+                    ++num_events;
+                }
+            }
+            if ((mod == 0 && event.key.keysym.sym == SDLK_DOWN) ||
+                (mod == KMOD_ALT && event.key.keysym.sym == SDLK_n)) {
+                if (prompt->history_counter < prompt->history.len) {
+                    ++prompt->history_counter;
+                    prompt->text.len = 0;
+                    if (prompt->history_counter < prompt->history.len) {
+                        cz::Str hist = prompt->history[prompt->history_counter];
+                        prompt->text.reserve(cz::heap_allocator(), hist.len);
+                        prompt->text.append(hist);
+                    }
+                    prompt->cursor = prompt->text.len;
                     ++num_events;
                 }
             }
