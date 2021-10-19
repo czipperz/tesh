@@ -445,6 +445,68 @@ static void ensure_prompt_on_screen(Render_State* rend, Backlog_State* backlog) 
     }
 }
 
+static void transform_shift_numbers(SDL_Keysym* keysym) {
+    if (!(keysym->mod & KMOD_SHIFT))
+        return;
+
+    switch (keysym->sym) {
+    case SDLK_1:
+        keysym->sym = SDLK_EXCLAIM;
+        break;
+    case SDLK_2:
+        keysym->sym = SDLK_AT;
+        break;
+    case SDLK_3:
+        keysym->sym = SDLK_HASH;
+        break;
+    case SDLK_4:
+        keysym->sym = SDLK_DOLLAR;
+        break;
+    case SDLK_5:
+        keysym->sym = SDLK_PERCENT;
+        break;
+    case SDLK_6:
+        keysym->sym = SDLK_CARET;
+        break;
+    case SDLK_7:
+        keysym->sym = SDLK_AMPERSAND;
+        break;
+    case SDLK_8:
+        keysym->sym = SDLK_ASTERISK;
+        break;
+    case SDLK_9:
+        keysym->sym = SDLK_LEFTPAREN;
+        break;
+    case SDLK_0:
+        keysym->sym = SDLK_RIGHTPAREN;
+        break;
+    case SDLK_SEMICOLON:
+        keysym->sym = SDLK_COLON;
+        break;
+    case SDLK_COMMA:
+        keysym->sym = SDLK_LESS;
+        break;
+    case SDLK_PERIOD:
+        keysym->sym = SDLK_GREATER;
+        break;
+    case SDLK_MINUS:
+        keysym->sym = SDLK_UNDERSCORE;
+        break;
+    case SDLK_EQUALS:
+        keysym->sym = SDLK_PLUS;
+        break;
+    case SDLK_SLASH:
+        keysym->sym = SDLK_QUESTION;
+        break;
+    case SDLK_QUOTE:
+        keysym->sym = SDLK_QUOTEDBL;
+        break;
+    default:
+        return;
+    }
+    keysym->mod &= ~KMOD_SHIFT;
+}
+
 static int process_events(Backlog_State* backlog,
                           Prompt_State* prompt,
                           Render_State* rend,
@@ -471,6 +533,8 @@ static int process_events(Backlog_State* backlog,
             break;
 
         case SDL_KEYDOWN: {
+            transform_shift_numbers(&event.key.keysym);
+
             int mod = (event.key.keysym.mod & ~(KMOD_CAPS | KMOD_NUM));
             if (mod & KMOD_ALT)
                 mod |= KMOD_ALT;
