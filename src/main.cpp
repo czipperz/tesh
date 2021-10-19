@@ -205,11 +205,13 @@ static void render_prompt(SDL_Surface* window_surface, Render_State* rend, Promp
     ZoneScoped;
 
     SDL_Rect point = rend->backlog_end_point;
-    point.w = window_surface->w - point.x;
-    point.h = rend->font_height;
-    SDL_FillRect(window_surface, &point, SDL_MapRGB(window_surface->format, 0, 0, 0));
-    point.x = 0;
-    point.y += rend->font_height;
+    if (point.x != 0 || point.y != 0) {
+        point.w = window_surface->w - point.x;
+        point.h = rend->font_height;
+        SDL_FillRect(window_surface, &point, SDL_MapRGB(window_surface->format, 0, 0, 0));
+        point.x = 0;
+        point.y += rend->font_height;
+    }
 
     SDL_Color bg_color = process_colors[prompt->process_id % CZ_DIM(process_colors)];
     uint32_t background = SDL_MapRGB(window_surface->format, bg_color.r, bg_color.g, bg_color.b);
@@ -430,6 +432,11 @@ static int process_events(Backlog_State* backlog,
                 return -1;
             if (event.key.keysym.sym == SDLK_RETURN) {
                 append_text(backlog, -1, "\n");
+                if (rend->backlog_scroll_screen_start + 1 == backlog->length) {
+                    ++rend->backlog_scroll_screen_start;
+                    rend->backlog_end_index = rend->backlog_scroll_screen_start;
+                    rend->backlog_end_point = {};
+                }
                 append_text(backlog, prompt->process_id, prompt->prefix);
                 append_text(backlog, -2, prompt->text);
                 append_text(backlog, prompt->process_id, "\n");
