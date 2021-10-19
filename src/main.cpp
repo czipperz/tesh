@@ -523,6 +523,51 @@ static int process_events(Backlog_State* backlog,
             prompt->cursor += text.len;
             ++num_events;
         } break;
+
+        case SDL_MOUSEWHEEL: {
+            if (event.wheel.direction == SDL_MOUSEWHEEL_FLIPPED) {
+                event.wheel.y *= -1;
+                event.wheel.x *= -1;
+            }
+
+// On linux the horizontal scroll is flipped for some reason.
+#ifndef _WIN32
+            event.wheel.x *= -1;
+#endif
+
+            event.wheel.y *= 4;
+            event.wheel.x *= 10;
+
+            if (event.wheel.y < 0) {
+                // Scroll down.
+                uint64_t* line_start = &rend->backlog_scroll_screen_start;
+                uint64_t cursor = *line_start;
+                while (event.wheel.y < 0 && cursor < backlog->length) {
+                    char c = backlog->buffers[OUTER_INDEX(cursor)][INNER_INDEX(cursor)];
+                    ++cursor;
+                    if (c == '\n') {
+                        *line_start = cursor;
+                        ++event.wheel.y;
+                    }
+                }
+                rend->complete_redraw = true;
+                ++num_events;
+            } else {
+                // Scroll up.
+                uint64_t* line_start = &rend->backlog_scroll_screen_start;
+                uint64_t cursor = *line_start;
+                while (event.wheel.y > 0 && cursor > 0) {
+                    --cursor;
+                    char c = backlog->buffers[OUTER_INDEX(cursor)][INNER_INDEX(cursor)];
+                    if (c == '\n') {
+                        *line_start = cursor + 1;
+                        --event.wheel.y;
+                    }
+                }
+                rend->complete_redraw = true;
+                ++num_events;
+            }
+        } break;
         }
     }
     return num_events;
