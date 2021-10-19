@@ -60,6 +60,12 @@ if (TRACY_ENABLE)
     endif()
 endif()
 
+# Enable High DPI
+if (WIN32)
+    target_link_libraries(${PROGRAM_NAME} Shcore.lib)
+    target_link_libraries(${TEST_PROGRAM_NAME} Shcore.lib)
+endif()
+
 # Warnings.
 if(MSVC)
     add_definitions(-D_CRT_SECURE_CPP_OVERLOAD_STANDARD_NAMES=1)

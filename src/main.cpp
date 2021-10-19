@@ -9,6 +9,11 @@
 #include <cz/string.hpp>
 #include <cz/vector.hpp>
 
+#ifdef _WIN32
+#include <shellscalingapi.h>
+#include <windows.h>
+#endif
+
 ///////////////////////////////////////////////////////////////////////////////
 // Type definitions
 ///////////////////////////////////////////////////////////////////////////////
@@ -542,6 +547,10 @@ int actual_main(int argc, char** argv) {
         backlog.buffers.push(buffer);
     }
 
+#ifdef _WIN32
+    SetProcessDpiAwareness(PROCESS_SYSTEM_DPI_AWARE);
+#endif
+
     if (SDL_Init(SDL_INIT_VIDEO) != 0) {
         fprintf(stderr, "SDL_Init failed: %s\n", SDL_GetError());
         return 1;
@@ -554,15 +563,24 @@ int actual_main(int argc, char** argv) {
     }
     CZ_DEFER(TTF_Quit());
 
-    SDL_Window* window = SDL_CreateWindow("tesh", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
-                                          800, 800, SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE);
+    float dpi_scale = 1.0f;
+    {
+        const float dpi_default = 96.0f;
+        float dpi = 0;
+        if (SDL_GetDisplayDPI(0, &dpi, NULL, NULL) == 0)
+            dpi_scale = dpi / dpi_default;
+    }
+
+    SDL_Window* window = SDL_CreateWindow(
+        "tesh", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 800 * dpi_scale, 800 * dpi_scale,
+        SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI);
     if (!window) {
         fprintf(stderr, "SDL_CreateWindow failed: %s\n", SDL_GetError());
         return 1;
     }
     CZ_DEFER(SDL_DestroyWindow(window));
 
-    rend.font = open_font(font_path, font_size);
+    rend.font = open_font(font_path, (int)(font_size * dpi_scale));
     if (!rend.font) {
         fprintf(stderr, "TTF_OpenFont failed: %s\n", SDL_GetError());
         return 1;
