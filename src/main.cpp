@@ -21,13 +21,23 @@ struct Render_State {
     bool complete_redraw;
 
     uint64_t backlog_scroll_screen_start;
-    SDL_Color backlog_bg_color;
     SDL_Color backlog_fg_color;
     uint64_t backlog_end_index;
     SDL_Rect backlog_end_point;
 
-    SDL_Color prompt_bg_color;
     SDL_Color prompt_fg_color;
+};
+
+enum Backlog_Event_Type {
+    BACKLOG_EVENT_START_PROCESS,
+};
+
+struct Backlog_Event {
+    uint64_t index;
+    uint8_t type;
+    union {
+        uint64_t process_id;
+    } v;
 };
 
 struct Backlog_State {
@@ -36,12 +46,24 @@ struct Backlog_State {
 #define INNER_INDEX(index) ((index)&0xfff)
     cz::Vector<char*> buffers;
     uint64_t length;
+    cz::Vector<Backlog_Event> events;
+    uint64_t last_process_id;
 };
 
 struct Prompt_State {
     cz::Str prefix;
     cz::String text;
     size_t cursor;
+    uint64_t process_id;
+};
+
+///////////////////////////////////////////////////////////////////////////////
+// Data
+///////////////////////////////////////////////////////////////////////////////
+
+static SDL_Color process_colors[] = {
+    {0x22, 0, 0, 0xff},    {0, 0x22, 0, 0xff},    {0, 0, 0x22, 0xff},
+    {0x11, 0x11, 0, 0xff}, {0, 0x11, 0x11, 0xff}, {0x11, 0, 0x11, 0xff},
 };
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -77,53 +99,18 @@ static SDL_Surface* rasterize_character_cached(Render_State* rend,
     return surface;
 }
 
-static void render_backlog(SDL_Surface* window_surface,
-                           Render_State* rend,
-                           Backlog_State* backlog) {
-    ZoneScoped;
-    SDL_Rect* point = &rend->backlog_end_point;
-    uint64_t i = rend->backlog_end_index;
-    for (; i < backlog->length; ++i) {
-        char c = backlog->buffers[OUTER_INDEX(i)][INNER_INDEX(i)];
-
-        if (c == '\n') {
-            point->x = 0;
-            point->y += rend->font_height;
-            continue;
-        }
-
-        SDL_Surface* s =
-            rasterize_character_cached(rend, rend->backlog_cache, c, rend->backlog_fg_color);
-        if (point->x + s->w > window_surface->w) {
-            point->x = 0;
-            point->y += rend->font_height;
-        }
-        // Beyond bottom of screen.
-        if (point->y >= window_surface->h)
-            break;
-
-        if (point->x == 0) {
-            uint32_t background = SDL_MapRGB(window_surface->format, rend->backlog_bg_color.r,
-                                             rend->backlog_bg_color.g, rend->backlog_bg_color.b);
-            SDL_Rect fill_rect = {0, point->y, window_surface->w, rend->font_height};
-            SDL_FillRect(window_surface, &fill_rect, background);
-        }
-
-        {
-            ZoneScopedN("blit_character");
-            SDL_BlitSurface(s, NULL, window_surface, point);
-        }
-
-        point->x += s->w;
-    }
-    rend->backlog_end_index = i;
-}
-
-static void render_prompt_char(SDL_Surface* window_surface,
-                               Render_State* rend,
-                               SDL_Rect* point,
-                               char c) {
+static void render_char(SDL_Surface* window_surface,
+                        Render_State* rend,
+                        SDL_Rect* point,
+                        SDL_Surface** cache,
+                        uint32_t background,
+                        SDL_Color foreground,
+                        char c) {
     if (c == '\n') {
+        point->w = window_surface->w - point->x;
+        point->h = rend->font_height;
+        SDL_FillRect(window_surface, point, background);
+
         point->x = 0;
         point->y += rend->font_height;
         return;
@@ -140,38 +127,96 @@ static void render_prompt_char(SDL_Surface* window_surface,
 
     {
         ZoneScopedN("blit_character");
+        point->w = s->w;
+        point->h = rend->font_height;
+        SDL_FillRect(window_surface, point, background);
         SDL_BlitSurface(s, NULL, window_surface, point);
     }
 
     point->x += s->w;
 }
 
+static void render_backlog(SDL_Surface* window_surface,
+                           Render_State* rend,
+                           Backlog_State* backlog) {
+    ZoneScoped;
+    SDL_Rect* point = &rend->backlog_end_point;
+    uint64_t i = rend->backlog_end_index;
+
+    uint64_t process_id = 0;
+    SDL_Color bg_color = process_colors[process_id % CZ_DIM(process_colors)];
+    uint32_t background = SDL_MapRGB(window_surface->format, bg_color.r, bg_color.g, bg_color.b);
+
+    size_t event_index = 0;
+
+    for (; i < backlog->length; ++i) {
+        while (event_index < backlog->events.len && backlog->events[event_index].index <= i) {
+            Backlog_Event* event = &backlog->events[event_index];
+            if (event->type == BACKLOG_EVENT_START_PROCESS) {
+                process_id = event->v.process_id;
+                if (process_id == -1)
+                    bg_color = {};
+                else
+                    bg_color = process_colors[process_id % CZ_DIM(process_colors)];
+                background = SDL_MapRGB(window_surface->format, bg_color.r, bg_color.g, bg_color.b);
+            }
+            ++event_index;
+        }
+
+        char c = backlog->buffers[OUTER_INDEX(i)][INNER_INDEX(i)];
+        render_char(window_surface, rend, point, rend->backlog_cache, background,
+                    rend->backlog_fg_color, c);
+    }
+
+    rend->backlog_end_index = i;
+}
+
 static void render_prompt(SDL_Surface* window_surface, Render_State* rend, Prompt_State* prompt) {
     ZoneScoped;
 
     SDL_Rect point = rend->backlog_end_point;
+    point.w = window_surface->w - point.x;
+    point.h = rend->font_height;
+    SDL_FillRect(window_surface, &point, SDL_MapRGB(window_surface->format, 0, 0, 0));
     point.x = 0;
     point.y += rend->font_height;
 
-    SDL_Rect prompt_rect = {0, point.y, window_surface->w, window_surface->h - point.y};
-    uint32_t background = SDL_MapRGB(window_surface->format, rend->prompt_bg_color.r,
-                                     rend->prompt_bg_color.g, rend->prompt_bg_color.b);
-    SDL_FillRect(window_surface, &prompt_rect, background);
+    SDL_Color bg_color = process_colors[prompt->process_id % CZ_DIM(process_colors)];
+    uint32_t background = SDL_MapRGB(window_surface->format, bg_color.r, bg_color.g, bg_color.b);
 
     for (size_t i = 0; i < prompt->prefix.len; ++i) {
         char c = prompt->prefix[i];
-        render_prompt_char(window_surface, rend, &point, c);
+        render_char(window_surface, rend, &point, rend->prompt_cache, background,
+                    rend->prompt_fg_color, c);
     }
+
     for (size_t i = 0; i < prompt->text.len; ++i) {
+        char c = prompt->text[i];
+
         if (prompt->cursor == i) {
             SDL_Rect fill_rect = {point.x - 1, point.y, 2, rend->font_height};
             uint32_t foreground = SDL_MapRGB(window_surface->format, rend->prompt_fg_color.r,
                                              rend->prompt_fg_color.g, rend->prompt_fg_color.b);
             SDL_FillRect(window_surface, &fill_rect, foreground);
+
+            render_char(window_surface, rend, &point, rend->prompt_cache, background,
+                        rend->prompt_fg_color, c);
+
+            if (point.x != 0) {
+                uint32_t foreground = SDL_MapRGB(window_surface->format, rend->prompt_fg_color.r,
+                                                 rend->prompt_fg_color.g, rend->prompt_fg_color.b);
+                SDL_FillRect(window_surface, &fill_rect, foreground);
+            }
+        } else {
+            render_char(window_surface, rend, &point, rend->prompt_cache, background,
+                        rend->prompt_fg_color, c);
         }
-        char c = prompt->text[i];
-        render_prompt_char(window_surface, rend, &point, c);
     }
+
+    SDL_Rect fill_rect = {point.x, point.y, window_surface->w - point.x, rend->font_height};
+    uint32_t foreground = SDL_MapRGB(window_surface->format, 0, 0, 0);
+    SDL_FillRect(window_surface, &fill_rect, foreground);
+
     if (prompt->cursor == prompt->text.len) {
         SDL_Rect fill_rect = {point.x - 1, point.y, 2, rend->font_height};
         uint32_t foreground = SDL_MapRGB(window_surface->format, rend->prompt_fg_color.r,
@@ -188,11 +233,9 @@ static void render_frame(SDL_Window* window,
 
     SDL_Surface* window_surface = SDL_GetWindowSurface(window);
 
-    uint32_t background = SDL_MapRGB(window_surface->format, rend->backlog_bg_color.r,
-                                     rend->backlog_bg_color.g, rend->backlog_bg_color.b);
     if (rend->complete_redraw) {
         ZoneScopedN("draw_background");
-        SDL_FillRect(window_surface, NULL, background);
+        SDL_FillRect(window_surface, NULL, SDL_MapRGB(window_surface->format, 0x00, 0x00, 0x00));
 
         rend->backlog_end_index = rend->backlog_scroll_screen_start;
         rend->backlog_end_point = {};
@@ -216,7 +259,20 @@ static void render_frame(SDL_Window* window,
 // Buffer methods
 ///////////////////////////////////////////////////////////////////////////////
 
-static void append_text(Backlog_State* backlog, cz::Str text) {
+static void set_backlog_process(Backlog_State* backlog, uint64_t process_id) {
+    Backlog_Event event = {};
+    event.index = backlog->length;
+    event.type = BACKLOG_EVENT_START_PROCESS;
+    event.v.process_id = process_id;
+    backlog->events.reserve(cz::heap_allocator(), 1);
+    backlog->events.push(event);
+    backlog->last_process_id = process_id;
+}
+
+static void append_text(Backlog_State* backlog, cz::Str text, uint64_t process_id) {
+    if (process_id != backlog->last_process_id)
+        set_backlog_process(backlog, process_id);
+
     uint64_t overhang = INNER_INDEX(backlog->length + text.len);
     uint64_t inner = INNER_INDEX(backlog->length);
     if (overhang < text.len) {
@@ -256,12 +312,29 @@ static int process_events(Backlog_State* backlog, Prompt_State* prompt, Render_S
             ++num_events;
             break;
 
-        case SDL_KEYDOWN:
+        case SDL_KEYDOWN: {
+            int mod = (event.key.keysym.mod & ~(KMOD_CAPS | KMOD_NUM));
+            if (mod & KMOD_ALT)
+                mod |= KMOD_ALT;
+            if (mod & KMOD_CTRL)
+                mod |= KMOD_CTRL;
+            if (mod & KMOD_SHIFT)
+                mod |= KMOD_SHIFT;
+            if (mod & KMOD_GUI)
+                mod |= KMOD_GUI;
+
             if (event.key.keysym.sym == SDLK_ESCAPE)
                 return -1;
             if (event.key.keysym.sym == SDLK_RETURN) {
+                append_text(backlog, "\n", -1);
+                append_text(backlog, prompt->prefix, prompt->process_id);
+                prompt->text.reserve(cz::heap_allocator(), 1);
+                prompt->text.push('\n');
+                append_text(backlog, prompt->text, prompt->process_id);
+
                 prompt->text.len = 0;
                 prompt->cursor = 0;
+                ++prompt->process_id;
                 ++num_events;
             }
             if (event.key.keysym.sym == SDLK_BACKSPACE) {
@@ -271,19 +344,29 @@ static int process_events(Backlog_State* backlog, Prompt_State* prompt, Render_S
                     ++num_events;
                 }
             }
-            if (event.key.keysym.sym == SDLK_LEFT) {
+            if ((mod == 0 && event.key.keysym.sym == SDLK_LEFT) ||
+                (mod == KMOD_CTRL && event.key.keysym.sym == SDLK_b)) {
                 if (prompt->cursor > 0) {
                     --prompt->cursor;
                     ++num_events;
                 }
             }
-            if (event.key.keysym.sym == SDLK_RIGHT) {
+            if ((mod == 0 && event.key.keysym.sym == SDLK_RIGHT) ||
+                (mod == KMOD_CTRL && event.key.keysym.sym == SDLK_f)) {
                 if (prompt->cursor < prompt->text.len) {
                     ++prompt->cursor;
                     ++num_events;
                 }
             }
-            break;
+            if (mod == KMOD_ALT && event.key.keysym.sym == SDLK_a) {
+                prompt->cursor = 0;
+                ++num_events;
+            }
+            if (mod == KMOD_ALT && event.key.keysym.sym == SDLK_e) {
+                prompt->cursor = prompt->text.len;
+                ++num_events;
+            }
+        } break;
 
         case SDL_TEXTINPUT: {
             cz::Str text = event.text.text;
@@ -356,12 +439,8 @@ int actual_main(int argc, char** argv) {
 
     rend.font_height = TTF_FontLineSkip(rend.font);
 
-    rend.backlog_bg_color = {0x22, 0x22, 0x22, 0xff};
     rend.backlog_fg_color = {0xdd, 0xdd, 0xdd, 0xff};
-    rend.prompt_bg_color = {0x00, 0x00, 0x00, 0xff};
     rend.prompt_fg_color = {0xff, 0xff, 0xff, 0xff};
-
-    uint32_t spaghetti_time = SDL_GetTicks();
 
     while (1) {
         uint32_t start_frame = SDL_GetTicks();
@@ -369,13 +448,6 @@ int actual_main(int argc, char** argv) {
         int status = process_events(&backlog, &prompt, &rend);
         if (status < 0)
             break;
-
-        if (spaghetti_time - start_frame >= 250) {
-            spaghetti_time += 250;
-            // TODO: remove this test.
-            append_text(&backlog, "sandwichsandwichsandwichsandwich");
-            status = 1;
-        }
 
         if (status > 0)
             render_frame(window, &rend, &backlog, &prompt);
