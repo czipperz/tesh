@@ -426,6 +426,19 @@ static uint64_t screen_lines(Render_State* rend) {
     return rend->window_height / rend->font_height;
 }
 
+static void ensure_prompt_on_screen(Render_State* rend, Backlog_State* backlog) {
+    uint64_t lines = screen_lines(rend);
+    if (lines > 3) {
+        uint64_t backup = rend->backlog_scroll_screen_start;
+        rend->backlog_scroll_screen_start = backlog->length;
+        scroll_up(rend, backlog, lines - 3);
+        if (rend->backlog_scroll_screen_start > backup)
+            rend->complete_redraw = true;
+        else
+            rend->backlog_scroll_screen_start = backup;
+    }
+}
+
 static int process_events(Backlog_State* backlog,
                           Prompt_State* prompt,
                           Render_State* rend,
@@ -486,6 +499,8 @@ static int process_events(Backlog_State* backlog,
                 prompt->text.len = 0;
                 prompt->cursor = 0;
                 ++prompt->process_id;
+
+                ensure_prompt_on_screen(rend, backlog);
                 ++num_events;
             }
             if (event.key.keysym.sym == SDLK_BACKSPACE) {
@@ -567,6 +582,7 @@ static int process_events(Backlog_State* backlog,
             prompt->text.reserve(cz::heap_allocator(), text.len);
             prompt->text.insert(prompt->cursor, text);
             prompt->cursor += text.len;
+            ensure_prompt_on_screen(rend, backlog);
             ++num_events;
         } break;
 
