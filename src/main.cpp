@@ -7,6 +7,7 @@
 #include <cz/heap.hpp>
 #include <cz/process.hpp>
 #include <cz/string.hpp>
+#include <cz/util.hpp>
 #include <cz/vector.hpp>
 
 #ifdef _WIN32
@@ -21,6 +22,7 @@
 struct Render_State {
     TTF_Font* font;
     int font_height;
+    int window_height;
     SDL_Surface* backlog_cache[256];
     SDL_Surface* prompt_cache[256];
 
@@ -264,6 +266,7 @@ static void render_frame(SDL_Window* window,
     ZoneScoped;
 
     SDL_Surface* window_surface = SDL_GetWindowSurface(window);
+    rend->window_height = window_surface->h;
 
     if (rend->complete_redraw) {
         ZoneScopedN("draw_background");
@@ -419,6 +422,10 @@ static void scroll_up(Render_State* rend, Backlog_State* backlog, uint64_t lines
     }
 }
 
+static uint64_t screen_lines(Render_State* rend) {
+    return rend->window_height / rend->font_height;
+}
+
 static int process_events(Backlog_State* backlog,
                           Prompt_State* prompt,
                           Render_State* rend,
@@ -542,13 +549,13 @@ static int process_events(Backlog_State* backlog,
                 ++num_events;
             }
             if (mod == KMOD_CTRL && event.key.keysym.sym == SDLK_v) {
-                uint64_t lines = 20;
+                uint64_t lines = (cz::max)(screen_lines(rend), (uint64_t)6) - 3;
                 scroll_down(rend, backlog, lines);
                 rend->complete_redraw = true;
                 ++num_events;
             }
             if (mod == KMOD_ALT && event.key.keysym.sym == SDLK_v) {
-                uint64_t lines = 20;
+                uint64_t lines = (cz::max)(screen_lines(rend), (uint64_t)6) - 3;
                 scroll_up(rend, backlog, lines);
                 rend->complete_redraw = true;
                 ++num_events;
