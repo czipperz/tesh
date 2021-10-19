@@ -40,6 +40,7 @@ struct Render_State {
 enum Backlog_Event_Type {
     BACKLOG_EVENT_START_PROCESS,
     BACKLOG_EVENT_START_INPUT,
+    BACKLOG_EVENT_START_PROMPT,
 };
 
 struct Backlog_Event {
@@ -191,6 +192,8 @@ static void render_backlog(SDL_Surface* window_surface,
             } else if (event->type == BACKLOG_EVENT_START_INPUT) {
                 cache = rend->prompt_cache;
                 fg_color = rend->prompt_fg_color;
+            } else if (event->type == BACKLOG_EVENT_START_PROMPT) {
+                // Ignore
             } else {
                 CZ_PANIC("unreachable");
             }
@@ -297,6 +300,8 @@ static void set_backlog_process(Backlog_State* backlog, uint64_t process_id) {
     event.index = backlog->length;
     if (process_id == -2) {
         event.type = BACKLOG_EVENT_START_INPUT;
+    } else if (process_id == -3) {
+        event.type = BACKLOG_EVENT_START_PROMPT;
     } else {
         event.type = BACKLOG_EVENT_START_PROCESS;
         event.v.process_id = process_id;
@@ -485,6 +490,7 @@ static int process_events(Backlog_State* backlog,
                     rend->backlog_end_index = rend->backlog_scroll_screen_start;
                     rend->backlog_end_point = {};
                 }
+                set_backlog_process(backlog, -3);
                 append_text(backlog, prompt->process_id, prompt->prefix);
                 append_text(backlog, -2, prompt->text);
                 append_text(backlog, prompt->process_id, "\n");
