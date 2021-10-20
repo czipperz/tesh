@@ -82,7 +82,17 @@ static Error run_program(Running_Program* program,
                          cz::Input_File in,
                          cz::Output_File out,
                          cz::Output_File err) {
+    program->type = Running_Program::PROCESS;
+
+    // Setup builtins.
     if (args[0] == "echo") {
+        program->type = Running_Program::ECHO;
+        program->v.builtin.st.echo = {};
+        program->v.builtin.st.echo.outer = 1;
+    }
+
+    // If command is a builtin.
+    if (program->type != Running_Program::PROCESS) {
         if (!in.set_non_blocking())
             return Error_IO;
         if (!out.set_non_blocking())
@@ -90,13 +100,10 @@ static Error run_program(Running_Program* program,
         if (!err.set_non_blocking())
             return Error_IO;
 
-        program->type = Running_Program::ECHO;
         program->v.builtin.args = args;
         program->v.builtin.in = in;
         program->v.builtin.out = out;
         program->v.builtin.err = err;
-        program->v.builtin.st.echo = {};
-        program->v.builtin.st.echo.outer = 1;
         return Error_Success;
     }
 
@@ -106,7 +113,6 @@ static Error run_program(Running_Program* program,
     options.std_err = err;
     CZ_DEFER(options.close_all());
 
-    program->type = Running_Program::PROCESS;
     program->v.process = {};
     if (!program->v.process.launch_program(args, options))
         return Error_IO;
