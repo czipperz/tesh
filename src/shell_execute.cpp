@@ -96,6 +96,7 @@ static Error run_program(Running_Program* program,
         program->v.builtin.out = out;
         program->v.builtin.err = err;
         program->v.builtin.st.echo = {};
+        program->v.builtin.st.echo.outer = 1;
         return Error_Success;
     }
 
