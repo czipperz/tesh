@@ -7,14 +7,14 @@
 
 ///////////////////////////////////////////////////////////////////////////////
 
-struct Shell_Program {
+struct Parse_Program {
     cz::Vector<cz::Str> args;
 };
 
-struct Shell_Line {
-    cz::Vector<Shell_Program> pipeline;
+struct Parse_Line {
+    cz::Vector<Parse_Program> pipeline;
 };
 
 ///////////////////////////////////////////////////////////////////////////////
 
-Error parse_line(const Shell_State* shell, cz::Allocator allocator, Shell_Line* out, cz::Str text);
+Error parse_line(const Shell_State* shell, cz::Allocator allocator, Parse_Line* out, cz::Str text);

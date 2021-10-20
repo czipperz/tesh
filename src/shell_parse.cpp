@@ -5,7 +5,7 @@
 #include <cz/heap.hpp>
 #include <cz/string.hpp>
 
-Error parse_line(const Shell_State* shell, cz::Allocator allocator, Shell_Line* out, cz::Str text) {
+Error parse_line(const Shell_State* shell, cz::Allocator allocator, Parse_Line* out, cz::Str text) {
     cz::Vector<cz::Str> args = {};
     CZ_DEFER(args.drop(cz::heap_allocator()));
 
@@ -50,7 +50,7 @@ Error parse_line(const Shell_State* shell, cz::Allocator allocator, Shell_Line* 
         switch (text[index]) {
         case '|': {
             out->pipeline.reserve(cz::heap_allocator(), 1);
-            Shell_Program program = {};
+            Parse_Program program = {};
             program.args = args.clone(allocator);
             out->pipeline.push(program);
             args.len = 0;
@@ -61,7 +61,7 @@ Error parse_line(const Shell_State* shell, cz::Allocator allocator, Shell_Line* 
 
     if (args.len > 0) {
         out->pipeline.reserve(cz::heap_allocator(), 1);
-        Shell_Program program = {};
+        Parse_Program program = {};
         program.args = args.clone(allocator);
         out->pipeline.push(program);
         args.len = 0;
