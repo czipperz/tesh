@@ -350,6 +350,15 @@ static bool read_process_data(Shell_State* shell, Backlog_State* backlog) {
     for (size_t i = 0; i < shell->lines.len; ++i) {
         Running_Line* process = &shell->lines[i];
 
+        for (size_t p = 0; p < process->pipeline.len; ++p) {
+            Running_Program* program = &process->pipeline[p];
+            int exit_code = 1;
+            if (tick_program(program, &exit_code)) {
+                process->pipeline.remove(p);
+                --p;
+            }
+        }
+
         if (process->out.is_open()) {
             int64_t result = 0;
             while (1) {
@@ -363,15 +372,6 @@ static bool read_process_data(Shell_State* shell, Backlog_State* backlog) {
             if (result == 0) {
                 process->out.close();
                 process->out = {};
-            }
-        }
-
-        for (size_t p = 0; p < process->pipeline.len; ++p) {
-            Running_Program* program = &process->pipeline[p];
-            int exit_code = 1;
-            if (tick_program(program, &exit_code)) {
-                process->pipeline.remove(p);
-                --p;
             }
         }
 
