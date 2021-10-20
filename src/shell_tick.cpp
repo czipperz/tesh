@@ -54,9 +54,15 @@ bool tick_program(Running_Program* program, int* exit_code) {
     case Running_Program::CAT: {
         auto& builtin = program->v.builtin;
         auto& st = builtin.st.cat;
+
+        if (builtin.args.len == 1 && builtin.in.is_open()) {
+            st.file = builtin.in;
+            builtin.in = {};
+        }
+
         int64_t result = 0;
         int rounds = 0;
-        while (st.outer < builtin.args.len) {
+        while (st.file.is_open() || st.outer < builtin.args.len) {
             // Rate limit to prevent hanging.
             if (rounds++ == 16)
                 return false;
