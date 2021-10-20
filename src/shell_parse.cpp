@@ -6,8 +6,8 @@
 #include <cz/string.hpp>
 
 Error parse_line(const Shell_State* shell, cz::Allocator allocator, Shell_Line* out, cz::Str text) {
-    cz::Vector<cz::Str> words = {};
-    CZ_DEFER(words.drop(cz::heap_allocator()));
+    cz::Vector<cz::Str> args = {};
+    CZ_DEFER(args.drop(cz::heap_allocator()));
 
     size_t index = 0;
 
@@ -41,8 +41,8 @@ Error parse_line(const Shell_State* shell, cz::Allocator allocator, Shell_Line* 
         // Push the word.
     endofword:
         if (word.len > 0) {
-            words.reserve(cz::heap_allocator(), 1);
-            words.push(word);
+            args.reserve(cz::heap_allocator(), 1);
+            args.push(word);
             continue;
         }
 
@@ -51,20 +51,20 @@ Error parse_line(const Shell_State* shell, cz::Allocator allocator, Shell_Line* 
         case '|': {
             out->pipeline.reserve(cz::heap_allocator(), 1);
             Shell_Program program = {};
-            program.words = words.clone(allocator);
+            program.args = args.clone(allocator);
             out->pipeline.push(program);
-            words.len = 0;
+            args.len = 0;
             ++index;
         } break;
         }
     }
 
-    if (words.len > 0) {
+    if (args.len > 0) {
         out->pipeline.reserve(cz::heap_allocator(), 1);
         Shell_Program program = {};
-        program.words = words.clone(allocator);
+        program.args = args.clone(allocator);
         out->pipeline.push(program);
-        words.len = 0;
+        args.len = 0;
     }
 
     return ERROR_SUCCESS;

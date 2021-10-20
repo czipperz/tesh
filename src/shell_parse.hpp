@@ -8,7 +8,7 @@
 ///////////////////////////////////////////////////////////////////////////////
 
 struct Shell_Program {
-    cz::Vector<cz::Str> words;
+    cz::Vector<cz::Str> args;
 };
 
 struct Shell_Line {

@@ -16,8 +16,8 @@ TEST_CASE("parse_line one word") {
     Error error = parse_line(&shell, cz::heap_allocator(), &out, "abc");
     REQUIRE(error == ERROR_SUCCESS);
     REQUIRE(out.pipeline.len == 1);
-    REQUIRE(out.pipeline[0].words.len == 1);
-    CHECK(out.pipeline[0].words[0] == "abc");
+    REQUIRE(out.pipeline[0].args.len == 1);
+    CHECK(out.pipeline[0].args[0] == "abc");
 }
 
 TEST_CASE("parse_line two words") {
@@ -26,9 +26,9 @@ TEST_CASE("parse_line two words") {
     Error error = parse_line(&shell, cz::heap_allocator(), &out, "abc def");
     REQUIRE(error == ERROR_SUCCESS);
     REQUIRE(out.pipeline.len == 1);
-    REQUIRE(out.pipeline[0].words.len == 2);
-    CHECK(out.pipeline[0].words[0] == "abc");
-    CHECK(out.pipeline[0].words[1] == "def");
+    REQUIRE(out.pipeline[0].args.len == 2);
+    CHECK(out.pipeline[0].args[0] == "abc");
+    CHECK(out.pipeline[0].args[1] == "def");
 }
 
 TEST_CASE("parse_line two words whitespace") {
@@ -37,9 +37,9 @@ TEST_CASE("parse_line two words whitespace") {
     Error error = parse_line(&shell, cz::heap_allocator(), &out, "   abc   def   ");
     REQUIRE(error == ERROR_SUCCESS);
     REQUIRE(out.pipeline.len == 1);
-    REQUIRE(out.pipeline[0].words.len == 2);
-    CHECK(out.pipeline[0].words[0] == "abc");
-    CHECK(out.pipeline[0].words[1] == "def");
+    REQUIRE(out.pipeline[0].args.len == 2);
+    CHECK(out.pipeline[0].args[0] == "abc");
+    CHECK(out.pipeline[0].args[1] == "def");
 }
 
 TEST_CASE("parse_line pipe simple 1") {
@@ -48,10 +48,10 @@ TEST_CASE("parse_line pipe simple 1") {
     Error error = parse_line(&shell, cz::heap_allocator(), &out, "a | b");
     REQUIRE(error == ERROR_SUCCESS);
     REQUIRE(out.pipeline.len == 2);
-    REQUIRE(out.pipeline[0].words.len == 1);
-    CHECK(out.pipeline[0].words[0] == "a");
-    REQUIRE(out.pipeline[1].words.len == 1);
-    CHECK(out.pipeline[1].words[0] == "b");
+    REQUIRE(out.pipeline[0].args.len == 1);
+    CHECK(out.pipeline[0].args[0] == "a");
+    REQUIRE(out.pipeline[1].args.len == 1);
+    CHECK(out.pipeline[1].args[0] == "b");
 }
 
 TEST_CASE("parse_line pipe simple 2") {
@@ -60,10 +60,10 @@ TEST_CASE("parse_line pipe simple 2") {
     Error error = parse_line(&shell, cz::heap_allocator(), &out, "a b|c d");
     REQUIRE(error == ERROR_SUCCESS);
     REQUIRE(out.pipeline.len == 2);
-    REQUIRE(out.pipeline[0].words.len == 2);
-    CHECK(out.pipeline[0].words[0] == "a");
-    CHECK(out.pipeline[0].words[1] == "b");
-    REQUIRE(out.pipeline[1].words.len == 2);
-    CHECK(out.pipeline[1].words[0] == "c");
-    CHECK(out.pipeline[1].words[1] == "d");
+    REQUIRE(out.pipeline[0].args.len == 2);
+    CHECK(out.pipeline[0].args[0] == "a");
+    CHECK(out.pipeline[0].args[1] == "b");
+    REQUIRE(out.pipeline[1].args.len == 2);
+    CHECK(out.pipeline[1].args[0] == "c");
+    CHECK(out.pipeline[1].args[1] == "d");
 }
