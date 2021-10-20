@@ -56,7 +56,7 @@ bool tick_program(Running_Program* program, int* exit_code) {
             if (st.offset != st.len) {
                 result = builtin.out.write(st.buffer + st.offset, st.len - st.offset);
                 if (result <= 0)
-                    return false;
+                    break;
 
                 st.offset += result;
                 if (st.offset != st.len)
