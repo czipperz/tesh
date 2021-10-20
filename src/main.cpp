@@ -369,7 +369,7 @@ static bool read_process_data(Shell_State* shell, Backlog_State* backlog) {
         for (size_t p = 0; p < process->pipeline.len; ++p) {
             Running_Program* program = &process->pipeline[p];
             int exit_code = 1;
-            if (program->process.try_join(&exit_code)) {
+            if (tick_program(program, &exit_code)) {
                 process->pipeline.remove(p);
                 --p;
             }

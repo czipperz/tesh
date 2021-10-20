@@ -45,14 +45,16 @@ Error start_execute_line(Shell_State* shell, const Parse_Line& parse_line, uint6
         cz::Output_File out;
         cz::Output_File err = line_out;
 
-        if (p == 0)
+        if (p == 0) {
             in = line_in;
-        else
+            line_in = {};
+        } else
             in = pipe_in;
 
-        if (p + 1 == parse_line.pipeline.len)
+        if (p + 1 == parse_line.pipeline.len) {
             out = line_out;
-        else {
+            line_out = {};
+        } else {
             if (!cz::create_pipe(&pipe_in, &pipe_out))
                 return Error_IO;
             out = pipe_out;
@@ -80,12 +82,32 @@ static Error run_program(Running_Program* program,
                          cz::Input_File in,
                          cz::Output_File out,
                          cz::Output_File err) {
+    if (args[0] == "echo") {
+        if (!in.set_non_blocking())
+            return Error_IO;
+        if (!out.set_non_blocking())
+            return Error_IO;
+        if (!err.set_non_blocking())
+            return Error_IO;
+
+        program->type = Running_Program::ECHO;
+        program->v.builtin.args = args;
+        program->v.builtin.in = in;
+        program->v.builtin.out = out;
+        program->v.builtin.err = err;
+        program->v.builtin.st.echo = {};
+        return Error_Success;
+    }
+
     cz::Process_Options options;
     options.std_in = in;
     options.std_out = out;
     options.std_err = err;
+    CZ_DEFER(options.close_all());
 
-    if (!program->process.launch_program(args, options))
+    program->type = Running_Program::PROCESS;
+    program->v.process = {};
+    if (!program->v.process.launch_program(args, options))
         return Error_IO;
 
     return Error_Success;

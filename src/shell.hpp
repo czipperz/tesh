@@ -9,7 +9,24 @@
 ///////////////////////////////////////////////////////////////////////////////
 
 struct Running_Program {
-    cz::Process process;
+    enum Type {
+        PROCESS,
+        ECHO,
+    } type;
+    union {
+        cz::Process process;
+        struct {
+            cz::Slice<const cz::Str> args;
+            cz::Input_File in;
+            cz::Output_File out;
+            cz::Output_File err;
+            union {
+                struct {
+                    size_t outer, inner;
+                } echo;
+            } st;
+        } builtin;
+    } v;
 };
 
 struct Running_Line {
@@ -46,3 +63,7 @@ Error parse_line(const Shell_State* shell, cz::Allocator allocator, Parse_Line* 
 ///////////////////////////////////////////////////////////////////////////////
 
 Error start_execute_line(Shell_State* shell, const Parse_Line& line, uint64_t id);
+
+///////////////////////////////////////////////////////////////////////////////
+
+bool tick_program(Running_Program* program, int* exit_code);
