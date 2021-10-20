@@ -115,7 +115,7 @@ finish_builtin:
     auto& builtin = program->v.builtin;
     builtin.in.close();
     builtin.out.close();
-    if (builtin.out.handle != builtin.err.handle)
+    if (builtin.close_err)
         builtin.err.close();
     return true;
 }

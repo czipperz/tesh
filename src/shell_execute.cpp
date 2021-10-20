@@ -23,10 +23,6 @@ Error start_execute_line(Shell_State* shell, const Parse_Line& parse_line, uint6
 
     cz::Input_File line_in;
     cz::Output_File line_out;
-    CZ_DEFER({
-        line_in.close();
-        line_out.close();
-    });
     if (!cz::create_process_input_pipe(&line_in, &running_line.in))
         return Error_IO;
     if (!cz::create_process_output_pipe(&line_out, &running_line.out))

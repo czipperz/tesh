@@ -21,6 +21,7 @@ struct Running_Program {
             cz::Input_File in;
             cz::Output_File out;
             cz::Output_File err;
+            bool close_err;
             union {
                 struct {
                     size_t outer, inner;
