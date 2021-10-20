@@ -1,11 +1,12 @@
 #include "shell.hpp"
 
+#include <Tracy.hpp>
 #include <cz/format.hpp>
 #include <cz/heap.hpp>
 
-#include <windows.h>
-
 bool tick_program(Running_Program* program, int* exit_code) {
+    ZoneScoped;
+
     switch (program->type) {
     case Running_Program::PROCESS:
         return program->v.process.try_join(exit_code);

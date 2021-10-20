@@ -500,10 +500,9 @@ static int process_events(Backlog_State* backlog,
                           Prompt_State* prompt,
                           Render_State* rend,
                           Shell_State* shell) {
-    ZoneScoped;
-
     int num_events = 0;
     for (SDL_Event event; SDL_PollEvent(&event);) {
+        ZoneScopedN("process_event");
         switch (event.type) {
         case SDL_QUIT:
             return -1;

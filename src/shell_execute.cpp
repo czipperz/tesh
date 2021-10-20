@@ -1,5 +1,6 @@
 #include "shell.hpp"
 
+#include <Tracy.hpp>
 #include <cz/defer.hpp>
 #include <cz/heap.hpp>
 #include <cz/process.hpp>
@@ -15,6 +16,8 @@ static Error run_program(Running_Program* program,
 ///////////////////////////////////////////////////////////////////////////////
 
 Error start_execute_line(Shell_State* shell, const Parse_Line& parse_line, uint64_t id) {
+    ZoneScoped;
+
     if (parse_line.pipeline.len == 0)
         return Error_Success;
 

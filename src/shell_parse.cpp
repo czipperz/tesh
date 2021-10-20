@@ -1,11 +1,14 @@
 #include "shell.hpp"
 
+#include <Tracy.hpp>
 #include <cz/char_type.hpp>
 #include <cz/defer.hpp>
 #include <cz/heap.hpp>
 #include <cz/string.hpp>
 
 Error parse_line(const Shell_State* shell, cz::Allocator allocator, Parse_Line* out, cz::Str text) {
+    ZoneScoped;
+
     cz::Vector<cz::Str> args = {};
     CZ_DEFER(args.drop(cz::heap_allocator()));
 
