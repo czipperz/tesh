@@ -1,5 +1,10 @@
 #include "shell.hpp"
 
+#include <cz/format.hpp>
+#include <cz/heap.hpp>
+
+#include <windows.h>
+
 bool tick_program(Running_Program* program, int* exit_code) {
     switch (program->type) {
     case Running_Program::PROCESS:
@@ -34,16 +39,72 @@ bool tick_program(Running_Program* program, int* exit_code) {
 
         if (result > 0) {
             CZ_DEBUG_ASSERT(st.outer == builtin.args.len);
-            builtin.in.close();
-            builtin.out.close();
-            if (builtin.out.handle != builtin.err.handle)
-                builtin.err.close();
-            return true;
+            goto finish_builtin;
         }
+    } break;
+
+    case Running_Program::CAT: {
+        auto& builtin = program->v.builtin;
+        auto& st = builtin.st.cat;
+        int64_t result = 0;
+        int rounds = 0;
+        while (st.outer < builtin.args.len) {
+            // Rate limit for performance reasons.
+            if (rounds++ == 16)
+                return false;
+
+            if (st.offset != st.len) {
+                result = builtin.out.write(st.buffer + st.offset, st.len - st.offset);
+                if (result <= 0)
+                    return false;
+
+                st.offset += result;
+                if (st.offset != st.len)
+                    return false;
+            }
+
+            if (!st.file.is_open()) {
+                cz::Str arg = builtin.args[st.outer];
+                if (arg == "-") {
+                    st.file = builtin.in;
+                    builtin.in = {};
+                } else {
+                    if (!st.file.open(arg.clone_null_terminate(cz::heap_allocator()).buffer)) {
+                        cz::Str message = cz::format("cat: ", arg, ": No such file or directory\n");
+                        (void)builtin.err.write(message.buffer, message.len);
+                        continue;
+                    }
+                }
+            }
+
+            result = st.file.read(st.buffer, 4096);
+            if (result <= 0) {
+                if (result < 0)
+                    break;
+                st.file.close();
+                st.file = {};
+                ++st.outer;
+                continue;
+            }
+
+            st.offset = 0;
+            st.len = result;
+        }
+
+        if (result >= 0)
+            goto finish_builtin;
     } break;
 
     default:
         CZ_PANIC("unreachable");
     }
     return false;
+
+finish_builtin:
+    auto& builtin = program->v.builtin;
+    builtin.in.close();
+    builtin.out.close();
+    if (builtin.out.handle != builtin.err.handle)
+        builtin.err.close();
+    return true;
 }

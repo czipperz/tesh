@@ -12,6 +12,7 @@ struct Running_Program {
     enum Type {
         PROCESS,
         ECHO,
+        CAT,
     } type;
     union {
         cz::Process process;
@@ -24,6 +25,12 @@ struct Running_Program {
                 struct {
                     size_t outer, inner;
                 } echo;
+                struct {
+                    size_t outer;
+                    cz::Input_File file;
+                    char* buffer;
+                    size_t len, offset;
+                } cat;
             } st;
         } builtin;
     } v;
