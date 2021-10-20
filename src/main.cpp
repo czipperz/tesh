@@ -16,6 +16,8 @@
 #include <windows.h>
 #endif
 
+#include "shell.hpp"
+
 ///////////////////////////////////////////////////////////////////////////////
 // Type definitions
 ///////////////////////////////////////////////////////////////////////////////
@@ -68,18 +70,6 @@ struct Prompt_State {
     uint64_t process_id;
     uint64_t history_counter;
     cz::Vector<cz::Str> history;
-};
-
-struct Process_Info {
-    uint64_t id;
-    cz::Process handle;
-    cz::Output_File in;
-    cz::Input_File out;
-    cz::Carriage_Return_Carry out_carry;
-};
-
-struct Process_State {
-    cz::Vector<Process_Info> processes;
 };
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -339,58 +329,57 @@ static void append_text(Backlog_State* backlog, uint64_t process_id, cz::Str tex
 // Process control
 ///////////////////////////////////////////////////////////////////////////////
 
-static bool run_line(Process_State* proc, cz::Str line, uint64_t id) {
-    Process_Info process = {};
-    process.id = id;
+static bool run_line(Shell_State* shell, cz::Str text, uint64_t id) {
+    Error error;
+    Parse_Line line = {};
 
-    cz::Process_Options options;
-    cz::Process_IO io;
-    if (!cz::create_process_pipes(&io, &options))
-        return false;
-    CZ_DEFER(options.close_all());
-
-    process.in = io.std_in;
-    process.out = io.std_out;
-
-    if (!process.in.set_non_blocking())
-        return false;
-    if (!process.out.set_non_blocking())
+    error = parse_line(shell, cz::heap_allocator(), &line, text);
+    if (error != Error_Success)
         return false;
 
-    if (!process.handle.launch_script(line, options)) {
-        process.in.close();
-        process.out.close();
+    error = start_execute_line(shell, line, id);
+    if (error != Error_Success)
         return false;
-    }
 
-    proc->processes.reserve(cz::heap_allocator(), 1);
-    proc->processes.push(process);
     return true;
 }
 
-static bool read_process_data(Process_State* proc, Backlog_State* backlog) {
+static bool read_process_data(Shell_State* shell, Backlog_State* backlog) {
     static char buffer[4096];
     bool changes = false;
-    for (size_t i = 0; i < proc->processes.len; ++i) {
-        Process_Info* process = &proc->processes[i];
+    for (size_t i = 0; i < shell->lines.len; ++i) {
+        Running_Line* process = &shell->lines[i];
 
-        int64_t result = 0;
-        while (1) {
-            result = process->out.read_text(buffer, sizeof(buffer), &process->out_carry);
-            if (result <= 0)
-                break;
-            append_text(backlog, process->id, {buffer, (size_t)result});
-            changes = true;
+        if (process->out.is_open()) {
+            int64_t result = 0;
+            while (1) {
+                result = process->out.read_text(buffer, sizeof(buffer), &process->out_carry);
+                if (result <= 0)
+                    break;
+                append_text(backlog, process->id, {buffer, (size_t)result});
+                changes = true;
+            }
+
+            if (result == 0) {
+                process->out.close();
+                process->out = {};
+            }
         }
 
-        if (result == 0) {
+        for (size_t p = 0; p < process->pipeline.len; ++p) {
+            Running_Program* program = &process->pipeline[p];
             int exit_code = 1;
-            if (process->handle.try_join(&exit_code)) {
-                process->in.close();
-                process->out.close();
-                proc->processes.remove(i);
-                --i;
+            if (program->process.try_join(&exit_code)) {
+                process->pipeline.remove(p);
+                --p;
             }
+        }
+
+        if (process->pipeline.len == 0) {
+            process->in.close();
+            process->out.close();
+            shell->lines.remove(i);
+            --i;
         }
     }
     return changes;
@@ -510,7 +499,7 @@ static void transform_shift_numbers(SDL_Keysym* keysym) {
 static int process_events(Backlog_State* backlog,
                           Prompt_State* prompt,
                           Render_State* rend,
-                          Process_State* proc) {
+                          Shell_State* shell) {
     ZoneScoped;
 
     int num_events = 0;
@@ -559,7 +548,7 @@ static int process_events(Backlog_State* backlog,
                 append_text(backlog, -2, prompt->text);
                 append_text(backlog, prompt->process_id, "\n");
 
-                if (!run_line(proc, prompt->text, prompt->process_id)) {
+                if (!run_line(shell, prompt->text, prompt->process_id)) {
                     append_text(backlog, prompt->process_id, "Error: failed to execute\n");
                 }
 
@@ -752,7 +741,7 @@ int actual_main(int argc, char** argv) {
     Render_State rend = {};
     Backlog_State backlog = {};
     Prompt_State prompt = {};
-    Process_State proc = {};
+    Shell_State shell = {};
 
     prompt.prefix = "$ ";
     rend.complete_redraw = true;
@@ -814,11 +803,11 @@ int actual_main(int argc, char** argv) {
     while (1) {
         uint32_t start_frame = SDL_GetTicks();
 
-        int status = process_events(&backlog, &prompt, &rend, &proc);
+        int status = process_events(&backlog, &prompt, &rend, &shell);
         if (status < 0)
             break;
 
-        if (read_process_data(&proc, &backlog))
+        if (read_process_data(&shell, &backlog))
             status = 1;
 
         if (status > 0)

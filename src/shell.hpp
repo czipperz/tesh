@@ -4,12 +4,20 @@
 #include <cz/process.hpp>
 #include <cz/str.hpp>
 #include <cz/vector.hpp>
+#include "error.hpp"
 
 ///////////////////////////////////////////////////////////////////////////////
 
 struct Running_Program {
     cz::Process process;
+};
+
+struct Running_Line {
     uint64_t id;
+    cz::Vector<Running_Program> pipeline;
+    cz::Output_File in;
+    cz::Input_File out;
+    cz::Carriage_Return_Carry out_carry;
 };
 
 struct Shell_State {
@@ -18,5 +26,23 @@ struct Shell_State {
     // TODO: make refcounted
     cz::Vector<cz::Str> variable_values;
 
-    cz::Vector<Running_Program> programs;
+    cz::Vector<Running_Line> lines;
 };
+
+///////////////////////////////////////////////////////////////////////////////
+
+struct Parse_Program {
+    cz::Vector<cz::Str> args;
+};
+
+struct Parse_Line {
+    cz::Vector<Parse_Program> pipeline;
+};
+
+///////////////////////////////////////////////////////////////////////////////
+
+Error parse_line(const Shell_State* shell, cz::Allocator allocator, Parse_Line* out, cz::Str text);
+
+///////////////////////////////////////////////////////////////////////////////
+
+Error start_execute_line(Shell_State* shell, const Parse_Line& line, uint64_t id);

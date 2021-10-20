@@ -1,6 +1,6 @@
 #pragma once
 
 enum Error {
-    ERROR_SUCCESS = 0,
-    ERROR_IO = 1,
+    Error_Success = 0,
+    Error_IO = 1,
 };

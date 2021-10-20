@@ -1,4 +1,4 @@
-#include "shell_parse.hpp"
+#include "shell.hpp"
 
 #include <cz/char_type.hpp>
 #include <cz/defer.hpp>
@@ -67,5 +67,5 @@ Error parse_line(const Shell_State* shell, cz::Allocator allocator, Parse_Line* 
         args.len = 0;
     }
 
-    return ERROR_SUCCESS;
+    return Error_Success;
 }
