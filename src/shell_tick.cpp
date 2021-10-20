@@ -20,6 +20,7 @@ bool tick_program(Running_Program* program, int* exit_code) {
             if (rounds++ == 16)
                 return false;
 
+            // Write this arg.
             cz::Str arg = builtin.args[st.outer];
             if (st.inner != arg.len) {
                 result = builtin.out.write(arg.buffer + st.inner, arg.len - st.inner);
@@ -31,6 +32,7 @@ bool tick_program(Running_Program* program, int* exit_code) {
                     continue;
             }
 
+            // Write a trailing space.
             if (st.outer + 1 < builtin.args.len) {
                 result = builtin.out.write(" ", 1);
                 if (result <= 0)
@@ -39,6 +41,7 @@ bool tick_program(Running_Program* program, int* exit_code) {
             }
         }
 
+        // Write a final newline.
         if (st.outer == builtin.args.len)
             result = builtin.out.write("\n", 1);
 
@@ -58,6 +61,7 @@ bool tick_program(Running_Program* program, int* exit_code) {
             if (rounds++ == 16)
                 return false;
 
+            // Write remaining buffer.
             if (st.offset != st.len) {
                 result = builtin.out.write(st.buffer + st.offset, st.len - st.offset);
                 if (result <= 0)
@@ -68,6 +72,7 @@ bool tick_program(Running_Program* program, int* exit_code) {
                     continue;
             }
 
+            // Get a new file if we don't have one.
             if (!st.file.is_open()) {
                 cz::Str arg = builtin.args[st.outer];
                 if (arg == "-") {
@@ -82,6 +87,7 @@ bool tick_program(Running_Program* program, int* exit_code) {
                 }
             }
 
+            // Read a new buffer.
             result = st.file.read(st.buffer, 4096);
             if (result <= 0) {
                 if (result < 0)
