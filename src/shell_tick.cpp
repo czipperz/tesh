@@ -14,7 +14,12 @@ bool tick_program(Running_Program* program, int* exit_code) {
         auto& builtin = program->v.builtin;
         auto& st = builtin.st.echo;
         int64_t result = 0;
+        int rounds = 0;
         for (; st.outer < builtin.args.len; ++st.outer) {
+            // Rate limit to prevent hanging.
+            if (rounds++ == 16)
+                return false;
+
             cz::Str arg = builtin.args[st.outer];
             if (st.inner != arg.len) {
                 result = builtin.out.write(arg.buffer + st.inner, arg.len - st.inner);
@@ -23,7 +28,7 @@ bool tick_program(Running_Program* program, int* exit_code) {
 
                 st.inner += result;
                 if (st.inner != arg.len)
-                    break;
+                    continue;
             }
 
             if (st.outer + 1 < builtin.args.len) {
@@ -49,7 +54,7 @@ bool tick_program(Running_Program* program, int* exit_code) {
         int64_t result = 0;
         int rounds = 0;
         while (st.outer < builtin.args.len) {
-            // Rate limit for performance reasons.
+            // Rate limit to prevent hanging.
             if (rounds++ == 16)
                 return false;
 
@@ -60,7 +65,7 @@ bool tick_program(Running_Program* program, int* exit_code) {
 
                 st.offset += result;
                 if (st.offset != st.len)
-                    return false;
+                    continue;
             }
 
             if (!st.file.is_open()) {
