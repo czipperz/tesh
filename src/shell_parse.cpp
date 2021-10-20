@@ -27,6 +27,7 @@ Error parse_line(const Shell_State* shell, cz::Allocator allocator, Shell_Line* 
         while (index < text.len) {
             switch (text[index]) {
             case CZ_BLANK_CASES:
+            case '|':
                 goto endofword;
 
             default:
@@ -39,8 +40,23 @@ Error parse_line(const Shell_State* shell, cz::Allocator allocator, Shell_Line* 
 
         // Push the word.
     endofword:
-        words.reserve(cz::heap_allocator(), 1);
-        words.push(word);
+        if (word.len > 0) {
+            words.reserve(cz::heap_allocator(), 1);
+            words.push(word);
+            continue;
+        }
+
+        // Special character.
+        switch (text[index]) {
+        case '|': {
+            out->pipeline.reserve(cz::heap_allocator(), 1);
+            Shell_Program program = {};
+            program.words = words.clone(allocator);
+            out->pipeline.push(program);
+            words.len = 0;
+            ++index;
+        } break;
+        }
     }
 
     if (words.len > 0) {
