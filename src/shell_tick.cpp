@@ -8,6 +8,7 @@
 #include <cz/heap.hpp>
 #include <cz/parse.hpp>
 #include <cz/path.hpp>
+#include "global.hpp"
 
 static void standardize_arg(const Shell_State* shell,
                             cz::Str arg,
@@ -144,8 +145,7 @@ bool tick_program(Shell_State* shell, Running_Program* program, int* exit_code) 
                     builtin.in = {};
                 } else {
                     cz::String path = {};
-                    cz::path::make_absolute(arg, shell->working_directory, cz::heap_allocator(),
-                                            &path);
+                    cz::path::make_absolute(arg, shell->working_directory, temp_allocator, &path);
                     if (!st.file.open(path.buffer)) {
                         cz::Str message = cz::format("cat: ", arg, ": No such file or directory\n");
                         (void)builtin.err.write(message);
@@ -193,9 +193,12 @@ bool tick_program(Shell_State* shell, Running_Program* program, int* exit_code) 
         auto& builtin = program->v.builtin;
         cz::String new_wd = {};
         cz::Str arg = (builtin.args.len >= 2 ? builtin.args[1] : "~");
-        standardize_arg(shell, arg, cz::heap_allocator(), &new_wd, /*make_absolute=*/true);
+        standardize_arg(shell, arg, temp_allocator, &new_wd, /*make_absolute=*/true);
         if (cz::file::is_directory(new_wd.buffer)) {
-            shell->working_directory = new_wd;
+            shell->working_directory.len = 0;
+            shell->working_directory.reserve(cz::heap_allocator(), new_wd.len + 1);
+            shell->working_directory.append(new_wd);
+            shell->working_directory.null_terminate();
         } else {
             (void)builtin.err.write("cd: ");
             (void)builtin.err.write(new_wd.buffer, new_wd.len);
@@ -218,6 +221,45 @@ bool tick_program(Shell_State* shell, Running_Program* program, int* exit_code) 
                     break;
             }
             iterator.drop();
+        }
+        goto finish_builtin;
+    } break;
+
+    case Running_Program::ALIAS: {
+        auto& builtin = program->v.builtin;
+        for (size_t i = 1; i < builtin.args.len; ++i) {
+            cz::Str arg = builtin.args[i];
+            if (arg.len == 0 || arg[0] == '=') {
+                (void)builtin.err.write("alias: ");
+                (void)builtin.err.write(arg);
+                (void)builtin.err.write(": invalid alias name\n");
+                continue;
+            }
+
+            cz::Str key, value;
+            if (arg.split_excluding('=', &key, &value)) {
+                shell->alias_names.reserve(cz::heap_allocator(), 1);
+                shell->alias_values.reserve(cz::heap_allocator(), 1);
+                // TODO: garbage collect / ref count?
+                shell->alias_names.push(key.clone(cz::heap_allocator()));
+                shell->alias_values.push(value.clone(cz::heap_allocator()));
+            } else {
+                size_t i = 0;
+                for (; i < shell->alias_names.len; ++i) {
+                    if (arg == shell->alias_names[i]) {
+                        (void)builtin.out.write("alias ");
+                        (void)builtin.out.write(shell->alias_names[i]);
+                        (void)builtin.out.write("=");
+                        (void)builtin.out.write(shell->alias_values[i]);
+                        break;
+                    }
+                }
+                if (i == shell->alias_names.len) {
+                    (void)builtin.err.write("alias: ");
+                    (void)builtin.err.write(arg);
+                    (void)builtin.err.write(": unbound alias\n");
+                }
+            }
         }
         goto finish_builtin;
     } break;
