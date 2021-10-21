@@ -94,7 +94,7 @@ struct Prompt_State {
 #ifdef _WIN32
 const char* font_path = "C:/Windows/Fonts/MesloLGM-Regular.ttf";
 #else
-const char* font_path = "/usr/share/fonts";
+const char* font_path = "/usr/share/fonts/TTF/MesloLGMDZ-Regular.ttf";
 #endif
 int font_size = 12;
 int tab_width = 8;
