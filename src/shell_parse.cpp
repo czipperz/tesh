@@ -27,11 +27,28 @@ Error parse_line(const Shell_State* shell, cz::Allocator allocator, Parse_Line* 
 
         // Get the next word.
         cz::String word = {};
+        bool allow_empty = false;
         while (index < text.len) {
             switch (text[index]) {
             case CZ_BLANK_CASES:
             case '|':
                 goto endofword;
+
+            case '\'': {
+                allow_empty = true;
+                ++index;
+                while (1) {
+                    if (index == text.len)
+                        return Error_Parse;
+                    char c = text[index];
+                    if (c == '\'')
+                        break;
+                    ++index;
+                    word.reserve(allocator, 1);
+                    word.push(c);
+                }
+                break;
+            }
 
             default:
                 word.reserve(allocator, 1);
@@ -43,7 +60,7 @@ Error parse_line(const Shell_State* shell, cz::Allocator allocator, Parse_Line* 
 
         // Push the word.
     endofword:
-        if (word.len > 0) {
+        if (allow_empty || word.len > 0) {
             args.reserve(cz::heap_allocator(), 1);
             args.push(word);
             continue;

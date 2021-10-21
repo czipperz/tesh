@@ -67,3 +67,32 @@ TEST_CASE("parse_line pipe simple 2") {
     CHECK(out.pipeline[1].args[0] == "c");
     CHECK(out.pipeline[1].args[1] == "d");
 }
+
+TEST_CASE("parse_line single quotes basic cases") {
+    Shell_State shell = {};
+    Parse_Line out = {};
+    Error error = parse_line(&shell, cz::heap_allocator(), &out, "a '' 'b' 'abcabc'");
+    REQUIRE(error == Error_Success);
+    REQUIRE(out.pipeline.len == 1);
+    REQUIRE(out.pipeline[0].args.len == 4);
+    CHECK(out.pipeline[0].args[0] == "a");
+    CHECK(out.pipeline[0].args[1] == "");
+    CHECK(out.pipeline[0].args[2] == "b");
+    CHECK(out.pipeline[0].args[3] == "abcabc");
+}
+
+TEST_CASE("parse_line single quote unterminated 1") {
+    Shell_State shell = {};
+    Parse_Line out = {};
+    Error error = parse_line(&shell, cz::heap_allocator(), &out, "'");
+    REQUIRE(error == Error_Parse);
+    CHECK(out.pipeline.len == 0);
+}
+
+TEST_CASE("parse_line single quote unterminated 2") {
+    Shell_State shell = {};
+    Parse_Line out = {};
+    Error error = parse_line(&shell, cz::heap_allocator(), &out, "c  'b  \n  a");
+    REQUIRE(error == Error_Parse);
+    CHECK(out.pipeline.len == 0);
+}
