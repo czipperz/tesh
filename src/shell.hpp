@@ -17,6 +17,7 @@ struct Running_Program {
         PWD,
         CD,
         LS,
+        ALIAS,
     } type;
     union {
         cz::Process process;
@@ -50,11 +51,16 @@ struct Running_Line {
     cz::Carriage_Return_Carry out_carry;
 };
 
+struct Parse_Line;
+
 struct Shell_State {
     // TODO: get a hashmap in here
     cz::Vector<cz::Str> variable_names;
     // TODO: make refcounted
     cz::Vector<cz::Str> variable_values;
+
+    cz::Vector<cz::Str> alias_names;
+    cz::Vector<cz::Str> alias_values;
 
     cz::Vector<Running_Line> lines;
 

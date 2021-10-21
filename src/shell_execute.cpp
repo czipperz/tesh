@@ -85,6 +85,16 @@ static Error run_program(Shell_State* shell,
                          cz::Output_File err) {
     program->type = Running_Program::PROCESS;
 
+    // TODO: This is the wrong place to expand aliases.
+    for (size_t i = 0; i < shell->alias_names.len; ++i) {
+        if (args[0] == shell->alias_names[i]) {
+            cz::Slice<cz::Str> args2 = args.clone(cz::heap_allocator());
+            args2[0] = shell->alias_values[i];
+            args = args2;
+            break;
+        }
+    }
+
     // Setup builtins.
     if (args[0] == "echo") {
         program->type = Running_Program::ECHO;
@@ -108,6 +118,9 @@ static Error run_program(Shell_State* shell,
     }
     if (args[0] == "ls") {
         program->type = Running_Program::LS;
+    }
+    if (args[0] == "alias") {
+        program->type = Running_Program::ALIAS;
     }
 
     // If command is a builtin.

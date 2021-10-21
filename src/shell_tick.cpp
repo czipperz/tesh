@@ -222,6 +222,44 @@ bool tick_program(Shell_State* shell, Running_Program* program, int* exit_code) 
         goto finish_builtin;
     } break;
 
+    case Running_Program::ALIAS: {
+        auto& builtin = program->v.builtin;
+        for (size_t i = 1; i < builtin.args.len; ++i) {
+            cz::Str arg = builtin.args[i];
+            if (arg.len == 0 || arg[0] == '=') {
+                (void)builtin.err.write("alias: ");
+                (void)builtin.err.write(arg);
+                (void)builtin.err.write(": invalid alias name\n");
+                continue;
+            }
+
+            cz::Str key, value;
+            if (arg.split_excluding('=', &key, &value)) {
+                shell->alias_names.reserve(cz::heap_allocator(), 1);
+                shell->alias_values.reserve(cz::heap_allocator(), 1);
+                shell->alias_names.push(key);
+                shell->alias_values.push(value);
+            } else {
+                size_t i = 0;
+                for (; i < shell->alias_names.len; ++i) {
+                    if (arg == shell->alias_names[i]) {
+                        (void)builtin.out.write("alias ");
+                        (void)builtin.out.write(shell->alias_names[i]);
+                        (void)builtin.out.write("=");
+                        (void)builtin.out.write(shell->alias_values[i]);
+                        break;
+                    }
+                }
+                if (i == shell->alias_names.len) {
+                    (void)builtin.err.write("alias: ");
+                    (void)builtin.err.write(arg);
+                    (void)builtin.err.write(": unbound alias\n");
+                }
+            }
+        }
+        goto finish_builtin;
+    } break;
+
     default:
         CZ_PANIC("unreachable");
     }
