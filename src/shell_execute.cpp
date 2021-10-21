@@ -106,6 +106,9 @@ static Error run_program(Shell_State* shell,
     if (args[0] == "cd") {
         program->type = Running_Program::CD;
     }
+    if (args[0] == "ls") {
+        program->type = Running_Program::LS;
+    }
 
     // If command is a builtin.
     if (program->type != Running_Program::PROCESS) {

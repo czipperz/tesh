@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <Tracy.hpp>
 #include <cz/char_type.hpp>
+#include <cz/directory.hpp>
 #include <cz/format.hpp>
 #include <cz/heap.hpp>
 #include <cz/parse.hpp>
@@ -199,6 +200,24 @@ bool tick_program(Shell_State* shell, Running_Program* program, int* exit_code) 
             (void)builtin.err.write("cd: ");
             (void)builtin.err.write(new_wd.buffer, new_wd.len);
             (void)builtin.err.write(": Not a directory\n");
+        }
+        goto finish_builtin;
+    } break;
+
+    case Running_Program::LS: {
+        auto& builtin = program->v.builtin;
+        cz::Directory_Iterator iterator;
+        int result = iterator.init(shell->working_directory.buffer);
+        if (result == 1) {
+            while (1) {
+                (void)builtin.err.write(iterator.str_name());
+                (void)builtin.err.write("\n");
+
+                result = iterator.advance();
+                if (result <= 0)
+                    break;
+            }
+            iterator.drop();
         }
         goto finish_builtin;
     } break;

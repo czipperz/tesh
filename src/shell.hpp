@@ -16,6 +16,7 @@ struct Running_Program {
         EXIT,
         PWD,
         CD,
+        LS,
     } type;
     union {
         cz::Process process;
