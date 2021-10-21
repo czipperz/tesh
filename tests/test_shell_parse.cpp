@@ -96,3 +96,36 @@ TEST_CASE("parse_line single quote unterminated 2") {
     REQUIRE(error == Error_Parse);
     CHECK(out.pipeline.len == 0);
 }
+
+TEST_CASE("parse_line single quotes weird cases") {
+    Shell_State shell = {};
+    Parse_Line out = {};
+    Error error = parse_line(&shell, cz::heap_allocator(), &out, "' \n\n ' 'c'a'b'");
+    REQUIRE(error == Error_Success);
+    REQUIRE(out.pipeline.len == 1);
+    REQUIRE(out.pipeline[0].args.len == 2);
+    CHECK(out.pipeline[0].args[0] == " \n\n ");
+    CHECK(out.pipeline[0].args[1] == "cab");
+}
+
+TEST_CASE("parse_line double quote basic") {
+    Shell_State shell = {};
+    Parse_Line out = {};
+    Error error = parse_line(&shell, cz::heap_allocator(), &out, "\"a\" \"\" \"abc\"");
+    REQUIRE(error == Error_Success);
+    REQUIRE(out.pipeline.len == 1);
+    REQUIRE(out.pipeline[0].args.len == 3);
+    CHECK(out.pipeline[0].args[0] == "a");
+    CHECK(out.pipeline[0].args[1] == "");
+    CHECK(out.pipeline[0].args[2] == "abc");
+}
+
+TEST_CASE("parse_line double quote escape") {
+    Shell_State shell = {};
+    Parse_Line out = {};
+    Error error = parse_line(&shell, cz::heap_allocator(), &out, "\"\\\\ \\n \\a \\$ \\` \\\"\"");
+    REQUIRE(error == Error_Success);
+    REQUIRE(out.pipeline.len == 1);
+    REQUIRE(out.pipeline[0].args.len == 1);
+    CHECK(out.pipeline[0].args[0] == "\\ \\n \\a $ ` \"");
+}

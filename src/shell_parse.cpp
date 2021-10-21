@@ -50,6 +50,34 @@ Error parse_line(const Shell_State* shell, cz::Allocator allocator, Parse_Line* 
                 break;
             }
 
+            case '"': {
+                allow_empty = true;
+                ++index;
+                while (1) {
+                    if (index == text.len)
+                        return Error_Parse;
+                    char c = text[index];
+                    if (c == '"')
+                        break;
+                    ++index;
+                    if (c == '\\') {
+                        if (index == text.len)
+                            return Error_Parse;
+                        char c2 = text[index];
+                        // From manual testing it looks like these are the only
+                        // escape sequences that are processed.  Others are
+                        // left (ie typing '\\' -> '\' but '\n' -> '\n').
+                        if (c2 == '"' || c2 == '\\' || c2 == '`' || c2 == '$') {
+                            c = c2;
+                            ++index;
+                        }
+                    }
+                    word.reserve(allocator, 1);
+                    word.push(c);
+                }
+                break;
+            }
+
             default:
                 word.reserve(allocator, 1);
                 word.push(text[index]);
