@@ -11,7 +11,6 @@
 #include <cz/util.hpp>
 #include <cz/vector.hpp>
 #include <cz/working_directory.hpp>
-
 #ifdef _WIN32
 #include <shellscalingapi.h>
 #include <windows.h>
@@ -25,6 +24,7 @@
 
 struct Render_State {
     TTF_Font* font;
+    float dpi_scale;
     int font_width;
     int font_height;
     int window_height;
@@ -722,9 +722,40 @@ static int process_events(Backlog_State* backlog,
                 rend->complete_redraw = true;
                 ++num_events;
             }
+
+            // It would be really nice if this were CTRL-+ to match CTRL--, but whoever
+            // designed the QWERTY keyboard decided that + needed shift held down
+            // and - didn't.... SMH
+            if (mod == (KMOD_CTRL) && (event.key.keysym.sym == SDLK_EQUALS ||
+                                       event.key.keysym.sym == SDLK_MINUS)) {
+                if (event.key.keysym.sym == SDLK_EQUALS) {
+                    font_size        += 4;
+                    rend->font_width += 2;
+                } else {
+                    font_size         = cz::max(font_size - 4, 4);
+                    rend->font_width  = cz::max(rend->font_width - 2, 2);
+                }
+
+                rend->complete_redraw = true;
+                for (int i = 0; i < CZ_DIM(rend->backlog_cache); i++) {
+                    SDL_FreeSurface(rend->backlog_cache[i]);
+                    rend->backlog_cache[i] = NULL;
+                }
+                for (int i = 0; i < CZ_DIM(rend->prompt_cache); i++) {
+                    SDL_FreeSurface(rend->prompt_cache[i]);
+                    rend->prompt_cache[i] = NULL;
+                }
+                TTF_CloseFont(rend->font);
+                rend->font = open_font(font_path, (int)(font_size * rend->dpi_scale));
+                rend->font_height = TTF_FontLineSkip(rend->font);
+                ++num_events;
+            }
         } break;
 
         case SDL_TEXTINPUT: {
+            const Uint8 *state = SDL_GetKeyboardState(NULL);
+            if (state[SDL_SCANCODE_LCTRL] || state[SDL_SCANCODE_RCTRL])
+                break;
             cz::Str text = event.text.text;
             prompt->text.reserve(cz::heap_allocator(), text.len);
             prompt->text.insert(prompt->cursor, text);
@@ -809,16 +840,16 @@ int actual_main(int argc, char** argv) {
     }
     CZ_DEFER(TTF_Quit());
 
-    float dpi_scale = 1.0f;
+
     {
         const float dpi_default = 96.0f;
         float dpi = 0;
         if (SDL_GetDisplayDPI(0, &dpi, NULL, NULL) == 0)
-            dpi_scale = dpi / dpi_default;
+            rend.dpi_scale = dpi / dpi_default;
     }
 
     SDL_Window* window = SDL_CreateWindow(
-        "tesh", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 800 * dpi_scale, 800 * dpi_scale,
+        "tesh", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 800 * rend.dpi_scale, 800 * rend.dpi_scale,
         SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI);
     if (!window) {
         fprintf(stderr, "SDL_CreateWindow failed: %s\n", SDL_GetError());
@@ -826,7 +857,7 @@ int actual_main(int argc, char** argv) {
     }
     CZ_DEFER(SDL_DestroyWindow(window));
 
-    rend.font = open_font(font_path, (int)(font_size * dpi_scale));
+    rend.font = open_font(font_path, (int)(font_size * rend.dpi_scale));
     if (!rend.font) {
         fprintf(stderr, "TTF_OpenFont failed: %s\n", SDL_GetError());
         return 1;
