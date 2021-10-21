@@ -142,6 +142,15 @@ bool tick_program(Shell_State* shell, Running_Program* program, int* exit_code) 
             cz::String new_wd = {};
             cz::path::make_absolute(builtin.args[1], shell->working_directory, cz::heap_allocator(),
                                     &new_wd);
+#ifdef _WIN32
+            bool pop = (new_wd.len > 3 && new_wd.ends_with('/'));
+#else
+            bool pop = (new_wd.len > 1 && new_wd.ends_with('/'));
+#endif
+            if (pop) {
+                new_wd.pop();
+                new_wd.null_terminate();
+            }
             shell->working_directory = new_wd;
         }
         goto finish_builtin;
