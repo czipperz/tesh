@@ -7,7 +7,8 @@
 
 ///////////////////////////////////////////////////////////////////////////////
 
-static Error run_program(Running_Program* program,
+static Error run_program(Shell_State* shell,
+                         Running_Program* program,
                          cz::Slice<const cz::Str> args,
                          cz::Input_File in,
                          cz::Output_File out,
@@ -60,7 +61,7 @@ Error start_execute_line(Shell_State* shell, const Parse_Line& parse_line, uint6
         }
 
         Running_Program running_program = {};
-        Error error = run_program(&running_program, parse_program.args, in, out, err);
+        Error error = run_program(shell, &running_program, parse_program.args, in, out, err);
         if (error != Error_Success)
             return error;
 
@@ -76,7 +77,8 @@ Error start_execute_line(Shell_State* shell, const Parse_Line& parse_line, uint6
 
 ///////////////////////////////////////////////////////////////////////////////
 
-static Error run_program(Running_Program* program,
+static Error run_program(Shell_State* shell,
+                         Running_Program* program,
                          cz::Slice<const cz::Str> args,
                          cz::Input_File in,
                          cz::Output_File out,
@@ -98,6 +100,12 @@ static Error run_program(Running_Program* program,
     if (args[0] == "exit") {
         program->type = Running_Program::EXIT;
     }
+    if (args[0] == "pwd") {
+        program->type = Running_Program::PWD;
+    }
+    if (args[0] == "cd") {
+        program->type = Running_Program::CD;
+    }
 
     // If command is a builtin.
     if (program->type != Running_Program::PROCESS) {
@@ -112,6 +120,8 @@ static Error run_program(Running_Program* program,
         program->v.builtin.in = in;
         program->v.builtin.out = out;
         program->v.builtin.err = err;
+        program->v.builtin.working_directory =
+            shell->working_directory.clone_null_terminate(cz::heap_allocator());
         return Error_Success;
     }
 
@@ -119,6 +129,7 @@ static Error run_program(Running_Program* program,
     options.std_in = in;
     options.std_out = out;
     options.std_err = err;
+    options.working_directory = shell->working_directory.buffer;
     CZ_DEFER(options.close_all());
 
     program->v.process = {};

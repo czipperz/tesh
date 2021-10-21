@@ -5,8 +5,9 @@
 #include <cz/format.hpp>
 #include <cz/heap.hpp>
 #include <cz/parse.hpp>
+#include <cz/path.hpp>
 
-bool tick_program(Running_Program* program, int* exit_code) {
+bool tick_program(Shell_State* shell, Running_Program* program, int* exit_code) {
     ZoneScoped;
 
     switch (program->type) {
@@ -88,7 +89,10 @@ bool tick_program(Running_Program* program, int* exit_code) {
                     st.file = builtin.in;
                     builtin.in = {};
                 } else {
-                    if (!st.file.open(arg.clone_null_terminate(cz::heap_allocator()).buffer)) {
+                    cz::String path = {};
+                    cz::path::make_absolute(arg, shell->working_directory, cz::heap_allocator(),
+                                            &path);
+                    if (!st.file.open(path.buffer)) {
                         cz::Str message = cz::format("cat: ", arg, ": No such file or directory\n");
                         (void)builtin.err.write(message.buffer, message.len);
                         continue;
@@ -122,6 +126,25 @@ bool tick_program(Running_Program* program, int* exit_code) {
         int num = 1;
         cz::parse(builtin.args[1], &num);
         exit(num);
+    } break;
+
+    case Running_Program::PWD: {
+        auto& builtin = program->v.builtin;
+        cz::Str wd = shell->working_directory;
+        builtin.out.write(wd.buffer, wd.len);
+        builtin.out.write("\n", 1);
+        goto finish_builtin;
+    } break;
+
+    case Running_Program::CD: {
+        auto& builtin = program->v.builtin;
+        if (builtin.args.len >= 2) {
+            cz::String new_wd = {};
+            cz::path::make_absolute(builtin.args[1], shell->working_directory, cz::heap_allocator(),
+                                    &new_wd);
+            shell->working_directory = new_wd;
+        }
+        goto finish_builtin;
     } break;
 
     default:

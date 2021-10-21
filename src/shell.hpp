@@ -14,6 +14,8 @@ struct Running_Program {
         ECHO,
         CAT,
         EXIT,
+        PWD,
+        CD,
     } type;
     union {
         cz::Process process;
@@ -22,6 +24,7 @@ struct Running_Program {
             cz::Input_File in;
             cz::Output_File out;
             cz::Output_File err;
+            cz::Str working_directory;  // null terminated
             bool close_err;
             union {
                 struct {
@@ -53,6 +56,8 @@ struct Shell_State {
     cz::Vector<cz::Str> variable_values;
 
     cz::Vector<Running_Line> lines;
+
+    cz::String working_directory;
 };
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -75,4 +80,4 @@ Error start_execute_line(Shell_State* shell, const Parse_Line& line, uint64_t id
 
 ///////////////////////////////////////////////////////////////////////////////
 
-bool tick_program(Running_Program* program, int* exit_code);
+bool tick_program(Shell_State* shell, Running_Program* program, int* exit_code);

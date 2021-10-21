@@ -10,6 +10,7 @@
 #include <cz/string.hpp>
 #include <cz/util.hpp>
 #include <cz/vector.hpp>
+#include <cz/working_directory.hpp>
 
 #ifdef _WIN32
 #include <shellscalingapi.h>
@@ -353,7 +354,7 @@ static bool read_process_data(Shell_State* shell, Backlog_State* backlog) {
         for (size_t p = 0; p < process->pipeline.len; ++p) {
             Running_Program* program = &process->pipeline[p];
             int exit_code = 1;
-            if (tick_program(program, &exit_code)) {
+            if (tick_program(shell, program, &exit_code)) {
                 process->pipeline.remove(p);
                 --p;
             }
@@ -744,6 +745,11 @@ int actual_main(int argc, char** argv) {
 
     prompt.prefix = "$ ";
     rend.complete_redraw = true;
+
+    if (!cz::get_working_directory(cz::heap_allocator(), &shell.working_directory)) {
+        fprintf(stderr, "Failed to get working directory\n");
+        return 1;
+    }
 
     {
         backlog.buffers.reserve(cz::heap_allocator(), 1);
