@@ -8,6 +8,7 @@
 ///////////////////////////////////////////////////////////////////////////////
 
 static Error run_program(Shell_State* shell,
+                         cz::Allocator allocator,
                          Running_Program* program,
                          cz::Slice<const cz::Str> args,
                          cz::Input_File in,
@@ -16,7 +17,10 @@ static Error run_program(Shell_State* shell,
 
 ///////////////////////////////////////////////////////////////////////////////
 
-Error start_execute_line(Shell_State* shell, const Parse_Line& parse_line, uint64_t id) {
+Error start_execute_line(Shell_State* shell,
+                         cz::Buffer_Array arena,
+                         const Parse_Line& parse_line,
+                         uint64_t id) {
     ZoneScoped;
 
     if (parse_line.pipeline.len == 0)
@@ -24,17 +28,25 @@ Error start_execute_line(Shell_State* shell, const Parse_Line& parse_line, uint6
 
     Running_Line running_line = {};
     running_line.id = id;
+    running_line.arena = arena;
+    CZ_DEFER(running_line.pipeline.drop(cz::heap_allocator()));
 
     cz::Input_File line_in;
     cz::Output_File line_out;
-    if (!cz::create_process_input_pipe(&line_in, &running_line.in))
+    if (!cz::create_process_input_pipe(&line_in, &running_line.in)) {
+    cleanup1:
+        line_in.close();
+        line_out.close();
+        running_line.in.close();
+        running_line.out.close();
         return Error_IO;
+    }
     if (!cz::create_process_output_pipe(&line_out, &running_line.out))
-        return Error_IO;
+        goto cleanup1;
     if (!running_line.in.set_non_blocking())
-        return Error_IO;
+        goto cleanup1;
     if (!running_line.out.set_non_blocking())
-        return Error_IO;
+        goto cleanup1;
 
     cz::Input_File pipe_in;
     cz::Output_File pipe_out;
@@ -61,7 +73,8 @@ Error start_execute_line(Shell_State* shell, const Parse_Line& parse_line, uint6
         }
 
         Running_Program running_program = {};
-        Error error = run_program(shell, &running_program, parse_program.args, in, out, err);
+        Error error = run_program(shell, arena.allocator(), &running_program, parse_program.args,
+                                  in, out, err);
         if (error != Error_Success)
             return error;
 
@@ -71,6 +84,7 @@ Error start_execute_line(Shell_State* shell, const Parse_Line& parse_line, uint6
 
     shell->lines.reserve(cz::heap_allocator(), 1);
     shell->lines.push(running_line);
+    shell->lines.last().pipeline = running_line.pipeline.clone(arena.allocator());
 
     return Error_Success;
 }
@@ -78,6 +92,7 @@ Error start_execute_line(Shell_State* shell, const Parse_Line& parse_line, uint6
 ///////////////////////////////////////////////////////////////////////////////
 
 static Error run_program(Shell_State* shell,
+                         cz::Allocator allocator,
                          Running_Program* program,
                          cz::Slice<const cz::Str> args,
                          cz::Input_File in,
@@ -88,7 +103,7 @@ static Error run_program(Shell_State* shell,
     // TODO: This is the wrong place to expand aliases.
     for (size_t i = 0; i < shell->alias_names.len; ++i) {
         if (args[0] == shell->alias_names[i]) {
-            cz::Slice<cz::Str> args2 = args.clone(cz::heap_allocator());
+            cz::Slice<cz::Str> args2 = args.clone(allocator);
             args2[0] = shell->alias_values[i];
             args = args2;
             break;
@@ -104,7 +119,7 @@ static Error run_program(Shell_State* shell,
     if (args[0] == "cat") {
         program->type = Running_Program::CAT;
         program->v.builtin.st.cat = {};
-        program->v.builtin.st.cat.buffer = (char*)cz::heap_allocator().alloc({4096, 1});
+        program->v.builtin.st.cat.buffer = (char*)allocator.alloc({4096, 1});
         program->v.builtin.st.cat.outer = 1;
     }
     if (args[0] == "exit") {
@@ -137,7 +152,7 @@ static Error run_program(Shell_State* shell,
         program->v.builtin.out = out;
         program->v.builtin.err = err;
         program->v.builtin.working_directory =
-            shell->working_directory.clone_null_terminate(cz::heap_allocator());
+            shell->working_directory.clone_null_terminate(allocator);
         return Error_Success;
     }
 

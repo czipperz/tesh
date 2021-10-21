@@ -17,6 +17,7 @@
 #include <windows.h>
 #endif
 
+#include "global.hpp"
 #include "shell.hpp"
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -72,6 +73,7 @@ struct Prompt_State {
     uint64_t process_id;
     uint64_t history_counter;
     cz::Vector<cz::Str> history;
+    cz::Buffer_Array history_arena;
 };
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -364,11 +366,17 @@ static bool run_line(Shell_State* shell, cz::Str text, uint64_t id) {
     Error error;
     Parse_Line line = {};
 
-    error = parse_line(shell, cz::heap_allocator(), &line, text);
+    cz::Buffer_Array arena;
+    if (shell->arenas.len > 0)
+        arena = shell->arenas.pop();
+    else
+        arena.init();
+
+    error = parse_line(shell, arena.allocator(), &line, text);
     if (error != Error_Success)
         return false;
 
-    error = start_execute_line(shell, line, id);
+    error = start_execute_line(shell, arena, line, id);
     if (error != Error_Success)
         return false;
 
@@ -409,6 +417,12 @@ static bool read_process_data(Shell_State* shell, Backlog_State* backlog) {
         if (process->pipeline.len == 0) {
             process->in.close();
             process->out.close();
+
+            cz::Buffer_Array arena = process->arena;
+            arena.clear();
+            shell->arenas.reserve(cz::heap_allocator(), 1);
+            shell->arenas.push(arena);
+
             shell->lines.remove(i);
             --i;
         }
@@ -586,7 +600,7 @@ static int process_events(Backlog_State* backlog,
                 }
 
                 prompt->history.reserve(cz::heap_allocator(), 1);
-                prompt->history.push(prompt->text.clone(cz::heap_allocator()));
+                prompt->history.push(prompt->text.clone(prompt->history_arena.allocator()));
                 prompt->history_counter = prompt->history.len;
 
                 prompt->text.len = 0;
@@ -771,6 +785,12 @@ int actual_main(int argc, char** argv) {
     Prompt_State prompt = {};
     Shell_State shell = {};
 
+    prompt.history_arena.init();
+
+    cz::Buffer_Array temp_arena;
+    temp_arena.init();
+    temp_allocator = temp_arena.allocator();
+
     prompt.prefix = "$ ";
     rend.complete_redraw = true;
 
@@ -844,6 +864,8 @@ int actual_main(int argc, char** argv) {
 
     while (1) {
         uint32_t start_frame = SDL_GetTicks();
+
+        temp_arena.clear();
 
         int status = process_events(&backlog, &prompt, &rend, &shell);
         if (status < 0)
