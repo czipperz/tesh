@@ -587,6 +587,12 @@ static int process_events(Backlog_State* backlog,
                 ensure_prompt_on_screen(rend, backlog);
                 ++num_events;
             }
+            if (mod == (KMOD_CTRL | KMOD_ALT) && event.key.keysym.sym == SDLK_BACKSPACE) {
+                prompt->text.remove_range(0, prompt->cursor);
+                prompt->cursor = 0;
+                ensure_prompt_on_screen(rend, backlog);
+                ++num_events;
+            }
             if ((mod == 0 && event.key.keysym.sym == SDLK_LEFT) ||
                 (mod == KMOD_CTRL && event.key.keysym.sym == SDLK_b)) {
                 if (prompt->cursor > 0) {
