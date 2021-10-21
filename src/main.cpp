@@ -25,6 +25,7 @@
 
 struct Render_State {
     TTF_Font* font;
+    int font_width;
     int font_height;
     int window_height;
     SDL_Surface* backlog_cache[256];
@@ -74,10 +75,18 @@ struct Prompt_State {
 };
 
 ///////////////////////////////////////////////////////////////////////////////
-// Data
+// Configuration
 ///////////////////////////////////////////////////////////////////////////////
 
-static SDL_Color process_colors[] = {
+#ifdef _WIN32
+const char* font_path = "C:/Windows/Fonts/MesloLGM-Regular.ttf";
+#else
+const char* font_path = "/usr/share/fonts/TTF/MesloLGMDZ-Regular.ttf";
+#endif
+int font_size = 12;
+int tab_width = 8;
+
+SDL_Color process_colors[] = {
     {0x18, 0, 0, 0xff},    {0, 0x18, 0, 0xff},    {0, 0, 0x26, 0xff},
     {0x11, 0x11, 0, 0xff}, {0, 0x11, 0x11, 0xff}, {0x11, 0, 0x17, 0xff},
 };
@@ -132,8 +141,15 @@ static void render_char(SDL_Surface* window_surface,
         return;
     }
 
-    SDL_Surface* s = rasterize_character_cached(rend, cache, c, foreground);
-    if (point->x + s->w > window_surface->w) {
+    int width = rend->font_width;
+    SDL_Surface* s = nullptr;
+    if (c == '\t') {
+        width *= tab_width;
+    } else {
+        s = rasterize_character_cached(rend, cache, c, foreground);
+    }
+
+    if (point->x + width > window_surface->w) {
         point->x = 0;
         point->y += rend->font_height;
     }
@@ -143,13 +159,14 @@ static void render_char(SDL_Surface* window_surface,
 
     {
         ZoneScopedN("blit_character");
-        point->w = s->w;
+        point->w = width;
         point->h = rend->font_height;
         SDL_FillRect(window_surface, point, background);
-        SDL_BlitSurface(s, NULL, window_surface, point);
+        if (s)
+            SDL_BlitSurface(s, NULL, window_surface, point);
     }
 
-    point->x += s->w;
+    point->x += width;
 }
 
 static void render_backlog(SDL_Surface* window_surface,
@@ -745,17 +762,6 @@ static int process_events(Backlog_State* backlog,
 }
 
 ///////////////////////////////////////////////////////////////////////////////
-// Configuration
-///////////////////////////////////////////////////////////////////////////////
-
-#ifdef _WIN32
-const char* font_path = "C:/Windows/Fonts/MesloLGM-Regular.ttf";
-#else
-const char* font_path = "/usr/share/fonts/TTF/MesloLGMDZ-Regular.ttf";
-#endif
-int font_size = 12;
-
-///////////////////////////////////////////////////////////////////////////////
 // main
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -828,6 +834,8 @@ int actual_main(int argc, char** argv) {
     CZ_DEFER(TTF_CloseFont(rend.font));
 
     rend.font_height = TTF_FontLineSkip(rend.font);
+    rend.font_width = 10;
+    TTF_GlyphMetrics(rend.font, ' ', nullptr, nullptr, nullptr, nullptr, &rend.font_width);
 
     rend.backlog_fg_color = {0xdd, 0xdd, 0xdd, 0xff};
     rend.prompt_fg_color = {0x77, 0xf9, 0xff, 0xff};
