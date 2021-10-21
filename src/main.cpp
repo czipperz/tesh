@@ -48,6 +48,8 @@ struct Render_State {
     Visual_Point backlog_start;  // First point that was drawn
     Visual_Point backlog_end;    // Last point that was drawn
 
+    bool hands_off;  // True if no user actions have occurred since the last command was ran.
+
     SDL_Color prompt_fg_color;
 };
 
@@ -177,16 +179,16 @@ static void render_char(SDL_Surface* window_surface,
     int width = coord_trans(point, rend->window_cols, c);
 
     if (point->y != old_y) {
-        // Beyond bottom of screen.
-        if (point->y >= rend->window_rows_ru)
-            return;
-
         rect.w = window_surface->w - rect.x;
         rect.h = rend->font_height;
         SDL_FillRect(window_surface, &rect, background);
 
         rect.x = 0;
         rect.y += rend->font_height;
+
+        // Beyond bottom of screen.
+        if (point->y >= rend->window_rows_ru)
+            return;
 
         // Newlines aren't drawn.
         if (width == 0)
@@ -328,6 +330,36 @@ static void render_prompt(SDL_Surface* window_surface,
     }
 }
 
+static void ensure_prompt_on_screen(Render_State* rend, Backlog_State* backlog);
+static void auto_scroll_start_paging(Render_State* rend, Backlog_State* backlog) {
+    uint64_t prompt_position = 0;
+    for (size_t e = backlog->events.len; e-- > 0;) {
+        Backlog_Event* event = &backlog->events[e];
+        if (event->type == BACKLOG_EVENT_START_PROMPT) {
+            prompt_position = event->index;
+            break;
+        }
+    }
+
+    // If we put the previous prompt at the top what happens.
+    Visual_Point point = {};
+    point.index = prompt_position;
+    while (point.index < backlog->length && point.y + 3 < rend->window_rows) {
+        char c = backlog->buffers[OUTER_INDEX(point.index)][INNER_INDEX(point.index)];
+        coord_trans(&point, rend->window_cols, c);
+    }
+
+    if (point.y + 3 >= rend->window_rows) {
+        rend->backlog_start = {};
+        rend->backlog_start.index = prompt_position;
+        rend->complete_redraw = true;
+        // Reach maximum scroll so stop.
+        rend->hands_off = false;
+    } else {
+        ensure_prompt_on_screen(rend, backlog);
+    }
+}
+
 static void render_frame(SDL_Window* window,
                          Render_State* rend,
                          Backlog_State* backlog,
@@ -339,6 +371,9 @@ static void render_frame(SDL_Window* window,
     rend->window_rows = window_surface->h / rend->font_height;
     rend->window_rows_ru = (window_surface->h + rend->font_height - 1) / rend->font_height;
     rend->window_cols = window_surface->w / rend->font_width;
+
+    if (rend->hands_off)
+        auto_scroll_start_paging(rend, backlog);
 
     if (rend->complete_redraw) {
         ZoneScopedN("draw_background");
@@ -665,6 +700,7 @@ static int process_events(Backlog_State* backlog,
     int num_events = 0;
     for (SDL_Event event; SDL_PollEvent(&event);) {
         ZoneScopedN("process_event");
+        rend->hands_off = false;
         switch (event.type) {
         case SDL_QUIT:
             return -1;
@@ -713,6 +749,7 @@ static int process_events(Backlog_State* backlog,
                 append_text(backlog, prompt->process_id, "\n");
 
                 if (event.key.keysym.sym == SDLK_RETURN) {
+                    rend->hands_off = true;
                     if (!run_line(shell, prompt->text, prompt->process_id)) {
                         append_text(backlog, prompt->process_id, "Error: failed to execute\n");
                     }
