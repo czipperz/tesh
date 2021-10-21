@@ -544,8 +544,9 @@ static int process_events(Backlog_State* backlog,
                 mod |= KMOD_CTRL;
             if (mod & KMOD_SHIFT)
                 mod |= KMOD_SHIFT;
-            if (mod & KMOD_GUI)
-                mod |= KMOD_GUI;
+
+            // Ignore the GUI key.
+            mod &= ~KMOD_GUI;
 
             if (event.key.keysym.sym == SDLK_ESCAPE)
                 return -1;
