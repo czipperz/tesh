@@ -198,7 +198,10 @@ static void render_backlog(SDL_Surface* window_surface,
     rend->backlog_end_index = i;
 }
 
-static void render_prompt(SDL_Surface* window_surface, Render_State* rend, Prompt_State* prompt) {
+static void render_prompt(SDL_Surface* window_surface,
+                          Render_State* rend,
+                          Prompt_State* prompt,
+                          Shell_State* shell) {
     ZoneScoped;
 
     SDL_Rect point = rend->backlog_end_point;
@@ -212,6 +215,15 @@ static void render_prompt(SDL_Surface* window_surface, Render_State* rend, Promp
 
     SDL_Color bg_color = process_colors[prompt->process_id % CZ_DIM(process_colors)];
     uint32_t background = SDL_MapRGB(window_surface->format, bg_color.r, bg_color.g, bg_color.b);
+
+    for (size_t i = 0; i < shell->working_directory.len; ++i) {
+        char c = shell->working_directory[i];
+        render_char(window_surface, rend, &point, rend->backlog_cache, background,
+                    rend->backlog_fg_color, c);
+    }
+
+    render_char(window_surface, rend, &point, rend->backlog_cache, background,
+                rend->backlog_fg_color, ' ');
 
     for (size_t i = 0; i < prompt->prefix.len; ++i) {
         char c = prompt->prefix[i];
@@ -256,7 +268,8 @@ static void render_prompt(SDL_Surface* window_surface, Render_State* rend, Promp
 static void render_frame(SDL_Window* window,
                          Render_State* rend,
                          Backlog_State* backlog,
-                         Prompt_State* prompt) {
+                         Prompt_State* prompt,
+                         Shell_State* shell) {
     ZoneScoped;
 
     SDL_Surface* window_surface = SDL_GetWindowSurface(window);
@@ -271,7 +284,7 @@ static void render_frame(SDL_Window* window,
     }
 
     render_backlog(window_surface, rend, backlog);
-    render_prompt(window_surface, rend, prompt);
+    render_prompt(window_surface, rend, prompt, shell);
 
     {
         const SDL_Rect rects[] = {{0, 0, window_surface->w, window_surface->h}};
@@ -544,6 +557,8 @@ static int process_events(Backlog_State* backlog,
                     rend->backlog_end_point = {};
                 }
                 set_backlog_process(backlog, -3);
+                append_text(backlog, prompt->process_id, shell->working_directory);
+                append_text(backlog, prompt->process_id, " ");
                 append_text(backlog, prompt->process_id, prompt->prefix);
                 append_text(backlog, -2, prompt->text);
                 append_text(backlog, prompt->process_id, "\n");
@@ -816,7 +831,7 @@ int actual_main(int argc, char** argv) {
             status = 1;
 
         if (status > 0)
-            render_frame(window, &rend, &backlog, &prompt);
+            render_frame(window, &rend, &backlog, &prompt, &shell);
 
         const uint32_t frame_length = 1000 / 60;
         uint32_t wanted_end = start_frame + frame_length;
