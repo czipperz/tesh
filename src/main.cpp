@@ -579,29 +579,29 @@ static int process_events(Backlog_State* backlog,
                 ensure_prompt_on_screen(rend, backlog);
                 ++num_events;
             }
-            if (event.key.keysym.sym == SDLK_BACKSPACE) {
+            if (mod == 0 && event.key.keysym.sym == SDLK_BACKSPACE) {
                 if (prompt->cursor > 0) {
                     --prompt->cursor;
                     prompt->text.remove(prompt->cursor);
-                    ensure_prompt_on_screen(rend, backlog);
-                    ++num_events;
                 }
+                ensure_prompt_on_screen(rend, backlog);
+                ++num_events;
             }
             if ((mod == 0 && event.key.keysym.sym == SDLK_LEFT) ||
                 (mod == KMOD_CTRL && event.key.keysym.sym == SDLK_b)) {
                 if (prompt->cursor > 0) {
                     --prompt->cursor;
-                    ensure_prompt_on_screen(rend, backlog);
-                    ++num_events;
                 }
+                ensure_prompt_on_screen(rend, backlog);
+                ++num_events;
             }
             if ((mod == 0 && event.key.keysym.sym == SDLK_RIGHT) ||
                 (mod == KMOD_CTRL && event.key.keysym.sym == SDLK_f)) {
                 if (prompt->cursor < prompt->text.len) {
                     ++prompt->cursor;
-                    ensure_prompt_on_screen(rend, backlog);
-                    ++num_events;
                 }
+                ensure_prompt_on_screen(rend, backlog);
+                ++num_events;
             }
             if ((mod == 0 && event.key.keysym.sym == SDLK_UP) ||
                 (mod == KMOD_ALT && event.key.keysym.sym == SDLK_p)) {
@@ -612,9 +612,9 @@ static int process_events(Backlog_State* backlog,
                     prompt->text.reserve(cz::heap_allocator(), hist.len);
                     prompt->text.append(hist);
                     prompt->cursor = prompt->text.len;
-                    ensure_prompt_on_screen(rend, backlog);
-                    ++num_events;
                 }
+                ensure_prompt_on_screen(rend, backlog);
+                ++num_events;
             }
             if ((mod == 0 && event.key.keysym.sym == SDLK_DOWN) ||
                 (mod == KMOD_ALT && event.key.keysym.sym == SDLK_n)) {
@@ -627,9 +627,9 @@ static int process_events(Backlog_State* backlog,
                         prompt->text.append(hist);
                     }
                     prompt->cursor = prompt->text.len;
-                    ensure_prompt_on_screen(rend, backlog);
-                    ++num_events;
                 }
+                ensure_prompt_on_screen(rend, backlog);
+                ++num_events;
             }
             if (mod == KMOD_ALT && event.key.keysym.sym == SDLK_a) {
                 prompt->cursor = 0;
