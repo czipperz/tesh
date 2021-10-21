@@ -14,7 +14,12 @@ set(CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake ${CMAKE_MODULE_PATH})
 include(cmake/SetupSDL2.cmake)
 
 # Build wrapper executable.
-add_executable(${PROGRAM_NAME} main.cpp)
+if(CMAKE_BUILD_TYPE MATCHES Debug)
+    add_executable(${PROGRAM_NAME} main.cpp)
+    target_compile_definitions(${PROGRAM_NAME} PUBLIC CONSOLE_MAIN)
+else()
+    add_executable(${PROGRAM_NAME} WIN32 main.cpp)
+endif()
 target_link_libraries(${PROGRAM_NAME} ${LIBRARY_NAME} cz tracy)
 
 # Add test program.
