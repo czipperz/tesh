@@ -668,12 +668,14 @@ static int process_events(Backlog_State* backlog,
                 ensure_prompt_on_screen(rend, backlog);
                 ++num_events;
             }
-            if (mod == KMOD_ALT && event.key.keysym.sym == SDLK_a) {
+            if ((mod == 0 && event.key.keysym.sym == SDLK_HOME) ||
+                (mod == KMOD_ALT && event.key.keysym.sym == SDLK_a)) {
                 prompt->cursor = 0;
                 ensure_prompt_on_screen(rend, backlog);
                 ++num_events;
             }
-            if (mod == KMOD_ALT && event.key.keysym.sym == SDLK_e) {
+            if ((mod == 0 && event.key.keysym.sym == SDLK_END) ||
+                (mod == KMOD_ALT && event.key.keysym.sym == SDLK_e)) {
                 prompt->cursor = prompt->text.len;
                 ensure_prompt_on_screen(rend, backlog);
                 ++num_events;
