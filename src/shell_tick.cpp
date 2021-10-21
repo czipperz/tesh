@@ -2,10 +2,63 @@
 
 #include <stdlib.h>
 #include <Tracy.hpp>
+#include <cz/char_type.hpp>
 #include <cz/format.hpp>
 #include <cz/heap.hpp>
 #include <cz/parse.hpp>
 #include <cz/path.hpp>
+
+static void standardize_arg(const Shell_State* shell,
+                            cz::Str arg,
+                            cz::Allocator allocator,
+                            cz::String* new_wd,
+                            bool make_absolute) {
+    // Expand home directory.
+    if (arg == "~") {
+        cz::Str home = {};
+        get_env_var(shell, "HOME", &home);
+        new_wd->reserve_exact(allocator, home.len + 1);
+        new_wd->append(home);
+        new_wd->null_terminate();
+    } else if (arg.starts_with("~/")) {
+        cz::Str home = {};
+        get_env_var(shell, "HOME", &home);
+        new_wd->reserve_exact(allocator, home.len + arg.len);
+        new_wd->append(home);
+        new_wd->push('/');
+        new_wd->append(arg.slice_start(2));
+        cz::path::flatten(new_wd);
+        new_wd->null_terminate();
+    } else {
+        if (make_absolute) {
+            cz::path::make_absolute(arg, shell->working_directory, allocator, new_wd);
+        } else {
+            new_wd->reserve_exact(allocator, arg.len);
+            new_wd->append(arg);
+        }
+    }
+
+#ifdef _WIN32
+    if (make_absolute)
+        cz::path::convert_to_forward_slashes(new_wd);
+#endif
+
+    if (cz::path::is_absolute(*new_wd)) {
+#ifdef _WIN32
+        new_wd->get(0) = cz::to_upper(new_wd->get(0));
+#endif
+
+#ifdef _WIN32
+        bool pop = (new_wd->len > 3 && new_wd->ends_with('/'));
+#else
+        bool pop = (new_wd->len > 1 && new_wd->ends_with('/'));
+#endif
+        if (pop) {
+            new_wd->pop();
+            new_wd->null_terminate();
+        }
+    }
+}
 
 bool tick_program(Shell_State* shell, Running_Program* program, int* exit_code) {
     ZoneScoped;
@@ -138,20 +191,15 @@ bool tick_program(Shell_State* shell, Running_Program* program, int* exit_code) 
 
     case Running_Program::CD: {
         auto& builtin = program->v.builtin;
-        if (builtin.args.len >= 2) {
-            cz::String new_wd = {};
-            cz::path::make_absolute(builtin.args[1], shell->working_directory, cz::heap_allocator(),
-                                    &new_wd);
-#ifdef _WIN32
-            bool pop = (new_wd.len > 3 && new_wd.ends_with('/'));
-#else
-            bool pop = (new_wd.len > 1 && new_wd.ends_with('/'));
-#endif
-            if (pop) {
-                new_wd.pop();
-                new_wd.null_terminate();
-            }
+        cz::String new_wd = {};
+        cz::Str arg = (builtin.args.len >= 2 ? builtin.args[1] : "~");
+        standardize_arg(shell, arg, cz::heap_allocator(), &new_wd, /*make_absolute=*/true);
+        if (cz::file::is_directory(new_wd.buffer)) {
             shell->working_directory = new_wd;
+        } else {
+            (void)builtin.err.write("cd: ");
+            (void)builtin.err.write(new_wd.buffer, new_wd.len);
+            (void)builtin.err.write(": Not a directory\n");
         }
         goto finish_builtin;
     } break;

@@ -60,6 +60,9 @@ struct Shell_State {
     cz::String working_directory;
 };
 
+bool get_env_var(const Shell_State* shell, cz::Str key, cz::Str *value);
+void set_env_var(Shell_State* shell, cz::Str key, cz::Str value);
+
 ///////////////////////////////////////////////////////////////////////////////
 
 struct Parse_Program {
@@ -69,8 +72,6 @@ struct Parse_Program {
 struct Parse_Line {
     cz::Vector<Parse_Program> pipeline;
 };
-
-///////////////////////////////////////////////////////////////////////////////
 
 Error parse_line(const Shell_State* shell, cz::Allocator allocator, Parse_Line* out, cz::Str text);
 

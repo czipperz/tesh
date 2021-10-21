@@ -774,6 +774,13 @@ int actual_main(int argc, char** argv) {
     }
 
     {
+        cz::String home = {};
+        if (cz::env::get_home(cz::heap_allocator(), &home)) {
+            set_env_var(&shell, "HOME", home);
+        }
+    }
+
+    {
         backlog.buffers.reserve(cz::heap_allocator(), 1);
         char* buffer = (char*)cz::heap_allocator().alloc({4096, 1});
         CZ_ASSERT(buffer);
