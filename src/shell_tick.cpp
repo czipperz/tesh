@@ -195,7 +195,10 @@ bool tick_program(Shell_State* shell, Running_Program* program, int* exit_code) 
         cz::Str arg = (builtin.args.len >= 2 ? builtin.args[1] : "~");
         standardize_arg(shell, arg, temp_allocator, &new_wd, /*make_absolute=*/true);
         if (cz::file::is_directory(new_wd.buffer)) {
-            shell->working_directory = new_wd.clone(cz::heap_allocator());
+            shell->working_directory.len = 0;
+            shell->working_directory.reserve(cz::heap_allocator(), new_wd.len + 1);
+            shell->working_directory.append(new_wd);
+            shell->working_directory.null_terminate();
         } else {
             (void)builtin.err.write("cd: ");
             (void)builtin.err.write(new_wd.buffer, new_wd.len);
@@ -237,6 +240,7 @@ bool tick_program(Shell_State* shell, Running_Program* program, int* exit_code) 
             if (arg.split_excluding('=', &key, &value)) {
                 shell->alias_names.reserve(cz::heap_allocator(), 1);
                 shell->alias_values.reserve(cz::heap_allocator(), 1);
+                // TODO: garbage collect / ref count?
                 shell->alias_names.push(key.clone(cz::heap_allocator()));
                 shell->alias_values.push(value.clone(cz::heap_allocator()));
             } else {
