@@ -581,7 +581,8 @@ static int process_events(Backlog_State* backlog,
 
             if (event.key.keysym.sym == SDLK_ESCAPE)
                 return -1;
-            if (event.key.keysym.sym == SDLK_RETURN) {
+            if ((mod == KMOD_CTRL && event.key.keysym.sym == SDLK_c) ||
+                event.key.keysym.sym == SDLK_RETURN) {
                 append_text(backlog, -1, "\n");
                 if (rend->backlog_scroll_screen_start + 1 == backlog->length) {
                     ++rend->backlog_scroll_screen_start;
@@ -595,8 +596,12 @@ static int process_events(Backlog_State* backlog,
                 append_text(backlog, -2, prompt->text);
                 append_text(backlog, prompt->process_id, "\n");
 
-                if (!run_line(shell, prompt->text, prompt->process_id)) {
-                    append_text(backlog, prompt->process_id, "Error: failed to execute\n");
+                if (event.key.keysym.sym == SDLK_RETURN) {
+                    if (!run_line(shell, prompt->text, prompt->process_id)) {
+                        append_text(backlog, prompt->process_id, "Error: failed to execute\n");
+                    }
+                } else {
+                    // TODO: kill active process
                 }
 
                 prompt->history.reserve(cz::heap_allocator(), 1);
@@ -737,6 +742,19 @@ static int process_events(Backlog_State* backlog,
                     rend->backlog_scroll_screen_start = backlog->length;
                 rend->complete_redraw = true;
                 ++num_events;
+            }
+            if (mod == KMOD_SHIFT && event.key.keysym.sym == SDLK_INSERT) {
+                char* clip = SDL_GetClipboardText();
+                if (clip) {
+                    CZ_DEFER(SDL_free(clip));
+                    size_t len = strlen(clip);
+                    cz::String str = {clip, len, len};
+                    cz::strip_carriage_returns(&str);
+                    prompt->text.reserve(cz::heap_allocator(), str.len);
+                    prompt->text.insert(prompt->cursor, str);
+                    prompt->cursor += str.len;
+                    ++num_events;
+                }
             }
         } break;
 
