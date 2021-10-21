@@ -100,7 +100,7 @@ bool tick_program(Shell_State* shell, Running_Program* program, int* exit_code) 
 
         // Write a final newline.
         if (st.outer == builtin.args.len)
-            result = builtin.out.write("\n", 1);
+            result = builtin.out.write("\n");
 
         if (result > 0) {
             CZ_DEBUG_ASSERT(st.outer == builtin.args.len);
@@ -147,7 +147,7 @@ bool tick_program(Shell_State* shell, Running_Program* program, int* exit_code) 
                                             &path);
                     if (!st.file.open(path.buffer)) {
                         cz::Str message = cz::format("cat: ", arg, ": No such file or directory\n");
-                        (void)builtin.err.write(message.buffer, message.len);
+                        (void)builtin.err.write(message);
                         continue;
                     }
                 }
@@ -183,9 +183,8 @@ bool tick_program(Shell_State* shell, Running_Program* program, int* exit_code) 
 
     case Running_Program::PWD: {
         auto& builtin = program->v.builtin;
-        cz::Str wd = shell->working_directory;
-        builtin.out.write(wd.buffer, wd.len);
-        builtin.out.write("\n", 1);
+        builtin.out.write(shell->working_directory);
+        builtin.out.write("\n");
         goto finish_builtin;
     } break;
 
