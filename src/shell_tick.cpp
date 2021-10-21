@@ -1,8 +1,10 @@
 #include "shell.hpp"
 
+#include <stdlib.h>
 #include <Tracy.hpp>
 #include <cz/format.hpp>
 #include <cz/heap.hpp>
+#include <cz/parse.hpp>
 
 bool tick_program(Running_Program* program, int* exit_code) {
     ZoneScoped;
@@ -111,6 +113,15 @@ bool tick_program(Running_Program* program, int* exit_code) {
 
         if (result >= 0)
             goto finish_builtin;
+    } break;
+
+    case Running_Program::EXIT: {
+        auto& builtin = program->v.builtin;
+        if (builtin.args.len == 1)
+            exit(0);
+        int num = 1;
+        cz::parse(builtin.args[1], &num);
+        exit(num);
     } break;
 
     default:

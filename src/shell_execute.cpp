@@ -95,6 +95,9 @@ static Error run_program(Running_Program* program,
         program->v.builtin.st.cat.buffer = (char*)cz::heap_allocator().alloc({4096, 1});
         program->v.builtin.st.cat.outer = 1;
     }
+    if (args[0] == "exit") {
+        program->type = Running_Program::EXIT;
+    }
 
     // If command is a builtin.
     if (program->type != Running_Program::PROCESS) {

@@ -13,6 +13,7 @@ struct Running_Program {
         PROCESS,
         ECHO,
         CAT,
+        EXIT,
     } type;
     union {
         cz::Process process;
