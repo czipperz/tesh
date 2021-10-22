@@ -485,7 +485,7 @@ static bool run_line(Shell_State* shell, cz::Str text, uint64_t id) {
 
 static bool read_process_data(Shell_State* shell, Backlog_State* backlog) {
     static char buffer[4096];
-    bool changes = false;
+    size_t starting_length = backlog->length;
     for (size_t i = 0; i < shell->lines.len; ++i) {
         Running_Line* process = &shell->lines[i];
 
@@ -505,7 +505,6 @@ static bool read_process_data(Shell_State* shell, Backlog_State* backlog) {
                 if (result <= 0)
                     break;
                 append_text(backlog, process->id, {buffer, (size_t)result});
-                changes = true;
             }
 
             if (result == 0) {
@@ -527,7 +526,7 @@ static bool read_process_data(Shell_State* shell, Backlog_State* backlog) {
             --i;
         }
     }
-    return changes;
+    return backlog->length != starting_length;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
