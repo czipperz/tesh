@@ -13,6 +13,8 @@
 #include <cz/working_directory.hpp>
 
 #ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
 #include <shellscalingapi.h>
 #include <windows.h>
 #endif
@@ -845,13 +847,13 @@ static int process_events(Backlog_State* backlog,
                 ++num_events;
             }
             if (mod == KMOD_CTRL && event.key.keysym.sym == SDLK_v) {
-                int lines = (cz::max)(rend->window_rows, 6) - 3;
+                int lines = cz::max(rend->window_rows, 6) - 3;
                 scroll_down(rend, backlog, lines);
                 rend->complete_redraw = true;
                 ++num_events;
             }
             if (mod == KMOD_ALT && event.key.keysym.sym == SDLK_v) {
-                int lines = (cz::max)(rend->window_rows, 6) - 3;
+                int lines = cz::max(rend->window_rows, 6) - 3;
                 scroll_up(rend, backlog, lines);
                 rend->complete_redraw = true;
                 ++num_events;
@@ -859,7 +861,7 @@ static int process_events(Backlog_State* backlog,
             if (mod == KMOD_ALT && event.key.keysym.sym == SDLK_GREATER) {
                 rend->backlog_start = {};
                 rend->backlog_start.index = backlog->length;
-                int lines = (cz::max)(rend->window_rows, 3) - 3;
+                int lines = cz::max(rend->window_rows, 3) - 3;
                 scroll_up(rend, backlog, lines);
                 rend->complete_redraw = true;
                 ++num_events;
