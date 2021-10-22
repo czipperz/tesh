@@ -1052,6 +1052,7 @@ int actual_main(int argc, char** argv) {
     }
     CZ_DEFER(TTF_Quit());
 
+    rend.dpi_scale = 1.0f;
     {
         const float dpi_default = 96.0f;
         float dpi = 0;
