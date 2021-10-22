@@ -819,6 +819,19 @@ static int process_events(Backlog_State* backlog,
                 rend->complete_redraw = true;
                 ++num_events;
             }
+            if (mod == KMOD_ALT && event.key.keysym.sym == SDLK_LESS) {
+                size_t event_index = backlog->events.len;
+                while (event_index-- > 0) {
+                    Backlog_Event* event = &backlog->events[event_index];
+                    if (event->type == BACKLOG_EVENT_START_PROMPT) {
+                        rend->backlog_start = {};
+                        rend->backlog_start.index = backlog->events[event_index].index;
+                        rend->complete_redraw = true;
+                        ++num_events;
+                        break;
+                    }
+                }
+            }
             if (mod == (KMOD_CTRL | KMOD_ALT) && event.key.keysym.sym == SDLK_b) {
                 size_t event_index = 0;
                 while (event_index < backlog->events.len &&
