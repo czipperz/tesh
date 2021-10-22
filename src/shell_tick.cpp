@@ -213,8 +213,8 @@ bool tick_program(Shell_State* shell, Running_Program* program, int* exit_code) 
         int result = iterator.init(shell->working_directory.buffer);
         if (result == 1) {
             while (1) {
-                (void)builtin.err.write(iterator.str_name());
-                (void)builtin.err.write("\n");
+                (void)builtin.out.write(iterator.str_name());
+                (void)builtin.out.write("\n");
 
                 result = iterator.advance();
                 if (result <= 0)
