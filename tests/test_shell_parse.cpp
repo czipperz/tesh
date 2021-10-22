@@ -159,3 +159,35 @@ TEST_CASE("parse_line variable after arg is arg") {
     CHECK(out.pipeline[0].args[0] == "arg");
     CHECK(out.pipeline[0].args[1] == "c=d");
 }
+
+TEST_CASE("parse_line variable expand simple") {
+    Shell_State shell = {};
+    set_env_var(&shell, "var", "$value");
+    Parse_Line out = {};
+    Error error = parse_line(&shell, cz::heap_allocator(), &out, "$var$var");
+    REQUIRE(error == Error_Success);
+    REQUIRE(out.pipeline.len == 1);
+    REQUIRE(out.pipeline[0].args.len == 1);
+    CHECK(out.pipeline[0].args[0] == "$value$value");
+}
+
+TEST_CASE("parse_line variable expand inside quotes") {
+    Shell_State shell = {};
+    set_env_var(&shell, "var", "$value");
+    Parse_Line out = {};
+    Error error = parse_line(&shell, cz::heap_allocator(), &out, "\"$var$var\"");
+    REQUIRE(error == Error_Success);
+    REQUIRE(out.pipeline.len == 1);
+    REQUIRE(out.pipeline[0].args.len == 1);
+    CHECK(out.pipeline[0].args[0] == "$value$value");
+}
+
+TEST_CASE("parse_line 'echo $hi' hi is undefined") {
+    Shell_State shell = {};
+    Parse_Line out = {};
+    Error error = parse_line(&shell, cz::heap_allocator(), &out, "echo $hi");
+    REQUIRE(error == Error_Success);
+    REQUIRE(out.pipeline.len == 1);
+    REQUIRE(out.pipeline[0].args.len == 1);
+    CHECK(out.pipeline[0].args[0] == "echo");
+}

@@ -6,6 +6,8 @@
 #include <cz/heap.hpp>
 #include <cz/string.hpp>
 
+static bool get_var_at_point(cz::Str text, size_t index, cz::Str* key);
+
 Error parse_line(const Shell_State* shell, cz::Allocator allocator, Parse_Line* out, cz::Str text) {
     ZoneScoped;
 
@@ -69,6 +71,18 @@ Error parse_line(const Shell_State* shell, cz::Allocator allocator, Parse_Line* 
                     if (c == '"')
                         break;
                     ++index;
+                    if (c == '$') {
+                        cz::Str key;
+                        if (get_var_at_point(text, index, &key)) {
+                            index += key.len;
+                            cz::Str value;
+                            if (get_env_var(shell, key, &value)) {
+                                word.reserve(allocator, value.len);
+                                word.append(value);
+                            }
+                            continue;
+                        }
+                    }
                     if (c == '\\') {
                         if (index == text.len)
                             return Error_Parse;
@@ -100,6 +114,25 @@ Error parse_line(const Shell_State* shell, cz::Allocator allocator, Parse_Line* 
                 break;
             }
 
+            case '$': {
+                if (index + 1 == text.len)
+                    goto def;
+
+                cz::Str key;
+                if (!get_var_at_point(text, index + 1, &key))
+                    goto def;
+
+                index += key.len;
+
+                cz::Str value;
+                if (get_env_var(shell, key, &value)) {
+                    // TODO: split var over multiple words
+                    word.reserve(allocator, value.len);
+                    word.append(value);
+                }
+                break;
+            }
+
             default:
             def:
                 word.reserve(allocator, 1);
@@ -125,6 +158,10 @@ Error parse_line(const Shell_State* shell, cz::Allocator allocator, Parse_Line* 
             continue;
         }
 
+        // "echo $hi" when 'hi' is undefined should have 0 args.
+        if (index == text.len)
+            break;
+
         // Special character.
         switch (text[index]) {
         case '|': {
@@ -149,4 +186,19 @@ Error parse_line(const Shell_State* shell, cz::Allocator allocator, Parse_Line* 
     }
 
     return Error_Success;
+}
+
+static bool get_var_at_point(cz::Str text, size_t index, cz::Str* key) {
+    if (index == text.len)
+        return false;
+
+    size_t start = index;
+    for (; index < text.len; ++index) {
+        if (cz::is_alnum(text[index]))
+            continue;
+        break;
+    }
+
+    *key = text.slice(start, index);
+    return true;
 }
