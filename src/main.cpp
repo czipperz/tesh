@@ -970,6 +970,18 @@ int actual_main(int argc, char** argv) {
     }
 
     {
+        // TODO: parse envp to get all environment variables.
+        // Note(chris.gregory): Probably will be OS specific.  I can do Windows side.
+        const char* vars[] = {"PATH", "PATHEXT"};
+        cz::String value = {};
+        for (size_t i = 0; i < CZ_DIM(vars); ++i) {
+            value.len = 0;
+            if (cz::env::get(vars[i], temp_allocator, &value))
+                set_env_var(&shell, vars[i], value);
+        }
+    }
+
+    {
         backlog.buffers.reserve(cz::heap_allocator(), 1);
         char* buffer = (char*)cz::heap_allocator().alloc({4096, 1});
         CZ_ASSERT(buffer);
