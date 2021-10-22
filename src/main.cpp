@@ -699,10 +699,10 @@ static int process_events(Backlog_State* backlog,
                 append_text(backlog, prompt->process_id, "\n");
 
                 if (event.key.keysym.sym == SDLK_RETURN) {
-#ifdef AUTO_PAGE
-                    rend->auto_scroll = true;
-#else
+#if AUTO_PAGE
                     rend->auto_page = true;
+#else
+                    rend->auto_scroll = true;
 #endif
                     if (!run_line(shell, prompt->text, prompt->process_id)) {
                         append_text(backlog, prompt->process_id, "Error: failed to execute\n");
