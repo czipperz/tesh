@@ -540,98 +540,25 @@ static void scroll_down(Render_State* rend, Backlog_State* backlog, int lines) {
 }
 
 static void scroll_up(Render_State* rend, Backlog_State* backlog, int lines) {
-    ++lines;
-
-    Visual_Point* start = &rend->backlog_start;
-    uint64_t cursor = start->index;
-    // int desired_y = start->y - lines;
-
-    cz::Vector<Visual_Point> visual_sols = {};
-    visual_sols.reserve_exact(temp_allocator, lines);
-    visual_sols.len = lines;
-
-    // No good way to go backwards so we do it one physical line at a time.
-    // TODO: most of the time we should be able to a much simpler loop
-    while (1) {
-        if (cursor == 0)
-            return;
-
-        // Find start of line.
-        uint64_t sol = cursor - 1;
-        while (sol > 0) {
-            --sol;
-            char c = backlog->buffers[OUTER_INDEX(sol)][INNER_INDEX(sol)];
-            if (c == '\n') {
-                ++sol;
-                break;
-            }
-        }
-
-        // Loop through each visual line in this line.
-        size_t visual_sols_index = 0;
-        size_t visual_sols_len = 0;
-        Visual_Point point = {};
-        point.index = sol;
-
-        // Start of physical line is also the start of a visual line.
-        visual_sols[visual_sols_index] = point;
-        visual_sols_index = (visual_sols_index + 1 % lines);
-        ++visual_sols_len;
-
-        while (1) {
-            if (point.index >= cursor) {
-                // CZ_DEBUG_ASSERT(point.index == cursor);  // not sure if > case happens
-                break;
-            }
-
-            int old_y = point.y;
-            int width = 0;
-            while (point.y == old_y) {
-                char c = backlog->buffers[OUTER_INDEX(point.index)][INNER_INDEX(point.index)];
-                width = coord_trans(&point, rend->window_cols, c);
-            }
-
-            Visual_Point point2 = point;
-            point2.x -= width;
-            point2.column -= width;
-            if (width > 0)
-                point2.index--;
-            visual_sols[visual_sols_index] = point2;
-            visual_sols_index = (visual_sols_index + 1 % lines);
-            ++visual_sols_len;
-        }
-
-        CZ_DEBUG_ASSERT(visual_sols_len >= 2);
-        --visual_sols_len;
-        if (visual_sols_index == 0)
-            visual_sols_index = lines;
-        --visual_sols_index;
-
-        size_t desired = 0;
-        if (visual_sols_len >= lines)
-            desired = visual_sols_index;
-
-        *start = visual_sols[desired];
-        start->y = 0;
-        cursor = start->index;
-
-        if (lines <= visual_sols_len)
-            break;
-        lines -= visual_sols_len;
-    }
-
-#if 0
-    uint64_t* line_start = &rend->backlog_scroll_screen_start;
-    uint64_t cursor = *line_start;
+    Visual_Point* line_start = &rend->backlog_start;
+    uint64_t cursor     = line_start->index;
+    uint64_t line_chars = 0;
     while (lines > 0 && cursor > 0) {
         --cursor;
         char c = backlog->buffers[OUTER_INDEX(cursor)][INNER_INDEX(cursor)];
+        line_chars++;
         if (c == '\n') {
-            *line_start = cursor + 1;
+            line_start->index = cursor + 1;
             --lines;
+            line_chars = 0;
+        }
+        if (line_chars == rend->window_cols) {
+            line_start->index = cursor + 1;
+            --lines;
+            line_chars = 0;
         }
     }
-#endif
+    line_start->y = 0;
 }
 
 static void ensure_prompt_on_screen(Render_State* rend, Backlog_State* backlog) {
