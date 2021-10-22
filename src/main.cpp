@@ -51,7 +51,8 @@ struct Render_State {
     Visual_Point backlog_start;  // First point that was drawn
     Visual_Point backlog_end;    // Last point that was drawn
 
-    bool hands_off;  // True if no user actions have occurred since the last command was ran.
+    bool auto_page;
+    bool auto_scroll;
 
     SDL_Color prompt_fg_color;
 };
@@ -93,6 +94,8 @@ struct Prompt_State {
 ///////////////////////////////////////////////////////////////////////////////
 // Configuration
 ///////////////////////////////////////////////////////////////////////////////
+
+#define AUTO_PAGE 1
 
 #ifdef _WIN32
 const char* font_path = "C:/Windows/Fonts/MesloLGM-Regular.ttf";
@@ -370,7 +373,7 @@ static void auto_scroll_start_paging(Render_State* rend, Backlog_State* backlog)
         rend->backlog_start.index = prompt_position;
         rend->complete_redraw = true;
         // Reach maximum scroll so stop.
-        rend->hands_off = false;
+        rend->auto_page = false;
     } else {
         ensure_prompt_on_screen(rend, backlog);
     }
@@ -388,8 +391,10 @@ static void render_frame(SDL_Window* window,
     rend->window_rows_ru = (window_surface->h + rend->font_height - 1) / rend->font_height;
     rend->window_cols = window_surface->w / rend->font_width;
 
-    if (rend->hands_off)
+    if (rend->auto_page)
         auto_scroll_start_paging(rend, backlog);
+    if (rend->auto_scroll)
+        ensure_prompt_on_screen(rend, backlog);
 
     if (rend->complete_redraw) {
         ZoneScopedN("draw_background");
@@ -541,7 +546,7 @@ static void scroll_down(Render_State* rend, Backlog_State* backlog, int lines) {
 
 static void scroll_up(Render_State* rend, Backlog_State* backlog, int lines) {
     Visual_Point* line_start = &rend->backlog_start;
-    uint64_t cursor     = line_start->index;
+    uint64_t cursor = line_start->index;
     uint64_t line_chars = 0;
     while (lines > 0 && cursor > 0) {
         --cursor;
@@ -644,7 +649,8 @@ static int process_events(Backlog_State* backlog,
     int num_events = 0;
     for (SDL_Event event; SDL_PollEvent(&event);) {
         ZoneScopedN("process_event");
-        rend->hands_off = false;
+        rend->auto_page = false;
+        rend->auto_scroll = false;
         switch (event.type) {
         case SDL_QUIT:
             return -1;
@@ -693,7 +699,11 @@ static int process_events(Backlog_State* backlog,
                 append_text(backlog, prompt->process_id, "\n");
 
                 if (event.key.keysym.sym == SDLK_RETURN) {
-                    rend->hands_off = true;
+#ifdef AUTO_PAGE
+                    rend->auto_scroll = true;
+#else
+                    rend->auto_page = true;
+#endif
                     if (!run_line(shell, prompt->text, prompt->process_id)) {
                         append_text(backlog, prompt->process_id, "Error: failed to execute\n");
                     }
