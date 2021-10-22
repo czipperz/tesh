@@ -932,10 +932,11 @@ static int process_events(Backlog_State* backlog,
                 }
             }
 
+            // Note: C-= used to zoom in so you don't have to hold shift.
             if (mod == KMOD_CTRL &&
-                (event.key.keysym.sym == SDLK_PLUS || event.key.keysym.sym == SDLK_MINUS)) {
+                (event.key.keysym.sym == SDLK_EQUALS || event.key.keysym.sym == SDLK_MINUS)) {
                 int new_font_size = font_size;
-                if (event.key.keysym.sym == SDLK_PLUS) {
+                if (event.key.keysym.sym == SDLK_EQUALS) {
                     new_font_size += 4;
                 } else {
                     new_font_size = cz::max(new_font_size - 4, 4);
