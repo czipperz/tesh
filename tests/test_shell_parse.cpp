@@ -144,3 +144,18 @@ TEST_CASE("parse_line variable") {
     CHECK(out.pipeline[0].variable_names[1] == "c");
     CHECK(out.pipeline[0].variable_values[1] == "d");
 }
+
+TEST_CASE("parse_line variable after arg is arg") {
+    Shell_State shell = {};
+    Parse_Line out = {};
+    Error error = parse_line(&shell, cz::heap_allocator(), &out, "a=b arg c=d");
+    REQUIRE(error == Error_Success);
+    REQUIRE(out.pipeline.len == 1);
+    REQUIRE(out.pipeline[0].args.len == 2);
+    REQUIRE(out.pipeline[0].variable_names.len == 1);
+    REQUIRE(out.pipeline[0].variable_values.len == 1);
+    CHECK(out.pipeline[0].variable_names[0] == "a");
+    CHECK(out.pipeline[0].variable_values[0] == "b");
+    CHECK(out.pipeline[0].args[0] == "arg");
+    CHECK(out.pipeline[0].args[1] == "c=d");
+}

@@ -88,7 +88,7 @@ Error parse_line(const Shell_State* shell, cz::Allocator allocator, Parse_Line* 
             }
 
             case '=': {
-                if (any_special)
+                if (any_special || args.len > 0)
                     goto def;
 
                 any_special = true;
