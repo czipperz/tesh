@@ -559,6 +559,7 @@ static void scroll_up(Render_State* rend, Backlog_State* backlog, int lines) {
         }
     }
     line_start->y = 0;
+    line_start->x = 0;
 }
 
 static void ensure_prompt_on_screen(Render_State* rend, Backlog_State* backlog) {
