@@ -11,6 +11,7 @@
 #include <cz/util.hpp>
 #include <cz/vector.hpp>
 #include <cz/working_directory.hpp>
+
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
@@ -109,6 +110,19 @@ SDL_Color process_colors[] = {
 ///////////////////////////////////////////////////////////////////////////////
 // Renderer methods
 ///////////////////////////////////////////////////////////////////////////////
+
+static void close_font(Render_State* rend) {
+    ZoneScoped;
+    for (int i = 0; i < CZ_DIM(rend->backlog_cache); i++) {
+        SDL_FreeSurface(rend->backlog_cache[i]);
+        rend->backlog_cache[i] = NULL;
+    }
+    for (int i = 0; i < CZ_DIM(rend->prompt_cache); i++) {
+        SDL_FreeSurface(rend->prompt_cache[i]);
+        rend->prompt_cache[i] = NULL;
+    }
+    TTF_CloseFont(rend->font);
+}
 
 static TTF_Font* open_font(const char* path, int font_size) {
     ZoneScoped;
@@ -918,37 +932,34 @@ static int process_events(Backlog_State* backlog,
                 }
             }
 
-            // It would be really nice if this were CTRL-+ to match CTRL--, but whoever
-            // designed the QWERTY keyboard decided that + needed shift held down
-            // and - didn't.... SMH
-            if (mod == (KMOD_CTRL) && (event.key.keysym.sym == SDLK_EQUALS ||
-                                       event.key.keysym.sym == SDLK_MINUS)) {
-                if (event.key.keysym.sym == SDLK_EQUALS) {
-                    font_size        += 4;
-                    rend->font_width += 2;
+            if (mod == KMOD_CTRL &&
+                (event.key.keysym.sym == SDLK_PLUS || event.key.keysym.sym == SDLK_MINUS)) {
+                int new_font_size = font_size;
+                if (event.key.keysym.sym == SDLK_PLUS) {
+                    new_font_size += 4;
                 } else {
-                    font_size         = cz::max(font_size - 4, 4);
-                    rend->font_width  = cz::max(rend->font_width - 2, 2);
+                    new_font_size = cz::max(new_font_size - 4, 4);
                 }
 
-                rend->complete_redraw = true;
-                for (int i = 0; i < CZ_DIM(rend->backlog_cache); i++) {
-                    SDL_FreeSurface(rend->backlog_cache[i]);
-                    rend->backlog_cache[i] = NULL;
+                TTF_Font* new_font = open_font(font_path, (int)(new_font_size * rend->dpi_scale));
+                if (new_font) {
+                    close_font(rend);
+
+                    rend->font = new_font;
+                    font_size = new_font_size;
+                    rend->font_height = TTF_FontLineSkip(rend->font);
+                    // TODO: handle failure
+                    TTF_GlyphMetrics(rend->font, ' ', nullptr, nullptr, nullptr, nullptr,
+                                     &rend->font_width);
+
+                    rend->complete_redraw = true;
+                    ++num_events;
                 }
-                for (int i = 0; i < CZ_DIM(rend->prompt_cache); i++) {
-                    SDL_FreeSurface(rend->prompt_cache[i]);
-                    rend->prompt_cache[i] = NULL;
-                }
-                TTF_CloseFont(rend->font);
-                rend->font = open_font(font_path, (int)(font_size * rend->dpi_scale));
-                rend->font_height = TTF_FontLineSkip(rend->font);
-                ++num_events;
             }
         } break;
 
         case SDL_TEXTINPUT: {
-            const Uint8 *state = SDL_GetKeyboardState(NULL);
+            const Uint8* state = SDL_GetKeyboardState(NULL);
             if (state[SDL_SCANCODE_LCTRL] || state[SDL_SCANCODE_RCTRL])
                 break;
             cz::Str text = event.text.text;
@@ -1041,7 +1052,6 @@ int actual_main(int argc, char** argv) {
     }
     CZ_DEFER(TTF_Quit());
 
-
     {
         const float dpi_default = 96.0f;
         float dpi = 0;
@@ -1050,8 +1060,8 @@ int actual_main(int argc, char** argv) {
     }
 
     SDL_Window* window = SDL_CreateWindow(
-        "tesh", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 800 * rend.dpi_scale, 800 * rend.dpi_scale,
-        SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI);
+        "tesh", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 800 * rend.dpi_scale,
+        800 * rend.dpi_scale, SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI);
     if (!window) {
         fprintf(stderr, "SDL_CreateWindow failed: %s\n", SDL_GetError());
         return 1;
