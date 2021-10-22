@@ -182,6 +182,8 @@ Error parse_line(const Shell_State* shell, cz::Allocator allocator, Parse_Line* 
 
                             if (end < value.len) {
                                 CZ_DEBUG_ASSERT(word.len > 0);
+                                word.reserve_exact(allocator, 1);
+                                word.null_terminate();
                                 program.args.reserve(cz::heap_allocator(), 1);
                                 program.args.push(word);
                                 word = {};
@@ -214,6 +216,8 @@ Error parse_line(const Shell_State* shell, cz::Allocator allocator, Parse_Line* 
 
         // Push the word.
         if (allow_empty || word.len > 0) {
+            word.reserve_exact(allocator, 1);
+            word.null_terminate();
             program.args.reserve(cz::heap_allocator(), 1);
             program.args.push(word);
             continue;
