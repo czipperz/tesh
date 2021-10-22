@@ -77,6 +77,8 @@ void set_env_var(Shell_State* shell, cz::Str key, cz::Str value);
 ///////////////////////////////////////////////////////////////////////////////
 
 struct Parse_Program {
+    cz::Vector<cz::Str> variable_names;
+    cz::Vector<cz::Str> variable_values;
     cz::Vector<cz::Str> args;
 };
 

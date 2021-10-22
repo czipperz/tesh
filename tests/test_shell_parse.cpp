@@ -129,3 +129,18 @@ TEST_CASE("parse_line double quote escape") {
     REQUIRE(out.pipeline[0].args.len == 1);
     CHECK(out.pipeline[0].args[0] == "\\ \\n \\a $ ` \"");
 }
+
+TEST_CASE("parse_line variable") {
+    Shell_State shell = {};
+    Parse_Line out = {};
+    Error error = parse_line(&shell, cz::heap_allocator(), &out, "a=b c=d");
+    REQUIRE(error == Error_Success);
+    REQUIRE(out.pipeline.len == 1);
+    CHECK(out.pipeline[0].args.len == 0);
+    REQUIRE(out.pipeline[0].variable_names.len == 2);
+    REQUIRE(out.pipeline[0].variable_values.len == 2);
+    CHECK(out.pipeline[0].variable_names[0] == "a");
+    CHECK(out.pipeline[0].variable_values[0] == "b");
+    CHECK(out.pipeline[0].variable_names[1] == "c");
+    CHECK(out.pipeline[0].variable_values[1] == "d");
+}
