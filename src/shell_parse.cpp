@@ -118,17 +118,47 @@ Error parse_line(const Shell_State* shell, cz::Allocator allocator, Parse_Line* 
                 if (index + 1 == text.len)
                     goto def;
 
-                cz::Str key;
-                if (!get_var_at_point(text, index + 1, &key))
+                cz::Str var;
+                if (!get_var_at_point(text, index + 1, &var))
                     goto def;
 
-                index += key.len;
+                index += var.len;
 
                 cz::Str value;
-                if (get_env_var(shell, key, &value)) {
-                    // TODO: split var over multiple words
-                    word.reserve(allocator, value.len);
-                    word.append(value);
+                if (get_env_var(shell, var, &value)) {
+                    if (key.len > 0) {
+                        // a=$var is equivalent to a="$var"
+                        word.reserve(allocator, value.len);
+                        word.append(value);
+                    } else {
+                        // Split by whitespace.
+                        size_t start = 0;
+                        while (start < value.len) {
+                            // Skip leading whitespace.
+                            for (; start < value.len; ++start) {
+                                if (!cz::is_space(value[start]))
+                                    break;
+                            }
+
+                            size_t end = start;
+                            for (; end < value.len; ++end) {
+                                if (cz::is_space(value[end]))
+                                    break;
+                            }
+
+                            word.reserve(allocator, end - start);
+                            word.append(value.slice(start, end));
+
+                            if (end < value.len) {
+                                CZ_DEBUG_ASSERT(word.len > 0);
+                                args.reserve(cz::heap_allocator(), 1);
+                                args.push(word);
+                                word = {};
+                            }
+
+                            start = end;
+                        }
+                    }
                 }
                 break;
             }

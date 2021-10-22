@@ -191,3 +191,31 @@ TEST_CASE("parse_line 'echo $hi' hi is undefined") {
     REQUIRE(out.pipeline[0].args.len == 1);
     CHECK(out.pipeline[0].args[0] == "echo");
 }
+
+TEST_CASE("parse_line multi word variable expanded") {
+    Shell_State shell = {};
+    set_env_var(&shell, "var", "a b");
+    Parse_Line out = {};
+    Error error = parse_line(&shell, cz::heap_allocator(), &out, "\"$var\" echo $var");
+    REQUIRE(error == Error_Success);
+    REQUIRE(out.pipeline.len == 1);
+    REQUIRE(out.pipeline[0].args.len == 4);
+    CHECK(out.pipeline[0].args[0] == "a b");
+    CHECK(out.pipeline[0].args[1] == "echo");
+    CHECK(out.pipeline[0].args[2] == "a");
+    CHECK(out.pipeline[0].args[3] == "b");
+}
+
+TEST_CASE("parse_line multi word variable a=$var keeps one word") {
+    Shell_State shell = {};
+    set_env_var(&shell, "var", "multi word");
+    Parse_Line out = {};
+    Error error = parse_line(&shell, cz::heap_allocator(), &out, "a=$var");
+    REQUIRE(error == Error_Success);
+    REQUIRE(out.pipeline.len == 1);
+    CHECK(out.pipeline[0].args.len == 0);
+    REQUIRE(out.pipeline[0].variable_names.len == 1);
+    REQUIRE(out.pipeline[0].variable_values.len == 1);
+    CHECK(out.pipeline[0].variable_names[0] == "a");
+    CHECK(out.pipeline[0].variable_values[0] == "multi word");
+}
