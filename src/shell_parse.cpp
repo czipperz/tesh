@@ -6,18 +6,19 @@
 #include <cz/heap.hpp>
 #include <cz/string.hpp>
 
+static void finish_program(Parse_Line* out, cz::Allocator allocator, Parse_Program* program);
 static bool get_var_at_point(cz::Str text, size_t index, cz::Str* key);
 
 Error parse_line(const Shell_State* shell, cz::Allocator allocator, Parse_Line* out, cz::Str text) {
     ZoneScoped;
 
-    cz::Vector<cz::Str> variable_names = {};
-    CZ_DEFER(variable_names.drop(cz::heap_allocator()));
-    cz::Vector<cz::Str> variable_values = {};
-    CZ_DEFER(variable_values.drop(cz::heap_allocator()));
+    Parse_Program state = {};
 
-    cz::Vector<cz::Str> args = {};
-    CZ_DEFER(args.drop(cz::heap_allocator()));
+    CZ_DEFER({
+        state.variable_names.drop(cz::heap_allocator());
+        state.variable_values.drop(cz::heap_allocator());
+        state.args.drop(cz::heap_allocator());
+    });
 
     size_t index = 0;
 
@@ -102,7 +103,7 @@ Error parse_line(const Shell_State* shell, cz::Allocator allocator, Parse_Line* 
             }
 
             case '=': {
-                if (any_special || args.len > 0)
+                if (any_special || state.args.len > 0)
                     goto def;
 
                 any_special = true;
@@ -151,8 +152,8 @@ Error parse_line(const Shell_State* shell, cz::Allocator allocator, Parse_Line* 
 
                             if (end < value.len) {
                                 CZ_DEBUG_ASSERT(word.len > 0);
-                                args.reserve(cz::heap_allocator(), 1);
-                                args.push(word);
+                                state.args.reserve(cz::heap_allocator(), 1);
+                                state.args.push(word);
                                 word = {};
                             }
 
@@ -174,17 +175,17 @@ Error parse_line(const Shell_State* shell, cz::Allocator allocator, Parse_Line* 
 
     endofword:
         if (key.len > 0) {
-            variable_names.reserve(cz::heap_allocator(), 1);
-            variable_values.reserve(cz::heap_allocator(), 1);
-            variable_names.push(key);
-            variable_values.push(word);
+            state.variable_names.reserve(cz::heap_allocator(), 1);
+            state.variable_values.reserve(cz::heap_allocator(), 1);
+            state.variable_names.push(key);
+            state.variable_values.push(word);
             continue;
         }
 
         // Push the word.
         if (allow_empty || word.len > 0) {
-            args.reserve(cz::heap_allocator(), 1);
-            args.push(word);
+            state.args.reserve(cz::heap_allocator(), 1);
+            state.args.push(word);
             continue;
         }
 
@@ -195,27 +196,31 @@ Error parse_line(const Shell_State* shell, cz::Allocator allocator, Parse_Line* 
         // Special character.
         switch (text[index]) {
         case '|': {
-            out->pipeline.reserve(cz::heap_allocator(), 1);
-            Parse_Program program = {};
-            program.args = args.clone(allocator);
-            out->pipeline.push(program);
-            args.len = 0;
+            finish_program(out, allocator, &state);
             ++index;
         } break;
         }
     }
 
-    if (variable_names.len > 0 || args.len > 0) {
-        out->pipeline.reserve(cz::heap_allocator(), 1);
-        Parse_Program program = {};
-        program.variable_names = variable_names.clone(allocator);
-        program.variable_values = variable_values.clone(allocator);
-        program.args = args.clone(allocator);
-        out->pipeline.push(program);
-        args.len = 0;
+    if (state.variable_names.len > 0 || state.args.len > 0) {
+        finish_program(out, allocator, &state);
     }
 
     return Error_Success;
+}
+
+static void finish_program(Parse_Line* out, cz::Allocator allocator, Parse_Program* in) {
+    Parse_Program program = *in;
+    program.variable_names = program.variable_names.clone(allocator);
+    program.variable_values = program.variable_values.clone(allocator);
+    program.args = program.args.clone(allocator);
+
+    out->pipeline.reserve(cz::heap_allocator(), 1);
+    out->pipeline.push(program);
+
+    in->variable_names.len = 0;
+    in->variable_values.len = 0;
+    in->args.len = 0;
 }
 
 static bool get_var_at_point(cz::Str text, size_t index, cz::Str* key) {
