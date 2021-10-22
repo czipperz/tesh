@@ -149,6 +149,7 @@ bool tick_program(Shell_State* shell, Running_Program* program, int* exit_code) 
                     if (!st.file.open(path.buffer)) {
                         cz::Str message = cz::format("cat: ", arg, ": No such file or directory\n");
                         (void)builtin.err.write(message);
+                        ++st.outer;
                         continue;
                     }
                 }
