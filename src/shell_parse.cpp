@@ -4,20 +4,35 @@
 #include <cz/char_type.hpp>
 #include <cz/defer.hpp>
 #include <cz/heap.hpp>
+#include <cz/sort.hpp>
 #include <cz/string.hpp>
 
-static void finish_program(Parse_Line* out, cz::Allocator allocator, Parse_Program* program);
+struct Parse_State {
+    size_t in_file_i;
+    size_t out_file_i;
+    size_t err_file_i;
+};
+
+static Error finish_program(Parse_Line* out,
+                            cz::Allocator allocator,
+                            Parse_Program* program,
+                            Parse_State* state);
+static Error handle_file_indirection(Parse_Program* program, Parse_State* state);
 static bool get_var_at_point(cz::Str text, size_t index, cz::Str* key);
 
 Error parse_line(const Shell_State* shell, cz::Allocator allocator, Parse_Line* out, cz::Str text) {
     ZoneScoped;
 
-    Parse_Program state = {};
+    Parse_Program program = {};
+    Parse_State state = {};
+    state.in_file_i = -1;
+    state.out_file_i = -1;
+    state.err_file_i = -1;
 
     CZ_DEFER({
-        state.variable_names.drop(cz::heap_allocator());
-        state.variable_values.drop(cz::heap_allocator());
-        state.args.drop(cz::heap_allocator());
+        program.variable_names.drop(cz::heap_allocator());
+        program.variable_values.drop(cz::heap_allocator());
+        program.args.drop(cz::heap_allocator());
     });
 
     size_t index = 0;
@@ -34,14 +49,29 @@ Error parse_line(const Shell_State* shell, cz::Allocator allocator, Parse_Line* 
         }
 
         // Get the next word.
+        size_t start_word = index;
         cz::String key = {};
         cz::String word = {};
         bool allow_empty = false;
         bool any_special = false;
+        bool special_stderr = false;
         while (index < text.len) {
             switch (text[index]) {
             case CZ_BLANK_CASES:
             case '|':
+                goto endofword;
+
+            case '<':
+            case '>':
+                if (text.slice(start_word, index) == "1") {
+                    word.drop(allocator);
+                    word = {};
+                }
+                if (text.slice(start_word, index) == "2") {
+                    special_stderr = true;
+                    word.drop(allocator);
+                    word = {};
+                }
                 goto endofword;
 
             case '\'': {
@@ -103,7 +133,7 @@ Error parse_line(const Shell_State* shell, cz::Allocator allocator, Parse_Line* 
             }
 
             case '=': {
-                if (any_special || state.args.len > 0)
+                if (any_special || program.args.len > 0)
                     goto def;
 
                 any_special = true;
@@ -152,8 +182,8 @@ Error parse_line(const Shell_State* shell, cz::Allocator allocator, Parse_Line* 
 
                             if (end < value.len) {
                                 CZ_DEBUG_ASSERT(word.len > 0);
-                                state.args.reserve(cz::heap_allocator(), 1);
-                                state.args.push(word);
+                                program.args.reserve(cz::heap_allocator(), 1);
+                                program.args.push(word);
                                 word = {};
                             }
 
@@ -175,17 +205,17 @@ Error parse_line(const Shell_State* shell, cz::Allocator allocator, Parse_Line* 
 
     endofword:
         if (key.len > 0) {
-            state.variable_names.reserve(cz::heap_allocator(), 1);
-            state.variable_values.reserve(cz::heap_allocator(), 1);
-            state.variable_names.push(key);
-            state.variable_values.push(word);
+            program.variable_names.reserve(cz::heap_allocator(), 1);
+            program.variable_values.reserve(cz::heap_allocator(), 1);
+            program.variable_names.push(key);
+            program.variable_values.push(word);
             continue;
         }
 
         // Push the word.
         if (allow_empty || word.len > 0) {
-            state.args.reserve(cz::heap_allocator(), 1);
-            state.args.push(word);
+            program.args.reserve(cz::heap_allocator(), 1);
+            program.args.push(word);
             continue;
         }
 
@@ -196,24 +226,46 @@ Error parse_line(const Shell_State* shell, cz::Allocator allocator, Parse_Line* 
         // Special character.
         switch (text[index]) {
         case '|': {
-            finish_program(out, allocator, &state);
+            Error error = finish_program(out, allocator, &program, &state);
+            if (error != Error_Success)
+                return error;
+            ++index;
+        } break;
+
+        case '<':
+        case '>': {
+            bool is_stdin = text[index] == '<';
+            if (is_stdin) {
+                state.in_file_i = program.args.len;
+            } else if (special_stderr) {
+                state.err_file_i = program.args.len;
+            } else {
+                state.out_file_i = program.args.len;
+            }
             ++index;
         } break;
         }
     }
 
-    if (state.variable_names.len > 0 || state.args.len > 0) {
-        finish_program(out, allocator, &state);
+    if (program.variable_names.len > 0 || program.args.len > 0) {
+        return finish_program(out, allocator, &program, &state);
     }
 
     return Error_Success;
 }
 
-static void finish_program(Parse_Line* out, cz::Allocator allocator, Parse_Program* in) {
+static Error finish_program(Parse_Line* out,
+                            cz::Allocator allocator,
+                            Parse_Program* in,
+                            Parse_State* state) {
     Parse_Program program = *in;
     program.variable_names = program.variable_names.clone(allocator);
     program.variable_values = program.variable_values.clone(allocator);
     program.args = program.args.clone(allocator);
+
+    Error error = handle_file_indirection(&program, state);
+    if (error != Error_Success)
+        return error;
 
     out->pipeline.reserve(cz::heap_allocator(), 1);
     out->pipeline.push(program);
@@ -221,6 +273,38 @@ static void finish_program(Parse_Line* out, cz::Allocator allocator, Parse_Progr
     in->variable_names.len = 0;
     in->variable_values.len = 0;
     in->args.len = 0;
+    state->in_file_i = -1;
+    state->out_file_i = -1;
+    state->err_file_i = -1;
+    return Error_Success;
+}
+
+static Error handle_file_indirection(Parse_Program* program, Parse_State* state) {
+    size_t* indices[3];
+    size_t num = 0;
+    if (state->in_file_i != -1)
+        indices[num++] = &state->in_file_i;
+    if (state->out_file_i != -1)
+        indices[num++] = &state->out_file_i;
+    if (state->err_file_i != -1)
+        indices[num++] = &state->err_file_i;
+    cz::sort(cz::slice(indices, num),
+             [](size_t** left, size_t** right) { return **left < **right; });
+    for (size_t i = num; i-- > 0;) {
+        size_t* index = indices[i];
+        if (*index != -1) {
+            if (*index >= program->args.len)
+                return Error_Parse;
+            if (index == &state->in_file_i)
+                program->in_file = program->args[*index];
+            else if (index == &state->out_file_i)
+                program->out_file = program->args[*index];
+            else
+                program->err_file = program->args[*index];
+            program->args.remove(*index);
+        }
+    }
+    return Error_Success;
 }
 
 static bool get_var_at_point(cz::Str text, size_t index, cz::Str* key) {

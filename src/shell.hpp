@@ -83,6 +83,11 @@ struct Parse_Program {
     cz::Vector<cz::Str> variable_names;
     cz::Vector<cz::Str> variable_values;
     cz::Vector<cz::Str> args;
+
+    /// Note: `Str::buffer == null` means not present.
+    cz::Str in_file;
+    cz::Str out_file;
+    cz::Str err_file;
 };
 
 struct Parse_Line {

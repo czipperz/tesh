@@ -219,3 +219,33 @@ TEST_CASE("parse_line multi word variable a=$var keeps one word") {
     CHECK(out.pipeline[0].variable_names[0] == "a");
     CHECK(out.pipeline[0].variable_values[0] == "multi word");
 }
+
+TEST_CASE("parse_line file indirection") {
+    Shell_State shell = {};
+    Parse_Line out = {};
+    Error error = parse_line(&shell, cz::heap_allocator(), &out, "echo < in arg1 > out arg2 2> err arg3");
+    REQUIRE(error == Error_Success);
+    REQUIRE(out.pipeline.len == 1);
+    REQUIRE(out.pipeline[0].args.len == 4);
+    CHECK(out.pipeline[0].args[0] == "echo");
+    CHECK(out.pipeline[0].args[1] == "arg1");
+    CHECK(out.pipeline[0].args[2] == "arg2");
+    CHECK(out.pipeline[0].args[3] == "arg3");
+
+    CHECK(out.pipeline[0].in_file == "in");
+    CHECK(out.pipeline[0].out_file == "out");
+    CHECK(out.pipeline[0].err_file == "err");
+}
+
+TEST_CASE("parse_line file indirection stderr must be 2> no space") {
+    Shell_State shell = {};
+    Parse_Line out = {};
+    Error error = parse_line(&shell, cz::heap_allocator(), &out, "echo 2 > out");
+    REQUIRE(error == Error_Success);
+    REQUIRE(out.pipeline.len == 1);
+    REQUIRE(out.pipeline[0].args.len == 2);
+    CHECK(out.pipeline[0].args[0] == "echo");
+    CHECK(out.pipeline[0].args[1] == "2");
+
+    CHECK(out.pipeline[0].out_file == "out");
+}
