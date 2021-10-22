@@ -13,7 +13,10 @@ static Error run_program(Shell_State* shell,
                          Parse_Program parse,
                          cz::Input_File in,
                          cz::Output_File out,
-                         cz::Output_File err);
+                         cz::Output_File err,
+                         bool in_pipe,
+                         bool out_pipe,
+                         bool err_pipe);
 
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -48,33 +51,51 @@ Error start_execute_line(Shell_State* shell,
     if (!running_line.out.set_non_blocking())
         goto cleanup1;
 
-    cz::Input_File pipe_in;
-    cz::Output_File pipe_out;
+    cz::Input_File pipe_in = line_in;
 
     for (size_t p = 0; p < parse_line.pipeline.len; ++p) {
         const Parse_Program& parse_program = parse_line.pipeline[p];
+        bool in_pipe = false, out_pipe = false, err_pipe = false;
         cz::Input_File in;
         cz::Output_File out;
-        cz::Output_File err = line_out;
+        cz::Output_File err;
 
-        if (p == 0) {
-            in = line_in;
-            line_in = {};
-        } else
-            in = pipe_in;
-
-        if (p + 1 == parse_line.pipeline.len) {
-            out = line_out;
-            line_out = {};
+        if (parse_program.in_file.buffer) {
+            if (!in.open(parse_program.in_file.buffer))
+                return Error_InvalidPath;  // TODO: cleanup file descriptors
+            pipe_in.close();
         } else {
-            if (!cz::create_pipe(&pipe_in, &pipe_out))
-                return Error_IO;
-            out = pipe_out;
+            in = pipe_in;
+            pipe_in = {};
+            in_pipe = true;
+        }
+
+        if (parse_program.out_file.buffer) {
+            if (!out.open(parse_program.out_file.buffer))
+                return Error_InvalidPath;  // TODO: cleanup file descriptors
+        } else {
+            if (p + 1 == parse_line.pipeline.len) {
+                out = line_out;
+            } else {
+                cz::Output_File pipe_out;
+                if (!cz::create_pipe(&pipe_in, &pipe_out))
+                    return Error_IO;
+                out = pipe_out;
+            }
+            out_pipe = true;
+        }
+
+        if (parse_program.err_file.buffer) {
+            if (!err.open(parse_program.err_file.buffer))
+                return Error_InvalidPath;  // TODO: cleanup file descriptors
+        } else {
+            err = line_out;
+            err_pipe = true;
         }
 
         Running_Program running_program = {};
-        Error error =
-            run_program(shell, arena.allocator(), &running_program, parse_program, in, out, err);
+        Error error = run_program(shell, arena.allocator(), &running_program, parse_program, in,
+                                  out, err, in_pipe, out_pipe, err_pipe);
         if (error != Error_Success)
             return error;
 
@@ -97,7 +118,10 @@ static Error run_program(Shell_State* shell,
                          Parse_Program parse,
                          cz::Input_File in,
                          cz::Output_File out,
-                         cz::Output_File err) {
+                         cz::Output_File err,
+                         bool in_pipe,
+                         bool out_pipe,
+                         bool err_pipe) {
     program->type = Running_Program::PROCESS;
 
     if (parse.args.len == 0) {
@@ -150,11 +174,11 @@ static Error run_program(Shell_State* shell,
     // If command is a builtin.
     if (program->type != Running_Program::PROCESS) {
     builtin:
-        if (!in.set_non_blocking())
+        if (in_pipe && !in.set_non_blocking())
             return Error_IO;
-        if (!out.set_non_blocking())
+        if (out_pipe && !out.set_non_blocking())
             return Error_IO;
-        if (!err.set_non_blocking())
+        if (err_pipe && !err.set_non_blocking())
             return Error_IO;
 
         program->v.builtin.args = parse.args;
