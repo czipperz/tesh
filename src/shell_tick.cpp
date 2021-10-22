@@ -264,6 +264,14 @@ bool tick_program(Shell_State* shell, Running_Program* program, int* exit_code) 
         goto finish_builtin;
     } break;
 
+    case Running_Program::VARIABLES: {
+        auto& st = program->v.builtin.st.variables;
+        for (size_t i = 0; i < st.names.len; ++i) {
+            set_env_var(shell, st.names[i], st.values[i]);
+        }
+        goto finish_builtin;
+    } break;
+
     default:
         CZ_PANIC("unreachable");
     }

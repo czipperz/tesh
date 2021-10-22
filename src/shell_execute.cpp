@@ -10,7 +10,7 @@
 static Error run_program(Shell_State* shell,
                          cz::Allocator allocator,
                          Running_Program* program,
-                         cz::Slice<const cz::Str> args,
+                         Parse_Program parse,
                          cz::Input_File in,
                          cz::Output_File out,
                          cz::Output_File err);
@@ -73,8 +73,8 @@ Error start_execute_line(Shell_State* shell,
         }
 
         Running_Program running_program = {};
-        Error error = run_program(shell, arena.allocator(), &running_program, parse_program.args,
-                                  in, out, err);
+        Error error =
+            run_program(shell, arena.allocator(), &running_program, parse_program, in, out, err);
         if (error != Error_Success)
             return error;
 
@@ -94,52 +94,62 @@ Error start_execute_line(Shell_State* shell,
 static Error run_program(Shell_State* shell,
                          cz::Allocator allocator,
                          Running_Program* program,
-                         cz::Slice<const cz::Str> args,
+                         Parse_Program parse,
                          cz::Input_File in,
                          cz::Output_File out,
                          cz::Output_File err) {
     program->type = Running_Program::PROCESS;
 
+    if (parse.args.len == 0) {
+        CZ_ASSERT(parse.variable_names.len > 0);
+        program->type = Running_Program::VARIABLES;
+        program->v.builtin.st.variables = {};
+        program->v.builtin.st.variables.names = parse.variable_names;
+        program->v.builtin.st.variables.values = parse.variable_values;
+        goto builtin;
+    }
+
     // TODO: This is the wrong place to expand aliases.
     for (size_t i = 0; i < shell->alias_names.len; ++i) {
-        if (args[0] == shell->alias_names[i]) {
-            cz::Slice<cz::Str> args2 = args.clone(allocator);
+        if (parse.args[0] == shell->alias_names[i]) {
+            cz::Vector<cz::Str> args2 = parse.args.clone(allocator);
             args2[0] = shell->alias_values[i];
-            args = args2;
+            parse.args = args2;
             break;
         }
     }
 
     // Setup builtins.
-    if (args[0] == "echo") {
+    if (parse.args[0] == "echo") {
         program->type = Running_Program::ECHO;
         program->v.builtin.st.echo = {};
         program->v.builtin.st.echo.outer = 1;
     }
-    if (args[0] == "cat") {
+    if (parse.args[0] == "cat") {
         program->type = Running_Program::CAT;
         program->v.builtin.st.cat = {};
         program->v.builtin.st.cat.buffer = (char*)allocator.alloc({4096, 1});
         program->v.builtin.st.cat.outer = 1;
     }
-    if (args[0] == "exit") {
+    if (parse.args[0] == "exit") {
         program->type = Running_Program::EXIT;
     }
-    if (args[0] == "pwd") {
+    if (parse.args[0] == "pwd") {
         program->type = Running_Program::PWD;
     }
-    if (args[0] == "cd") {
+    if (parse.args[0] == "cd") {
         program->type = Running_Program::CD;
     }
-    if (args[0] == "ls") {
+    if (parse.args[0] == "ls") {
         program->type = Running_Program::LS;
     }
-    if (args[0] == "alias") {
+    if (parse.args[0] == "alias") {
         program->type = Running_Program::ALIAS;
     }
 
     // If command is a builtin.
     if (program->type != Running_Program::PROCESS) {
+    builtin:
         if (!in.set_non_blocking())
             return Error_IO;
         if (!out.set_non_blocking())
@@ -147,7 +157,7 @@ static Error run_program(Shell_State* shell,
         if (!err.set_non_blocking())
             return Error_IO;
 
-        program->v.builtin.args = args;
+        program->v.builtin.args = parse.args;
         program->v.builtin.in = in;
         program->v.builtin.out = out;
         program->v.builtin.err = err;
@@ -164,7 +174,7 @@ static Error run_program(Shell_State* shell,
     CZ_DEFER(options.close_all());
 
     program->v.process = {};
-    if (!program->v.process.launch_program(args, options))
+    if (!program->v.process.launch_program(parse.args, options))
         return Error_IO;
 
     return Error_Success;

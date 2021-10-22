@@ -19,6 +19,7 @@ struct Running_Program {
         CD,
         LS,
         ALIAS,
+        VARIABLES,
     } type;
     union {
         cz::Process process;
@@ -39,6 +40,10 @@ struct Running_Program {
                     char* buffer;
                     size_t len, offset;
                 } cat;
+                struct {
+                    cz::Slice<const cz::Str> names;
+                    cz::Slice<const cz::Str> values;
+                } variables;
             } st;
         } builtin;
     } v;
@@ -56,10 +61,8 @@ struct Running_Line {
 struct Parse_Line;
 
 struct Shell_State {
-    // TODO: get a hashmap in here
-    cz::Vector<cz::Str> variable_names;
-    // TODO: make refcounted
-    cz::Vector<cz::Str> variable_values;
+    cz::Vector<cz::String> variable_names;
+    cz::Vector<cz::String> variable_values;
 
     cz::Vector<cz::Str> alias_names;
     cz::Vector<cz::Str> alias_values;
