@@ -147,6 +147,7 @@ bool tick_program(Shell_State* shell, Running_Program* program, int* exit_code) 
                     cz::String path = {};
                     cz::path::make_absolute(arg, shell->working_directory, temp_allocator, &path);
                     if (!st.file.open(path.buffer)) {
+                        builtin.exit_code = 1;
                         cz::Str message = cz::format("cat: ", arg, ": No such file or directory\n");
                         (void)builtin.err.write(message);
                         ++st.outer;
@@ -201,6 +202,7 @@ bool tick_program(Shell_State* shell, Running_Program* program, int* exit_code) 
             shell->working_directory.append(new_wd);
             shell->working_directory.null_terminate();
         } else {
+            builtin.exit_code = 1;
             (void)builtin.err.write("cd: ");
             (void)builtin.err.write(new_wd.buffer, new_wd.len);
             (void)builtin.err.write(": Not a directory\n");
@@ -223,6 +225,12 @@ bool tick_program(Shell_State* shell, Running_Program* program, int* exit_code) 
             }
             iterator.drop();
         }
+
+        if (result < 0) {
+            builtin.exit_code = 1;
+            (void)builtin.err.write("ls: error\n");
+        }
+
         goto finish_builtin;
     } break;
 
@@ -231,6 +239,7 @@ bool tick_program(Shell_State* shell, Running_Program* program, int* exit_code) 
         for (size_t i = 1; i < builtin.args.len; ++i) {
             cz::Str arg = builtin.args[i];
             if (arg.len == 0 || arg[0] == '=') {
+                builtin.exit_code = 1;
                 (void)builtin.err.write("alias: ");
                 (void)builtin.err.write(arg);
                 (void)builtin.err.write(": invalid alias name\n");
@@ -252,10 +261,12 @@ bool tick_program(Shell_State* shell, Running_Program* program, int* exit_code) 
                         (void)builtin.out.write(shell->alias_names[i]);
                         (void)builtin.out.write("=");
                         (void)builtin.out.write(shell->alias_values[i]);
+                        (void)builtin.out.write("\n");
                         break;
                     }
                 }
                 if (i == shell->alias_names.len) {
+                    builtin.exit_code = 1;
                     (void)builtin.err.write("alias: ");
                     (void)builtin.err.write(arg);
                     (void)builtin.err.write(": unbound alias\n");
@@ -284,5 +295,6 @@ finish_builtin:
     builtin.out.close();
     if (builtin.close_err)
         builtin.err.close();
+    *exit_code = builtin.exit_code;
     return true;
 }

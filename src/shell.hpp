@@ -29,6 +29,7 @@ struct Running_Program {
             cz::Output_File out;
             cz::Output_File err;
             cz::Str working_directory;  // null terminated
+            int exit_code;
             bool close_err;
             union {
                 struct {
