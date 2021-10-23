@@ -175,16 +175,22 @@ bool tick_program(Shell_State* shell, Running_Program* program, int* exit_code, 
             goto finish_builtin;
     } break;
 
-    case Running_Program::EXIT: {
+    case Running_Program::EXIT:
+    case Running_Program::RETURN: {
         auto& builtin = program->v.builtin;
         if (builtin.args.len == 1) {
             builtin.exit_code = 0;
         } else {
             builtin.exit_code = 1;
-            if (!cz::parse(builtin.args[1], &builtin.exit_code))
-                (void)builtin.err.write("exit: Invalid code\n");
+            if (!cz::parse(builtin.args[1], &builtin.exit_code)) {
+                if (program->type == Running_Program::EXIT)
+                    (void)builtin.err.write("exit: Invalid code\n");
+                else
+                    (void)builtin.err.write("return: Invalid code\n");
+            }
         }
-        *force_quit = true;
+        if (program->type == Running_Program::EXIT)
+            *force_quit = true;
         goto finish_builtin;
     } break;
 

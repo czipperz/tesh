@@ -15,6 +15,7 @@ struct Running_Program {
         ECHO,
         CAT,
         EXIT,
+        RETURN,
         PWD,
         CD,
         LS,

@@ -158,6 +158,9 @@ static Error run_program(Shell_State* shell,
     if (parse.args[0] == "exit") {
         program->type = Running_Program::EXIT;
     }
+    if (parse.args[0] == "return") {
+        program->type = Running_Program::RETURN;
+    }
     if (parse.args[0] == "pwd") {
         program->type = Running_Program::PWD;
     }
