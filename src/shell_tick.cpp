@@ -21,7 +21,6 @@ static void standardize_arg(const Shell_State* shell,
         get_env_var(shell, "HOME", &home);
         new_wd->reserve_exact(allocator, home.len + 1);
         new_wd->append(home);
-        new_wd->null_terminate();
     } else if (arg.starts_with("~/")) {
         cz::Str home = {};
         get_env_var(shell, "HOME", &home);
@@ -29,8 +28,6 @@ static void standardize_arg(const Shell_State* shell,
         new_wd->append(home);
         new_wd->push('/');
         new_wd->append(arg.slice_start(2));
-        cz::path::flatten(new_wd);
-        new_wd->null_terminate();
     } else {
         if (make_absolute) {
             cz::path::make_absolute(arg, shell->working_directory, allocator, new_wd);
@@ -44,6 +41,9 @@ static void standardize_arg(const Shell_State* shell,
     if (make_absolute)
         cz::path::convert_to_forward_slashes(new_wd);
 #endif
+
+    cz::path::flatten(new_wd);
+    new_wd->null_terminate();
 
     if (cz::path::is_absolute(*new_wd)) {
 #ifdef _WIN32
