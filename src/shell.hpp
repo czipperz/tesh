@@ -78,6 +78,8 @@ struct Shell_State {
 bool get_env_var(const Shell_State* shell, cz::Str key, cz::Str* value);
 void set_env_var(Shell_State* shell, cz::Str key, cz::Str value);
 
+void cleanup_processes(Shell_State* shell);
+
 ///////////////////////////////////////////////////////////////////////////////
 
 struct Parse_Program {
@@ -106,4 +108,4 @@ Error start_execute_line(Shell_State* shell,
 
 ///////////////////////////////////////////////////////////////////////////////
 
-bool tick_program(Shell_State* shell, Running_Program* program, int* exit_code);
+bool tick_program(Shell_State* shell, Running_Program* program, int* exit_code, bool* force_exit);

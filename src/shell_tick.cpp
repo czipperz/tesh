@@ -62,7 +62,7 @@ static void standardize_arg(const Shell_State* shell,
     }
 }
 
-bool tick_program(Shell_State* shell, Running_Program* program, int* exit_code) {
+bool tick_program(Shell_State* shell, Running_Program* program, int* exit_code, bool* force_quit) {
     ZoneScoped;
 
     switch (program->type) {
@@ -177,11 +177,15 @@ bool tick_program(Shell_State* shell, Running_Program* program, int* exit_code) 
 
     case Running_Program::EXIT: {
         auto& builtin = program->v.builtin;
-        if (builtin.args.len == 1)
-            exit(0);
-        int num = 1;
-        cz::parse(builtin.args[1], &num);
-        exit(num);
+        if (builtin.args.len == 1) {
+            builtin.exit_code = 0;
+        } else {
+            builtin.exit_code = 1;
+            if (!cz::parse(builtin.args[1], &builtin.exit_code))
+                (void)builtin.err.write("exit: Invalid code\n");
+        }
+        *force_quit = true;
+        goto finish_builtin;
     } break;
 
     case Running_Program::PWD: {

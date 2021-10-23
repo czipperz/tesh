@@ -484,7 +484,7 @@ static bool run_line(Shell_State* shell, cz::Str text, uint64_t id) {
     return true;
 }
 
-static bool read_process_data(Shell_State* shell, Backlog_State* backlog) {
+static bool read_process_data(Shell_State* shell, Backlog_State* backlog, bool* force_quit) {
     static char buffer[4096];
     size_t starting_length = backlog->length;
     for (size_t i = 0; i < shell->lines.len; ++i) {
@@ -493,10 +493,12 @@ static bool read_process_data(Shell_State* shell, Backlog_State* backlog) {
         for (size_t p = 0; p < process->pipeline.len; ++p) {
             Running_Program* program = &process->pipeline[p];
             int exit_code = 1;
-            if (tick_program(shell, program, &exit_code)) {
+            if (tick_program(shell, program, &exit_code, force_quit)) {
                 process->pipeline.remove(p);
                 --p;
             }
+            if (*force_quit)
+                return true;
         }
 
         if (process->out.is_open()) {
@@ -1157,8 +1159,14 @@ int actual_main(int argc, char** argv) {
         if (status < 0)
             break;
 
-        if (read_process_data(&shell, &backlog))
+        bool force_quit = false;
+        if (read_process_data(&shell, &backlog, &force_quit))
             status = 1;
+
+        if (force_quit) {
+            cleanup_processes(&shell);
+            break;
+        }
 
         if (status > 0)
             render_frame(window, &rend, &backlog, &prompt, &shell);

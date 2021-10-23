@@ -27,3 +27,18 @@ void set_env_var(Shell_State* shell, cz::Str key, cz::Str value) {
     shell->variable_names.push(key.clone(cz::heap_allocator()));
     shell->variable_values.push(value.clone(cz::heap_allocator()));
 }
+
+void cleanup_processes(Shell_State* shell) {
+    for (size_t i = 0; i < shell->lines.len; ++i) {
+        Running_Line* line = &shell->lines[i];
+        // TODO: cleanup fds
+        for (size_t i = 0; i < line->pipeline.len; ++i) {
+            Running_Program* program = &line->pipeline[i];
+            switch (program->type) {
+            case Running_Program::PROCESS:
+                program->v.process.kill();
+                break;
+            }
+        }
+    }
+}
