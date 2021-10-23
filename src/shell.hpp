@@ -7,6 +7,29 @@
 #include <cz/vector.hpp>
 #include "error.hpp"
 
+struct Running_Line;
+
+///////////////////////////////////////////////////////////////////////////////
+
+struct Shell_State {
+    cz::Vector<cz::String> variable_names;
+    cz::Vector<cz::String> variable_values;
+
+    cz::Vector<cz::Str> alias_names;
+    cz::Vector<cz::Str> alias_values;
+
+    cz::Vector<Running_Line> lines;
+
+    cz::Vector<cz::Buffer_Array> arenas;
+
+    cz::String working_directory;
+};
+
+bool get_env_var(const Shell_State* shell, cz::Str key, cz::Str* value);
+void set_env_var(Shell_State* shell, cz::Str key, cz::Str value);
+
+void cleanup_processes(Shell_State* shell);
+
 ///////////////////////////////////////////////////////////////////////////////
 
 struct Running_Program {
@@ -59,27 +82,6 @@ struct Running_Line {
     cz::Carriage_Return_Carry out_carry;
     cz::Buffer_Array arena;
 };
-
-struct Parse_Line;
-
-struct Shell_State {
-    cz::Vector<cz::String> variable_names;
-    cz::Vector<cz::String> variable_values;
-
-    cz::Vector<cz::Str> alias_names;
-    cz::Vector<cz::Str> alias_values;
-
-    cz::Vector<Running_Line> lines;
-
-    cz::Vector<cz::Buffer_Array> arenas;
-
-    cz::String working_directory;
-};
-
-bool get_env_var(const Shell_State* shell, cz::Str key, cz::Str* value);
-void set_env_var(Shell_State* shell, cz::Str key, cz::Str value);
-
-void cleanup_processes(Shell_State* shell);
 
 ///////////////////////////////////////////////////////////////////////////////
 
