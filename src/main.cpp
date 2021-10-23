@@ -1026,13 +1026,13 @@ static void save_history(Prompt_State* prompt, Shell_State* shell) {
         cz::Str element = prompt->history[i];
         if (element.len + 1 > buffer.remaining()) {
             if (file.write(buffer) != buffer.len)
-                break;
+                return;
             buffer.len = 0;
 
             // A truly massive line shouldn't be double buffered.
             if (element.len + 1 > buffer.cap) {
                 if (file.write(element) != element.len)
-                    break;
+                    return;
                 buffer.push('\n');
                 continue;
             }
@@ -1041,6 +1041,8 @@ static void save_history(Prompt_State* prompt, Shell_State* shell) {
         buffer.append(element);
         buffer.push('\n');
     }
+
+    (void)file.write(buffer);
 }
 
 ///////////////////////////////////////////////////////////////////////////////
