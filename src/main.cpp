@@ -5,6 +5,7 @@
 #include <Tracy.hpp>
 #include <cz/defer.hpp>
 #include <cz/env.hpp>
+#include <cz/format.hpp>
 #include <cz/heap.hpp>
 #include <cz/process.hpp>
 #include <cz/string.hpp>
@@ -954,6 +955,95 @@ static int process_events(Backlog_State* backlog,
 }
 
 ///////////////////////////////////////////////////////////////////////////////
+// History control
+///////////////////////////////////////////////////////////////////////////////
+
+uint64_t history_counter;
+cz::Vector<cz::Str> history;
+cz::Buffer_Array history_arena;
+
+static void load_history(Prompt_State* prompt, Shell_State* shell) {
+    cz::Str home = {};
+    if (!get_env_var(shell, "HOME", &home))
+        return;
+
+    cz::String path = cz::format(temp_allocator, home, "/.tesh_history");
+
+    cz::Input_File file;
+    if (!file.open(path.buffer))
+        return;
+    CZ_DEFER(file.close());
+
+    cz::String buffer = {};
+    buffer.reserve_exact(temp_allocator, 4096);
+
+    cz::String element = {};
+    while (1) {
+        int64_t result = file.read(buffer.buffer, buffer.cap);
+        if (result <= 0)
+            break;
+        buffer.len = result;
+
+        cz::Str remaining = buffer;
+        while (remaining.len > 0) {
+            cz::Str before = remaining, after = {};
+            bool flush = remaining.split_excluding('\n', &before, &after);
+            element.reserve_exact(prompt->history_arena.allocator(), before.len);
+            element.append(before);
+            if (flush && element.len > 0) {
+                prompt->history.reserve(cz::heap_allocator(), 1);
+                prompt->history.push(element);
+                element = {};
+            }
+            remaining = after;
+        }
+    }
+
+    if (element.len > 0) {
+        prompt->history.reserve(cz::heap_allocator(), 1);
+        prompt->history.push(element);
+    }
+
+    prompt->history_counter = prompt->history.len;
+}
+
+static void save_history(Prompt_State* prompt, Shell_State* shell) {
+    cz::Str home = {};
+    if (!get_env_var(shell, "HOME", &home))
+        return;
+
+    cz::String path = cz::format(temp_allocator, home, "/.tesh_history");
+
+    cz::Output_File file;
+    if (!file.open(path.buffer))
+        return;
+    CZ_DEFER(file.close());
+
+    cz::String buffer = {};
+    buffer.reserve_exact(temp_allocator, 4096);
+
+    for (size_t i = 0; i < prompt->history.len; ++i) {
+        cz::Str element = prompt->history[i];
+        if (element.len + 1 > buffer.remaining()) {
+            if (file.write(buffer) != buffer.len)
+                break;
+            buffer.len = 0;
+
+            // A truly massive line shouldn't be double buffered.
+            if (element.len + 1 > buffer.cap) {
+                if (file.write(element) != element.len)
+                    break;
+                buffer.push('\n');
+                continue;
+            }
+        }
+
+        buffer.append(element);
+        buffer.push('\n');
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////
 // main
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -995,6 +1085,9 @@ int actual_main(int argc, char** argv) {
                 set_env_var(&shell, vars[i], value);
         }
     }
+
+    load_history(&prompt, &shell);
+    CZ_DEFER(save_history(&prompt, &shell));
 
     {
         backlog.buffers.reserve(cz::heap_allocator(), 1);
