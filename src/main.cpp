@@ -296,19 +296,28 @@ static void render_prompt(SDL_Surface* window_surface,
     SDL_Color bg_color = process_colors[prompt->process_id % CZ_DIM(process_colors)];
     uint32_t background = SDL_MapRGB(window_surface->format, bg_color.r, bg_color.g, bg_color.b);
 
-    for (size_t i = 0; i < shell->working_directory.len; ++i) {
-        char c = shell->working_directory[i];
-        render_char(window_surface, rend, &point, rend->backlog_cache, background,
-                    rend->backlog_fg_color, c);
-    }
+    if (shell->active_process == -1) {
+        for (size_t i = 0; i < shell->working_directory.len; ++i) {
+            char c = shell->working_directory[i];
+            render_char(window_surface, rend, &point, rend->backlog_cache, background,
+                        rend->backlog_fg_color, c);
+        }
 
-    render_char(window_surface, rend, &point, rend->backlog_cache, background,
-                rend->backlog_fg_color, ' ');
-
-    for (size_t i = 0; i < prompt->prefix.len; ++i) {
-        char c = prompt->prefix[i];
         render_char(window_surface, rend, &point, rend->backlog_cache, background,
-                    rend->backlog_fg_color, c);
+                    rend->backlog_fg_color, ' ');
+
+        for (size_t i = 0; i < prompt->prefix.len; ++i) {
+            char c = prompt->prefix[i];
+            render_char(window_surface, rend, &point, rend->backlog_cache, background,
+                        rend->backlog_fg_color, c);
+        }
+    } else {
+        cz::Str input_prefix = "> ";
+        for (size_t i = 0; i < input_prefix.len; ++i) {
+            char c = input_prefix[i];
+            render_char(window_surface, rend, &point, rend->backlog_cache, background,
+                        rend->backlog_fg_color, c);
+        }
     }
 
     for (size_t i = 0; i < prompt->text.len; ++i) {
@@ -395,6 +404,9 @@ static void render_frame(SDL_Window* window,
     if (rend->auto_page)
         auto_scroll_start_paging(rend, backlog);
     if (rend->auto_scroll)
+        ensure_prompt_on_screen(rend, backlog);
+
+    if (shell->active_process != -1)
         ensure_prompt_on_screen(rend, backlog);
 
     if (rend->complete_redraw) {
@@ -484,9 +496,13 @@ static bool run_line(Shell_State* shell, cz::Str text, uint64_t id) {
     return true;
 }
 
-static bool read_process_data(Shell_State* shell, Backlog_State* backlog, bool* force_quit) {
+static bool read_process_data(Shell_State* shell,
+                              Backlog_State* backlog,
+                              Render_State* rend,
+                              bool* force_quit) {
     static char buffer[4096];
     size_t starting_length = backlog->length;
+    bool changes = false;
     for (size_t i = 0; i < shell->lines.len; ++i) {
         Running_Line* process = &shell->lines[i];
 
@@ -517,19 +533,13 @@ static bool read_process_data(Shell_State* shell, Backlog_State* backlog, bool* 
         }
 
         if (process->pipeline.len == 0) {
-            process->in.close();
-            process->out.close();
-
-            cz::Buffer_Array arena = process->arena;
-            arena.clear();
-            shell->arenas.reserve(cz::heap_allocator(), 1);
-            shell->arenas.push(arena);
-
-            shell->lines.remove(i);
+            recycle_process(shell, process);
+            rend->auto_scroll = true;
+            changes = true;
             --i;
         }
     }
-    return backlog->length != starting_length;
+    return backlog->length != starting_length || changes;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -712,14 +722,10 @@ static int process_events(Backlog_State* backlog,
                         append_text(backlog, prompt->process_id, "Error: failed to execute\n");
                     }
                 } else {
-                    // TODO: kill active process
-                    Running_Line * line = active_process(shell);
+                    Running_Line* line = active_process(shell);
                     if (line) {
                         cleanup_process(line);
-                        shell->arenas.reserve(cz::heap_allocator(), 1);
-                        shell->arenas.push(line->arena);
-                        shell->lines.remove(line - shell->lines.elems);
-                        shell->active_process = -1;
+                        recycle_process(shell, line);
                     }
                 }
 
@@ -1177,7 +1183,7 @@ int actual_main(int argc, char** argv) {
             break;
 
         bool force_quit = false;
-        if (read_process_data(&shell, &backlog, &force_quit))
+        if (read_process_data(&shell, &backlog, &rend, &force_quit))
             status = 1;
 
         if (force_quit)

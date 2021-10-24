@@ -103,6 +103,8 @@ Error start_execute_line(Shell_State* shell,
         running_line.pipeline.push(running_program);
     }
 
+    shell->active_process = running_line.id;
+
     shell->lines.reserve(cz::heap_allocator(), 1);
     shell->lines.push(running_line);
     shell->lines.last().pipeline = running_line.pipeline.clone(arena.allocator());

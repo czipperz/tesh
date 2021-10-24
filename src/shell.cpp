@@ -47,6 +47,21 @@ void cleanup_processes(Shell_State* shell) {
     }
 }
 
+void recycle_process(Shell_State* shell, Running_Line* process) {
+    process->in.close();
+    process->out.close();
+
+    cz::Buffer_Array arena = process->arena;
+    arena.clear();
+    shell->arenas.reserve(cz::heap_allocator(), 1);
+    shell->arenas.push(arena);
+
+    if (process->id == shell->active_process)
+        shell->active_process = -1;
+
+    shell->lines.remove(process - shell->lines.elems);
+}
+
 Running_Line* active_process(Shell_State* shell) {
     if (shell->active_process == -1)
         return nullptr;

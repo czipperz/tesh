@@ -31,6 +31,7 @@ void set_env_var(Shell_State* shell, cz::Str key, cz::Str value);
 
 void cleanup_process(Running_Line* line);
 void cleanup_processes(Shell_State* shell);
+void recycle_process(Shell_State* shell, Running_Line* line);
 
 /// Get the active process, or `nullptr` if there is none.
 Running_Line* active_process(Shell_State* shell);
