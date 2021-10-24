@@ -36,7 +36,11 @@ bool find_in_path(Shell_State* shell,
         full_path->len = 0;
         full_path->reserve(allocator, piece.len + abbreviation.len + 2);
         full_path->append(piece);
+#ifdef _WIN32
+        full_path->push('\\');
+#else
         full_path->push('/');
+#endif
         full_path->append(abbreviation);
         full_path->null_terminate();
 
