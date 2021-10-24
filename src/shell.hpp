@@ -38,6 +38,11 @@ void recycle_process(Shell_State* shell, Running_Line* line);
 /// Get the active process, or `nullptr` if there is none.
 Running_Line* active_process(Shell_State* shell);
 
+bool find_in_path(Shell_State* shell,
+                  cz::Str abbreviation,
+                  cz::Allocator allocator,
+                  cz::String* full_path);
+
 ///////////////////////////////////////////////////////////////////////////////
 
 struct Process_Output {
