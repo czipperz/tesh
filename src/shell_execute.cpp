@@ -5,6 +5,8 @@
 #include <cz/heap.hpp>
 #include <cz/process.hpp>
 
+#include "config.hpp"
+
 ///////////////////////////////////////////////////////////////////////////////
 
 static Error run_program(Shell_State* shell,
@@ -155,9 +157,8 @@ Error start_execute_line(Shell_State* shell,
         running_line.pipeline.push(running_program);
     }
 
-#ifdef ATTACH_ON_SPAWN
-    shell->active_process = running_line.id;
-#endif
+    if (cfg.on_spawn_attach)
+        shell->active_process = running_line.id;
 
     shell->lines.reserve(cz::heap_allocator(), 1);
     shell->lines.push(running_line);

@@ -20,6 +20,7 @@
 #include <windows.h>
 #endif
 
+#include "config.hpp"
 #include "global.hpp"
 #include "shell.hpp"
 
@@ -496,8 +497,9 @@ static bool read_process_data(Shell_State* shell,
             }
 #endif
 
+            if (shell->active_process == process->id)
+                rend->auto_scroll = true;
             recycle_process(shell, process);
-            rend->auto_scroll = true;
             changes = true;
             --i;
         }
@@ -686,13 +688,8 @@ static int process_events(Backlog_State* backlog,
                         (void)line->in.write(prompt->text);
                         --prompt->process_id;
                     } else {
-#if AUTO_PAGE
-                        rend->auto_page = true;
-                        rend->auto_scroll = false;
-#else
-                        rend->auto_page = false;
-                        rend->auto_scroll = true;
-#endif
+                        rend->auto_page = cfg.on_spawn_auto_page;
+                        rend->auto_scroll = cfg.on_spawn_auto_scroll;
                         if (!run_line(shell, backlog, prompt->text, prompt->process_id)) {
                             append_text(backlog, prompt->process_id, "Error: failed to execute\n");
                         }
@@ -1249,6 +1246,7 @@ int actual_main(int argc, char** argv) {
     rend.backlog_fg_color = {0xdd, 0xdd, 0xdd, 0xff};
     rend.prompt_fg_color = {0x77, 0xf9, 0xff, 0xff};
 
+    cfg.on_spawn_auto_page = true;
     cz::env::set("PAGER", "cat");
 
     while (1) {
