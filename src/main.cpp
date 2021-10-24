@@ -411,7 +411,7 @@ static void render_frame(SDL_Window* window,
 // Process control
 ///////////////////////////////////////////////////////////////////////////////
 
-static bool run_line(Shell_State* shell, cz::Str text, uint64_t id) {
+static bool run_line(Shell_State* shell, Backlog_State* backlog, cz::Str text, uint64_t id) {
     Error error;
     Parse_Line line = {};
 
@@ -425,7 +425,7 @@ static bool run_line(Shell_State* shell, cz::Str text, uint64_t id) {
     if (error != Error_Success)
         return false;
 
-    error = start_execute_line(shell, arena, line, id);
+    error = start_execute_line(shell, backlog, arena, line, id);
     if (error != Error_Success)
         return false;
 
@@ -666,7 +666,7 @@ static int process_events(Backlog_State* backlog,
                         rend->auto_page = false;
                         rend->auto_scroll = true;
 #endif
-                        if (!run_line(shell, prompt->text, prompt->process_id)) {
+                        if (!run_line(shell, backlog, prompt->text, prompt->process_id)) {
                             append_text(backlog, prompt->process_id, "Error: failed to execute\n");
                         }
                     }

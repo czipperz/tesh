@@ -132,6 +132,7 @@ Error parse_line(const Shell_State* shell, cz::Allocator allocator, Parse_Line* 
 ///////////////////////////////////////////////////////////////////////////////
 
 Error start_execute_line(Shell_State* shell,
+                         Backlog_State* backlog,
                          cz::Buffer_Array arena,
                          const Parse_Line& line,
                          uint64_t id);

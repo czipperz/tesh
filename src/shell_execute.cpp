@@ -12,15 +12,20 @@ static Error run_program(Shell_State* shell,
                          Running_Program* program,
                          Parse_Program parse,
                          cz::Input_File in,
-                         cz::Output_File out,
-                         cz::Output_File err,
+                         Process_Output out,
+                         Process_Output err,
                          bool in_pipe,
                          bool out_pipe,
                          bool err_pipe);
 
+static void recognize_builtins(Running_Program* program,
+                               const Parse_Program& parse,
+                               cz::Allocator allocator);
+
 ///////////////////////////////////////////////////////////////////////////////
 
 Error start_execute_line(Shell_State* shell,
+                         Backlog_State* backlog,
                          cz::Buffer_Array arena,
                          const Parse_Line& parse_line,
                          uint64_t id) {
@@ -64,11 +69,35 @@ Error start_execute_line(Shell_State* shell,
     cz::Input_File pipe_in = line_in;
 
     for (size_t p = 0; p < parse_line.pipeline.len; ++p) {
-        const Parse_Program& parse_program = parse_line.pipeline[p];
+        Parse_Program parse_program = parse_line.pipeline[p];
+
+        // TODO: This is the wrong place to expand aliases.
+        for (size_t i = 0; i < shell->alias_names.len; ++i) {
+            if (parse_program.args[0] == shell->alias_names[i]) {
+                cz::Vector<cz::Str> args2 = parse_program.args.clone(arena.allocator());
+                args2[0] = shell->alias_values[i];
+                parse_program.args = args2;
+                break;
+            }
+        }
+
+        Running_Program running_program = {};
+        recognize_builtins(&running_program, parse_program, arena.allocator());
+
+        Process_Output my_line_out = {};
+        if (running_program.type == Running_Program::PROCESS) {
+            my_line_out.type = Process_Output::FILE;
+            my_line_out.v.file = line_out;
+        } else {
+            my_line_out.type = Process_Output::BACKLOG;
+            my_line_out.v.backlog.state = backlog;
+            my_line_out.v.backlog.process_id = id;
+        }
+
         bool in_pipe = false, out_pipe = false, err_pipe = false;
         cz::Input_File in;
-        cz::Output_File out;
-        cz::Output_File err;
+        Process_Output out = {};
+        Process_Output err = {};
 
         if (parse_program.in_file.buffer) {
             if (!in.open(parse_program.in_file.buffer))
@@ -83,13 +112,14 @@ Error start_execute_line(Shell_State* shell,
         }
 
         if (parse_program.out_file.buffer) {
-            if (!out.open(parse_program.out_file.buffer))
+            out.type = Process_Output::FILE;
+            if (!out.v.file.open(parse_program.out_file.buffer))
                 return Error_InvalidPath;  // TODO: cleanup file descriptors
             running_line.files.reserve(cz::heap_allocator(), 1);
-            running_line.files.push(out);
+            running_line.files.push(out.v.file);
         } else {
             if (p + 1 == parse_line.pipeline.len) {
-                out = line_out;
+                out = my_line_out;
             } else {
                 cz::Output_File pipe_out;
                 if (!cz::create_pipe(&pipe_in, &pipe_out))
@@ -97,22 +127,23 @@ Error start_execute_line(Shell_State* shell,
                 running_line.files.reserve(cz::heap_allocator(), 2);
                 running_line.files.push(pipe_in);
                 running_line.files.push(pipe_out);
-                out = pipe_out;
+                out.type = Process_Output::FILE;
+                out.v.file = pipe_out;
             }
             out_pipe = true;
         }
 
         if (parse_program.err_file.buffer) {
-            if (!err.open(parse_program.err_file.buffer))
+            err.type = Process_Output::FILE;
+            if (!err.v.file.open(parse_program.err_file.buffer))
                 return Error_InvalidPath;  // TODO: cleanup file descriptors
             running_line.files.reserve(cz::heap_allocator(), 1);
-            running_line.files.push(err);
+            running_line.files.push(err.v.file);
         } else {
-            err = line_out;
+            err = my_line_out;
             err_pipe = true;
         }
 
-        Running_Program running_program = {};
         Error error = run_program(shell, arena.allocator(), &running_program, parse_program, in,
                                   out, err, in_pipe, out_pipe, err_pipe);
         if (error != Error_Success)
@@ -142,11 +173,48 @@ static Error run_program(Shell_State* shell,
                          Running_Program* program,
                          Parse_Program parse,
                          cz::Input_File in,
-                         cz::Output_File out,
-                         cz::Output_File err,
+                         Process_Output out,
+                         Process_Output err,
                          bool in_pipe,
                          bool out_pipe,
                          bool err_pipe) {
+    // If command is a builtin.
+    if (program->type != Running_Program::PROCESS) {
+        if (in_pipe && !in.set_non_blocking())
+            return Error_IO;
+        if (out_pipe && out.type == Process_Output::FILE && !out.v.file.set_non_blocking())
+            return Error_IO;
+        if (err_pipe && err.type == Process_Output::FILE && !err.v.file.set_non_blocking())
+            return Error_IO;
+
+        program->v.builtin.args = parse.args;
+        program->v.builtin.in = in;
+        program->v.builtin.out = out;
+        program->v.builtin.err = err;
+        program->v.builtin.working_directory =
+            shell->working_directory.clone_null_terminate(allocator);
+        return Error_Success;
+    }
+
+    CZ_DEBUG_ASSERT(out.type == Process_Output::FILE);
+    CZ_DEBUG_ASSERT(err.type == Process_Output::FILE);
+
+    cz::Process_Options options;
+    options.std_in = in;
+    options.std_out = out.v.file;
+    options.std_err = err.v.file;
+    options.working_directory = shell->working_directory.buffer;
+
+    program->v.process = {};
+    if (!program->v.process.launch_program(parse.args, options))
+        return Error_IO;
+
+    return Error_Success;
+}
+
+static void recognize_builtins(Running_Program* program,
+                               const Parse_Program& parse,
+                               cz::Allocator allocator) {
     program->type = Running_Program::PROCESS;
 
     if (parse.args.len == 0) {
@@ -155,17 +223,7 @@ static Error run_program(Shell_State* shell,
         program->v.builtin.st.variables = {};
         program->v.builtin.st.variables.names = parse.variable_names;
         program->v.builtin.st.variables.values = parse.variable_values;
-        goto builtin;
-    }
-
-    // TODO: This is the wrong place to expand aliases.
-    for (size_t i = 0; i < shell->alias_names.len; ++i) {
-        if (parse.args[0] == shell->alias_names[i]) {
-            cz::Vector<cz::Str> args2 = parse.args.clone(allocator);
-            args2[0] = shell->alias_values[i];
-            parse.args = args2;
-            break;
-        }
+        return;
     }
 
     // Setup builtins.
@@ -173,62 +231,22 @@ static Error run_program(Shell_State* shell,
         program->type = Running_Program::ECHO;
         program->v.builtin.st.echo = {};
         program->v.builtin.st.echo.outer = 1;
-    }
-    if (parse.args[0] == "cat") {
+    } else if (parse.args[0] == "cat") {
         program->type = Running_Program::CAT;
         program->v.builtin.st.cat = {};
         program->v.builtin.st.cat.buffer = (char*)allocator.alloc({4096, 1});
         program->v.builtin.st.cat.outer = 0;
-    }
-    if (parse.args[0] == "exit") {
+    } else if (parse.args[0] == "exit") {
         program->type = Running_Program::EXIT;
-    }
-    if (parse.args[0] == "return") {
+    } else if (parse.args[0] == "return") {
         program->type = Running_Program::RETURN;
-    }
-    if (parse.args[0] == "pwd") {
+    } else if (parse.args[0] == "pwd") {
         program->type = Running_Program::PWD;
-    }
-    if (parse.args[0] == "cd") {
+    } else if (parse.args[0] == "cd") {
         program->type = Running_Program::CD;
-    }
-    if (parse.args[0] == "ls") {
+    } else if (parse.args[0] == "ls") {
         program->type = Running_Program::LS;
-    }
-    if (parse.args[0] == "alias") {
+    } else if (parse.args[0] == "alias") {
         program->type = Running_Program::ALIAS;
     }
-
-    // If command is a builtin.
-    if (program->type != Running_Program::PROCESS) {
-    builtin:
-        if (in_pipe && !in.set_non_blocking())
-            return Error_IO;
-        if (out_pipe && !out.set_non_blocking())
-            return Error_IO;
-        if (err_pipe && !err.set_non_blocking())
-            return Error_IO;
-
-        program->v.builtin.args = parse.args;
-        program->v.builtin.in = in;
-        program->v.builtin.out.type = Process_Output::FILE;
-        program->v.builtin.out.v.file = out;
-        program->v.builtin.err.type = Process_Output::FILE;
-        program->v.builtin.err.v.file = err;
-        program->v.builtin.working_directory =
-            shell->working_directory.clone_null_terminate(allocator);
-        return Error_Success;
-    }
-
-    cz::Process_Options options;
-    options.std_in = in;
-    options.std_out = out;
-    options.std_err = err;
-    options.working_directory = shell->working_directory.buffer;
-
-    program->v.process = {};
-    if (!program->v.process.launch_program(parse.args, options))
-        return Error_IO;
-
-    return Error_Success;
 }
