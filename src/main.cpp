@@ -858,7 +858,8 @@ static int process_events(Backlog_State* backlog,
                 rend->complete_redraw = true;
                 ++num_events;
             }
-            if (mod == KMOD_CTRL && event.key.keysym.sym == SDLK_v) {
+            if ((mod == 0 && event.key.keysym.sym == SDLK_PAGEDOWN) ||
+                (mod == KMOD_CTRL && event.key.keysym.sym == SDLK_v)) {
                 rend->auto_page = false;
                 rend->auto_scroll = false;
                 int lines = cz::max(rend->window_rows, 6) - 3;
@@ -866,7 +867,8 @@ static int process_events(Backlog_State* backlog,
                 rend->complete_redraw = true;
                 ++num_events;
             }
-            if (mod == KMOD_ALT && event.key.keysym.sym == SDLK_v) {
+            if ((mod == 0 && event.key.keysym.sym == SDLK_PAGEUP) ||
+                (mod == KMOD_ALT && event.key.keysym.sym == SDLK_v)) {
                 rend->auto_page = false;
                 rend->auto_scroll = false;
                 int lines = cz::max(rend->window_rows, 6) - 3;
