@@ -1150,6 +1150,40 @@ static void load_default_configuration() {
     cfg.process_colors = process_colors;
 }
 
+static void load_environment_variables(Shell_State* shell) {
+#ifdef _WIN32
+    {
+        char* penv = GetEnvironmentStringsA();
+        if (!penv)
+            return;
+        CZ_DEFER(FreeEnvironmentStringsA(penv));
+
+        const char* iter = penv;
+        while (*iter) {
+            cz::Str line = iter;
+            iter += line.len + 1;
+
+            cz::Str key, value;
+            if (line.split_excluding('=', &key, &value)) {
+                if (key.len > 0)
+                    set_env_var(shell, key, value);
+            }
+        }
+    }
+
+    // Set HOME to the user home directory.
+    cz::Str temp;
+    if (!get_env_var(shell, "HOME", &temp)) {
+        cz::String home = {};
+        if (cz::env::get_home(cz::heap_allocator(), &home)) {
+            set_env_var(shell, "HOME", home);
+        }
+    }
+#else
+#error TODO
+#endif
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 // main
 ///////////////////////////////////////////////////////////////////////////////
@@ -1180,24 +1214,7 @@ int actual_main(int argc, char** argv) {
         return 1;
     }
 
-    {
-        cz::String home = {};
-        if (cz::env::get_home(cz::heap_allocator(), &home)) {
-            set_env_var(&shell, "HOME", home);
-        }
-    }
-
-    {
-        // TODO: parse envp to get all environment variables.
-        // Note(chris.gregory): Probably will be OS specific.  I can do Windows side.
-        const char* vars[] = {"PATH", "PATHEXT"};
-        cz::String value = {};
-        for (size_t i = 0; i < CZ_DIM(vars); ++i) {
-            value.len = 0;
-            if (cz::env::get(vars[i], temp_allocator, &value))
-                set_env_var(&shell, vars[i], value);
-        }
-    }
+    load_environment_variables(&shell);
 
     load_history(&prompt, &shell);
     CZ_DEFER(save_history(&prompt, &shell));
