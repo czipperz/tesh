@@ -28,6 +28,7 @@ Error start_execute_line(Shell_State* shell,
                          Backlog_State* backlog,
                          cz::Buffer_Array arena,
                          const Parse_Line& parse_line,
+                         cz::Str command_line,
                          uint64_t id) {
     ZoneScoped;
 
@@ -37,6 +38,7 @@ Error start_execute_line(Shell_State* shell,
     Running_Line running_line = {};
     running_line.id = id;
     running_line.arena = arena;
+    running_line.command_line = command_line.clone(arena.allocator());
     CZ_DEFER(running_line.pipeline.drop(cz::heap_allocator()));
     CZ_DEFER({
         for (size_t i = 0; i < running_line.files.len; ++i) {

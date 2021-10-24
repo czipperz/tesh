@@ -102,6 +102,7 @@ struct Running_Program {
 
 struct Running_Line {
     uint64_t id;
+    cz::Str command_line;
     cz::Vector<Running_Program> pipeline;
     cz::Vector<cz::File_Descriptor> files;
     cz::Output_File in;
@@ -135,6 +136,7 @@ Error start_execute_line(Shell_State* shell,
                          Backlog_State* backlog,
                          cz::Buffer_Array arena,
                          const Parse_Line& line,
+                         cz::Str command_line,
                          uint64_t id);
 
 ///////////////////////////////////////////////////////////////////////////////

@@ -422,19 +422,34 @@ static bool run_line(Shell_State* shell, Backlog_State* backlog, cz::Str text, u
         arena.init();
 
 #ifdef TRACY_ENABLE
-    cz::String message = cz::format(temp_allocator, "Start: ", text);
-    TRACY_MESSAGE(message.buffer, message.len);
+    {
+        cz::String message = cz::format(temp_allocator, "Start: ", text);
+        TracyMessage(message.buffer, message.len);
+    }
 #endif
 
     error = parse_line(shell, arena.allocator(), &line, text);
     if (error != Error_Success)
-        return false;
+        goto fail;
 
-    error = start_execute_line(shell, backlog, arena, line, id);
+    error = start_execute_line(shell, backlog, arena, line, text, id);
     if (error != Error_Success)
-        return false;
+        goto fail;
 
     return true;
+
+fail:;
+#ifdef TRACY_ENABLE
+    {
+        cz::String message = cz::format(temp_allocator, "Failed to start: ", text);
+        TracyMessage(message.buffer, message.len);
+    }
+#endif
+
+    arena.clear();
+    shell->arenas.reserve(cz::heap_allocator(), 1);
+    shell->arenas.push(arena);
+    return false;
 }
 
 static bool read_process_data(Shell_State* shell,
@@ -475,8 +490,10 @@ static bool read_process_data(Shell_State* shell,
 
         if (process->pipeline.len == 0) {
 #ifdef TRACY_ENABLE
-            cz::String message = cz::format(temp_allocator, "End: ", text);
-            TRACY_MESSAGE(message.buffer, message.len);
+            {
+                cz::String message = cz::format(temp_allocator, "End: ", process->command_line);
+                TracyMessage(message.buffer, message.len);
+            }
 #endif
 
             recycle_process(shell, process);
@@ -684,8 +701,9 @@ static int process_events(Backlog_State* backlog,
                     Running_Line* line = active_process(shell);
                     if (line) {
 #ifdef TRACY_ENABLE
-                        cz::String message = cz::format(temp_allocator, "Kill: ", text);
-                        TRACY_MESSAGE(message.buffer, message.len);
+                        cz::String message =
+                            cz::format(temp_allocator, "End: ", line->command_line);
+                        TracyMessage(message.buffer, message.len);
 #endif
 
                         kill_process(line);
