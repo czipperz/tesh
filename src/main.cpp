@@ -413,14 +413,7 @@ static void render_frame(SDL_Window* window,
 ///////////////////////////////////////////////////////////////////////////////
 
 static bool run_line(Shell_State* shell, Backlog_State* backlog, cz::Str text, uint64_t id) {
-    Error error;
-    Parse_Line line = {};
-
-    cz::Buffer_Array arena;
-    if (shell->arenas.len > 0)
-        arena = shell->arenas.pop();
-    else
-        arena.init();
+    cz::Buffer_Array arena = alloc_arena(shell);
 
 #ifdef TRACY_ENABLE
     {
@@ -429,11 +422,12 @@ static bool run_line(Shell_State* shell, Backlog_State* backlog, cz::Str text, u
     }
 #endif
 
-    error = parse_line(shell, arena.allocator(), &line, text);
+    Parse_Script script = {};
+    Error error = parse_script(shell, arena.allocator(), &script, text);
     if (error != Error_Success)
         goto fail;
 
-    error = start_execute_line(shell, backlog, arena, line, text, id);
+    error = start_execute_script(shell, backlog, arena, script, text, id);
     if (error != Error_Success)
         goto fail;
 
@@ -447,10 +441,21 @@ fail:;
     }
 #endif
 
-    arena.clear();
-    shell->arenas.reserve(cz::heap_allocator(), 1);
-    shell->arenas.push(arena);
+    recycle_arena(shell, arena);
     return false;
+}
+
+static void tick_pipeline(Shell_State* shell, Running_Pipeline* pipeline, bool* force_quit) {
+    for (size_t p = 0; p < pipeline->pipeline.len; ++p) {
+        Running_Program* program = &pipeline->pipeline[p];
+        int exit_code = 1;
+        if (tick_program(shell, program, &exit_code, force_quit)) {
+            pipeline->pipeline.remove(p);
+            --p;
+        }
+        if (*force_quit)
+            return;
+    }
 }
 
 static bool read_process_data(Shell_State* shell,
@@ -460,46 +465,43 @@ static bool read_process_data(Shell_State* shell,
     static char buffer[4096];
     size_t starting_length = backlog->length;
     bool changes = false;
-    for (size_t i = 0; i < shell->lines.len; ++i) {
-        Running_Line* process = &shell->lines[i];
+    for (size_t i = 0; i < shell->scripts.len; ++i) {
+        Running_Script* script = &shell->scripts[i];
 
-        for (size_t p = 0; p < process->pipeline.len; ++p) {
-            Running_Program* program = &process->pipeline[p];
-            int exit_code = 1;
-            if (tick_program(shell, program, &exit_code, force_quit)) {
-                process->pipeline.remove(p);
-                --p;
-            }
-            if (*force_quit)
-                return true;
-        }
+        tick_pipeline(shell, &script->fg.pipeline, force_quit);
+        if (*force_quit)
+            return true;
 
-        if (process->out.is_open()) {
+        if (script->out.is_open()) {
             int64_t result = 0;
             while (1) {
-                result = process->out.read_text(buffer, sizeof(buffer), &process->out_carry);
+                result = script->out.read_text(buffer, sizeof(buffer), &script->out_carry);
                 if (result <= 0)
                     break;
-                append_text(backlog, process->id, {buffer, (size_t)result});
+                append_text(backlog, script->id, {buffer, (size_t)result});
             }
 
             if (result == 0) {
-                process->out.close();
-                process->out = {};
+                script->out.close();
+                script->out = {};
             }
         }
 
-        if (process->pipeline.len == 0) {
+        if (script->fg.pipeline.pipeline.len == 0) {
 #ifdef TRACY_ENABLE
             {
-                cz::String message = cz::format(temp_allocator, "End: ", process->command_line);
+                cz::String message = cz::format(temp_allocator, "End: ", script->command_line);
                 TracyMessage(message.buffer, message.len);
             }
 #endif
 
-            if (shell->active_process == process->id)
+            // If we're attached then we auto scroll but we can hit an edge case where the
+            // final output isn't scrolled to.  So we stop halfway through the output.  I think
+            // it would be better if this just called `ensure_prompt_on_screen`.
+            if (shell->active_process == script->id)
                 rend->auto_scroll = true;
-            recycle_process(shell, process);
+
+            recycle_process(shell, script);
             changes = true;
             --i;
         }
@@ -680,9 +682,9 @@ static int process_events(Backlog_State* backlog,
 
                 resolve_history_searching(prompt);
 
-                Running_Line* line = active_process(shell);
-                if (line) {
-                    set_backlog_process(backlog, line->id);
+                Running_Script* script = active_process(shell);
+                if (script) {
+                    set_backlog_process(backlog, script->id);
                 } else {
                     append_text(backlog, -1, "\n");
                     if (rend->backlog_start.index + 1 == backlog->length) {
@@ -699,9 +701,8 @@ static int process_events(Backlog_State* backlog,
                 append_text(backlog, prompt->process_id, "\n");
 
                 if (event.key.keysym.sym == SDLK_RETURN) {
-                    Running_Line* line = active_process(shell);
-                    if (line) {
-                        (void)line->in.write(prompt->text);
+                    if (script) {
+                        (void)script->in.write(prompt->text);
                         --prompt->process_id;
                     } else {
                         rend->auto_page = cfg.on_spawn_auto_page;
@@ -711,16 +712,14 @@ static int process_events(Backlog_State* backlog,
                         }
                     }
                 } else {
-                    Running_Line* line = active_process(shell);
-                    if (line) {
+                    if (script) {
 #ifdef TRACY_ENABLE
                         cz::String message =
-                            cz::format(temp_allocator, "End: ", line->command_line);
+                            cz::format(temp_allocator, "End: ", script->command_line);
                         TracyMessage(message.buffer, message.len);
 #endif
 
-                        kill_process(line);
-                        recycle_process(shell, line);
+                        recycle_process(shell, script);
                     }
                 }
 
@@ -741,8 +740,8 @@ static int process_events(Backlog_State* backlog,
                 rend->auto_page = false;
                 rend->auto_scroll = true;
                 if (shell->active_process == -1) {
-                    if (shell->lines.len > 0)
-                        shell->active_process = shell->lines.last().id;
+                    if (shell->scripts.len > 0)
+                        shell->active_process = shell->scripts.last().id;
                 } else {
                     shell->active_process = -1;
                 }

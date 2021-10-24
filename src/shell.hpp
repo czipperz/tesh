@@ -8,7 +8,8 @@
 #include "backlog.hpp"
 #include "error.hpp"
 
-struct Running_Line;
+struct Running_Script;
+struct Parse_Line;
 
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -19,7 +20,7 @@ struct Shell_State {
     cz::Vector<cz::Str> alias_names;
     cz::Vector<cz::Str> alias_values;
 
-    cz::Vector<Running_Line> lines;
+    cz::Vector<Running_Script> scripts;
     uint64_t active_process = ~0ull;
 
     cz::Vector<cz::Buffer_Array> arenas;
@@ -30,13 +31,14 @@ struct Shell_State {
 bool get_env_var(const Shell_State* shell, cz::Str key, cz::Str* value);
 void set_env_var(Shell_State* shell, cz::Str key, cz::Str value);
 
-void cleanup_process(Running_Line* line);
-void kill_process(Running_Line* line);
 void cleanup_processes(Shell_State* shell);
-void recycle_process(Shell_State* shell, Running_Line* line);
+void recycle_process(Shell_State* shell, Running_Script* script);
+
+cz::Buffer_Array alloc_arena(Shell_State* shell);
+void recycle_arena(Shell_State* shell, cz::Buffer_Array arena);
 
 /// Get the active process, or `nullptr` if there is none.
-Running_Line* active_process(Shell_State* shell);
+Running_Script* active_process(Shell_State* shell);
 
 bool find_in_path(Shell_State* shell,
                   cz::Str abbreviation,
@@ -106,15 +108,36 @@ struct Running_Program {
     } v;
 };
 
-struct Running_Line {
-    uint64_t id;
+struct Running_Pipeline {
     cz::Str command_line;
     cz::Vector<Running_Program> pipeline;
     cz::Vector<cz::File_Descriptor> files;
+    cz::Buffer_Array arena;
+};
+
+struct Running_Line {
+    Running_Pipeline pipeline;
+    enum Type {
+        NONE,
+        // ALWAYS,
+        // AND,
+        // OR,
+    } type;
+    Parse_Line* continuation;
+};
+
+struct Running_Script {
+    uint64_t id;
+    cz::Buffer_Array arena;
+    // cz::Vector<Running_Pipeline> bg;
+    Running_Line fg;
     cz::Output_File in;
     cz::Input_File out;
     cz::Carriage_Return_Carry out_carry;
-    cz::Buffer_Array arena;
+
+    /// Default stdin/stdout for a newly launched program in this script.
+    cz::Input_File script_in;
+    cz::Output_File script_out;
 };
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -130,20 +153,39 @@ struct Parse_Program {
     cz::Str err_file;
 };
 
-struct Parse_Line {
+struct Parse_Pipeline {
     cz::Vector<Parse_Program> pipeline;
 };
 
-Error parse_line(const Shell_State* shell, cz::Allocator allocator, Parse_Line* out, cz::Str text);
+struct Parse_Line {
+    Parse_Pipeline pipeline;
+    enum Type {
+        NONE,
+        // ALWAYS,  // ';', '\n'
+        // AND,     // '&&'
+        // OR,      // '||'
+        // ASYNC,   // '&'
+    } type;
+    Parse_Line* continuation;
+};
+
+struct Parse_Script {
+    Parse_Line first;
+};
+
+Error parse_script(const Shell_State* shell,
+                   cz::Allocator allocator,
+                   Parse_Script* out,
+                   cz::Str text);
 
 ///////////////////////////////////////////////////////////////////////////////
 
-Error start_execute_line(Shell_State* shell,
-                         Backlog_State* backlog,
-                         cz::Buffer_Array arena,
-                         const Parse_Line& line,
-                         cz::Str command_line,
-                         uint64_t id);
+Error start_execute_script(Shell_State* shell,
+                           Backlog_State* backlog,
+                           cz::Buffer_Array arena,
+                           const Parse_Script& script,
+                           cz::Str command_line,
+                           uint64_t id);
 
 ///////////////////////////////////////////////////////////////////////////////
 

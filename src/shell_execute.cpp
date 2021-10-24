@@ -9,6 +9,13 @@
 
 ///////////////////////////////////////////////////////////////////////////////
 
+static Error start_execute_pipeline(Shell_State* shell,
+                                    Backlog_State* backlog,
+                                    cz::Buffer_Array arena,
+                                    const Running_Script& script,
+                                    const Parse_Pipeline& parse,
+                                    Running_Pipeline* running);
+
 static Error run_program(Shell_State* shell,
                          cz::Allocator allocator,
                          Running_Program* program,
@@ -26,54 +33,99 @@ static void recognize_builtins(Running_Program* program,
 
 ///////////////////////////////////////////////////////////////////////////////
 
-Error start_execute_line(Shell_State* shell,
-                         Backlog_State* backlog,
-                         cz::Buffer_Array arena,
-                         const Parse_Line& parse_line,
-                         cz::Str command_line,
-                         uint64_t id) {
+Error start_execute_script(Shell_State* shell,
+                           Backlog_State* backlog,
+                           cz::Buffer_Array arena,
+                           const Parse_Script& parse,
+                           cz::Str command_line,
+                           uint64_t id) {
+    Error error = Error_Success;
+
+    cz::Buffer_Array pipeline_arena;
+
+    Running_Script running = {};
+    running.id = id;
+
+    if (!cz::create_process_input_pipe(&running.script_in, &running.in))
+        return Error_IO;
+    if (!cz::create_process_output_pipe(&running.script_out, &running.out)) {
+        error = Error_IO;
+        goto cleanup1;
+    }
+
+    if (!running.in.set_non_blocking()) {
+        error = Error_IO;
+        goto cleanup2;
+    }
+    if (!running.out.set_non_blocking()) {
+        error = Error_IO;
+        goto cleanup2;
+    }
+
+    running.arena = arena;
+
+    switch (parse.first.type) {
+    case Parse_Line::NONE:
+        running.fg.type = Running_Line::NONE;
+        break;
+    }
+    running.fg.continuation = parse.first.continuation;
+
+    // TODO: I think we should refactor this to create the
+    // Running_Script then adding a Running_Line to it.  Idk.
+    pipeline_arena = alloc_arena(shell);
+    error = start_execute_pipeline(shell, backlog, pipeline_arena, running, parse.first.pipeline,
+                                   &running.fg.pipeline);
+    if (error != Error_Success) {
+        goto cleanup3;
+    }
+
+    if (cfg.on_spawn_attach)
+        shell->active_process = running.id;
+
+    return Error_Success;
+
+cleanup3:
+    recycle_arena(shell, pipeline_arena);
+cleanup2:
+    running.script_out.close();
+    running.out.close();
+cleanup1:
+    running.script_in.close();
+    running.in.close();
+    return error;
+}
+
+///////////////////////////////////////////////////////////////////////////////
+
+static Error start_execute_pipeline(Shell_State* shell,
+                                    Backlog_State* backlog,
+                                    cz::Buffer_Array arena,
+                                    const Running_Script& script,
+                                    const Parse_Pipeline& parse,
+                                    Running_Pipeline* running) {
     ZoneScoped;
 
-    if (parse_line.pipeline.len == 0)
+    if (parse.pipeline.len == 0)
         return Error_Success;
 
-    Running_Line running_line = {};
-    running_line.id = id;
-    running_line.arena = arena;
-    running_line.command_line = command_line.clone(arena.allocator());
-    CZ_DEFER(running_line.pipeline.drop(cz::heap_allocator()));
+    running->arena = arena;
+    // running->command_line = command_line.clone(arena.allocator());
+
+    cz::Vector<Running_Program> pipeline = {};
+    CZ_DEFER(pipeline.drop(cz::heap_allocator()));
+    cz::Vector<cz::File_Descriptor> files = {};
     CZ_DEFER({
-        for (size_t i = 0; i < running_line.files.len; ++i) {
-            running_line.files[i].close();
+        for (size_t i = 0; i < files.len; ++i) {
+            files[i].close();
         }
-        running_line.files.drop(cz::heap_allocator());
+        files.drop(cz::heap_allocator());
     });
 
-    running_line.files.reserve(cz::heap_allocator(), 2);
+    cz::Input_File pipe_in = script.script_in;
 
-    cz::Input_File line_in;
-    cz::Output_File line_out;
-    if (!cz::create_process_input_pipe(&line_in, &running_line.in)) {
-    cleanup1:
-        running_line.in.close();
-        running_line.out.close();
-        return Error_IO;
-    }
-    running_line.files.push(line_in);
-
-    if (!cz::create_process_output_pipe(&line_out, &running_line.out))
-        goto cleanup1;
-    running_line.files.push(line_out);
-
-    if (!running_line.in.set_non_blocking())
-        goto cleanup1;
-    if (!running_line.out.set_non_blocking())
-        goto cleanup1;
-
-    cz::Input_File pipe_in = line_in;
-
-    for (size_t p = 0; p < parse_line.pipeline.len; ++p) {
-        Parse_Program parse_program = parse_line.pipeline[p];
+    for (size_t p = 0; p < parse.pipeline.len; ++p) {
+        Parse_Program parse_program = parse.pipeline[p];
 
         // TODO: This is the wrong place to expand aliases.
         for (size_t i = 0; i < shell->alias_names.len; ++i) {
@@ -91,11 +143,11 @@ Error start_execute_line(Shell_State* shell,
         Process_Output my_line_out = {};
         if (running_program.type == Running_Program::PROCESS) {
             my_line_out.type = Process_Output::FILE;
-            my_line_out.v.file = line_out;
+            my_line_out.v.file = script.script_out;
         } else {
             my_line_out.type = Process_Output::BACKLOG;
             my_line_out.v.backlog.state = backlog;
-            my_line_out.v.backlog.process_id = id;
+            my_line_out.v.backlog.process_id = script.id;
         }
 
         bool in_pipe = false, out_pipe = false, err_pipe = false;
@@ -106,8 +158,8 @@ Error start_execute_line(Shell_State* shell,
         if (parse_program.in_file.buffer) {
             if (!in.open(parse_program.in_file.buffer))
                 return Error_InvalidPath;  // TODO: cleanup file descriptors
-            running_line.files.reserve(cz::heap_allocator(), 1);
-            running_line.files.push(in);
+            files.reserve(cz::heap_allocator(), 1);
+            files.push(in);
             pipe_in = {};
         } else {
             in = pipe_in;
@@ -119,18 +171,18 @@ Error start_execute_line(Shell_State* shell,
             out.type = Process_Output::FILE;
             if (!out.v.file.open(parse_program.out_file.buffer))
                 return Error_InvalidPath;  // TODO: cleanup file descriptors
-            running_line.files.reserve(cz::heap_allocator(), 1);
-            running_line.files.push(out.v.file);
+            files.reserve(cz::heap_allocator(), 1);
+            files.push(out.v.file);
         } else {
-            if (p + 1 == parse_line.pipeline.len) {
+            if (p + 1 == parse.pipeline.len) {
                 out = my_line_out;
             } else {
                 cz::Output_File pipe_out;
                 if (!cz::create_pipe(&pipe_in, &pipe_out))
                     return Error_IO;
-                running_line.files.reserve(cz::heap_allocator(), 2);
-                running_line.files.push(pipe_in);
-                running_line.files.push(pipe_out);
+                files.reserve(cz::heap_allocator(), 2);
+                files.push(pipe_in);
+                files.push(pipe_out);
                 out.type = Process_Output::FILE;
                 out.v.file = pipe_out;
             }
@@ -141,8 +193,8 @@ Error start_execute_line(Shell_State* shell,
             err.type = Process_Output::FILE;
             if (!err.v.file.open(parse_program.err_file.buffer))
                 return Error_InvalidPath;  // TODO: cleanup file descriptors
-            running_line.files.reserve(cz::heap_allocator(), 1);
-            running_line.files.push(err.v.file);
+            files.reserve(cz::heap_allocator(), 1);
+            files.push(err.v.file);
         } else {
             err = my_line_out;
             err_pipe = true;
@@ -153,18 +205,14 @@ Error start_execute_line(Shell_State* shell,
         if (error != Error_Success)
             return error;
 
-        running_line.pipeline.reserve(cz::heap_allocator(), 1);
-        running_line.pipeline.push(running_program);
+        pipeline.reserve(cz::heap_allocator(), 1);
+        pipeline.push(running_program);
     }
 
-    if (cfg.on_spawn_attach)
-        shell->active_process = running_line.id;
-
-    shell->lines.reserve(cz::heap_allocator(), 1);
-    shell->lines.push(running_line);
-    shell->lines.last().pipeline = running_line.pipeline.clone(arena.allocator());
-    shell->lines.last().files = running_line.files.clone(arena.allocator());
-    running_line.files.len = 0;
+    running->pipeline = pipeline.clone(arena.allocator());
+    running->files = files.clone(arena.allocator());
+    pipeline.len = 0;
+    files.len = 0;
 
     return Error_Success;
 }

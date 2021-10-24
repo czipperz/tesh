@@ -28,56 +28,72 @@ void set_env_var(Shell_State* shell, cz::Str key, cz::Str value) {
     shell->variable_values.push(value.clone(cz::heap_allocator()));
 }
 
-void cleanup_process(Running_Line* line) {
-    for (size_t i = 0; i < line->files.len; ++i) {
-        line->files[i].close();
+static void kill_program(Running_Program* program) {
+    switch (program->type) {
+    case Running_Program::PROCESS:
+        program->v.process.kill();
+        break;
     }
-
-    line->in.close();
-    line->out.close();
 }
 
-void kill_process(Running_Line* line) {
-    for (size_t i = 0; i < line->pipeline.len; ++i) {
-        Running_Program* program = &line->pipeline[i];
-        switch (program->type) {
-        case Running_Program::PROCESS:
-            program->v.process.kill();
-            break;
-        }
+static void cleanup_pipeline(Running_Pipeline* pipeline) {
+    for (size_t p = 0; p < pipeline->pipeline.len; ++p) {
+        kill_program(&pipeline->pipeline[p]);
     }
+    for (size_t f = 0; f < pipeline->files.len; ++f) {
+        pipeline->files[f].close();
+    }
+}
+
+static void cleanup_process(Running_Script* script) {
+    cleanup_pipeline(&script->fg.pipeline);
+
+    script->in.close();
+    script->out.close();
 }
 
 void cleanup_processes(Shell_State* shell) {
-    for (size_t i = 0; i < shell->lines.len; ++i) {
-        Running_Line* line = &shell->lines[i];
-        cleanup_process(line);
-        kill_process(line);
+    for (size_t i = 0; i < shell->scripts.len; ++i) {
+        Running_Script* script = &shell->scripts[i];
+        cleanup_process(script);
     }
 }
 
-void recycle_process(Shell_State* shell, Running_Line* process) {
-    cleanup_process(process);
+cz::Buffer_Array alloc_arena(Shell_State* shell) {
+    if (shell->arenas.len > 0)
+        return shell->arenas.pop();
 
-    cz::Buffer_Array arena = process->arena;
+    cz::Buffer_Array arena;
+    arena.init();
+    return arena;
+}
+
+void recycle_arena(Shell_State* shell, cz::Buffer_Array arena) {
     arena.clear();
     shell->arenas.reserve(cz::heap_allocator(), 1);
     shell->arenas.push(arena);
-
-    if (process->id == shell->active_process)
-        shell->active_process = -1;
-
-    shell->lines.remove(process - shell->lines.elems);
 }
 
-Running_Line* active_process(Shell_State* shell) {
+void recycle_process(Shell_State* shell, Running_Script* script) {
+    recycle_arena(shell, script->arena);
+    recycle_arena(shell, script->fg.pipeline.arena);
+
+    cleanup_process(script);
+
+    if (script->id == shell->active_process)
+        shell->active_process = -1;
+
+    shell->scripts.remove(script - shell->scripts.elems);
+}
+
+Running_Script* active_process(Shell_State* shell) {
     if (shell->active_process == -1)
         return nullptr;
 
-    for (size_t i = 0; i < shell->lines.len; ++i) {
-        Running_Line* line = &shell->lines[i];
-        if (line->id == shell->active_process)
-            return line;
+    for (size_t i = 0; i < shell->scripts.len; ++i) {
+        Running_Script* script = &shell->scripts[i];
+        if (script->id == shell->active_process)
+            return script;
     }
 
     CZ_PANIC("Invalid active_process");

@@ -13,14 +13,39 @@ struct Parse_State {
     size_t err_file_i;
 };
 
-static Error finish_program(Parse_Line* out,
+static Error parse_pipeline(const Shell_State* shell,
+                            cz::Allocator allocator,
+                            Parse_Pipeline* out,
+                            cz::Str text);
+
+static Error finish_program(Parse_Pipeline* out,
                             cz::Allocator allocator,
                             Parse_Program* program,
                             Parse_State* state);
 static Error handle_file_indirection(Parse_Program* program, Parse_State* state);
 static bool get_var_at_point(cz::Str text, size_t index, cz::Str* key);
 
-Error parse_line(const Shell_State* shell, cz::Allocator allocator, Parse_Line* out, cz::Str text) {
+///////////////////////////////////////////////////////////////////////////////
+
+Error parse_script(const Shell_State* shell,
+                   cz::Allocator allocator,
+                   Parse_Script* out,
+                   cz::Str text) {
+    Error error = parse_pipeline(shell, allocator, &out->first.pipeline, text);
+    if (error != Error_Success)
+        return error;
+
+    out->first.type = Parse_Line::NONE;
+    out->first.continuation = nullptr;
+    return Error_Success;
+}
+
+///////////////////////////////////////////////////////////////////////////////
+
+static Error parse_pipeline(const Shell_State* shell,
+                            cz::Allocator allocator,
+                            Parse_Pipeline* out,
+                            cz::Str text) {
     ZoneScoped;
 
     Parse_Program program = {};
@@ -258,7 +283,7 @@ Error parse_line(const Shell_State* shell, cz::Allocator allocator, Parse_Line* 
     return Error_Success;
 }
 
-static Error finish_program(Parse_Line* out,
+static Error finish_program(Parse_Pipeline* out,
                             cz::Allocator allocator,
                             Parse_Program* in,
                             Parse_State* state) {
