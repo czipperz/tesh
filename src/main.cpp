@@ -688,7 +688,7 @@ static int process_events(Backlog_State* backlog,
                         TRACY_MESSAGE(message.buffer, message.len);
 #endif
 
-                        cleanup_process(line);
+                        kill_process(line);
                         recycle_process(shell, line);
                     }
                 }
