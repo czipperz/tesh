@@ -187,7 +187,7 @@ static int coord_trans(Visual_Point* point, int num_cols, char ch) {
     return width;
 }
 
-static void render_char(SDL_Surface* window_surface,
+static bool render_char(SDL_Surface* window_surface,
                         Render_State* rend,
                         Visual_Point* point,
                         SDL_Surface** cache,
@@ -208,11 +208,11 @@ static void render_char(SDL_Surface* window_surface,
 
         // Beyond bottom of screen.
         if (point->y >= rend->window_rows_ru)
-            return;
+            return false;
 
         // Newlines aren't drawn.
         if (width == 0)
-            return;
+            return true;
     }
 
     ZoneScopedN("blit_character");
@@ -227,6 +227,8 @@ static void render_char(SDL_Surface* window_surface,
         SDL_FillRect(window_surface, &rect, background);
         SDL_BlitSurface(s, NULL, window_surface, &rect);
     }
+
+    return true;
 }
 
 static void render_backlog(SDL_Surface* window_surface,
@@ -236,6 +238,7 @@ static void render_backlog(SDL_Surface* window_surface,
     Visual_Point* point = &rend->backlog_end;
     uint64_t i = rend->backlog_end.index;
 
+    CZ_ASSERT(point->y >= 0);
     if (point->y >= rend->window_rows_ru)
         return;
 
@@ -272,7 +275,8 @@ static void render_backlog(SDL_Surface* window_surface,
         }
 
         char c = backlog->buffers[OUTER_INDEX(i)][INNER_INDEX(i)];
-        render_char(window_surface, rend, point, cache, background, fg_color, c);
+        if (!render_char(window_surface, rend, point, cache, background, fg_color, c))
+            break;
     }
 
     rend->backlog_end.index = i;
