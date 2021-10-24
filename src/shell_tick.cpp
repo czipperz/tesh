@@ -76,7 +76,7 @@ bool tick_program(Shell_State* shell, Running_Program* program, int* exit_code, 
         int rounds = 0;
         for (; st.outer < builtin.args.len; ++st.outer) {
             // Rate limit to prevent hanging.
-            if (rounds++ == 16)
+            if (rounds++ == 1024)
                 return false;
 
             // Write this arg.
@@ -125,7 +125,7 @@ bool tick_program(Shell_State* shell, Running_Program* program, int* exit_code, 
         int rounds = 0;
         while (st.file.is_open() || st.outer < builtin.args.len) {
             // Rate limit to prevent hanging.
-            if (rounds++ == 16)
+            if (rounds++ == 1024)
                 return false;
 
             // Write remaining buffer.
