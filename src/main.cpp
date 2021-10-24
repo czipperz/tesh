@@ -547,6 +547,7 @@ static void scroll_down(Render_State* rend, Backlog_State* backlog, int lines) {
 }
 
 static void scroll_up(Render_State* rend, Backlog_State* backlog, int lines) {
+    ++lines;
     Visual_Point* line_start = &rend->backlog_start;
     uint64_t cursor = line_start->index;
     uint64_t line_chars = 0;
