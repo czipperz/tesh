@@ -788,6 +788,16 @@ static int process_events(Backlog_State* backlog,
                 ensure_prompt_on_screen(rend, backlog);
                 ++num_events;
             }
+            if ((mod == 0 && event.key.keysym.sym == SDLK_DELETE) ||
+                (mod == KMOD_CTRL && event.key.keysym.sym == SDLK_d)) {
+                rend->auto_page = false;
+                rend->auto_scroll = true;
+                if (prompt->cursor < prompt->text.len) {
+                    prompt->text.remove(prompt->cursor);
+                }
+                ensure_prompt_on_screen(rend, backlog);
+                ++num_events;
+            }
             if ((mod == 0 && event.key.keysym.sym == SDLK_LEFT) ||
                 (mod == KMOD_CTRL && event.key.keysym.sym == SDLK_b)) {
                 rend->auto_page = false;
