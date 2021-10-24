@@ -821,6 +821,7 @@ static int process_events(Backlog_State* backlog,
                 rend->backlog_start.index = backlog->length;
                 int lines = cz::max(rend->window_rows, 3) - 3;
                 scroll_up(rend, backlog, lines);
+                rend->auto_scroll = true;
                 rend->complete_redraw = true;
                 ++num_events;
             }
