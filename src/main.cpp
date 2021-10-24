@@ -680,9 +680,6 @@ static int process_events(Backlog_State* backlog,
             break;
 
         case SDL_KEYDOWN: {
-            rend->auto_page = false;
-            rend->auto_scroll = false;
-
             transform_shift_numbers(&event.key.keysym);
 
             int mod = (event.key.keysym.mod & ~(KMOD_CAPS | KMOD_NUM));
@@ -700,6 +697,8 @@ static int process_events(Backlog_State* backlog,
                 return -1;
             if ((mod == KMOD_CTRL && event.key.keysym.sym == SDLK_c) ||
                 event.key.keysym.sym == SDLK_RETURN) {
+                rend->auto_page = false;
+                rend->auto_scroll = true;
                 Running_Line* line = active_process(shell);
                 if (line) {
                     set_backlog_process(backlog, line->id);
@@ -755,6 +754,8 @@ static int process_events(Backlog_State* backlog,
                 ++num_events;
             }
             if (mod == KMOD_CTRL && event.key.keysym.sym == SDLK_z) {
+                rend->auto_page = false;
+                rend->auto_scroll = true;
                 if (shell->active_process == -1) {
                     if (shell->lines.len > 0)
                         shell->active_process = shell->lines.last().id;
@@ -764,6 +765,8 @@ static int process_events(Backlog_State* backlog,
                 ++num_events;
             }
             if (mod == 0 && event.key.keysym.sym == SDLK_BACKSPACE) {
+                rend->auto_page = false;
+                rend->auto_scroll = true;
                 if (prompt->cursor > 0) {
                     --prompt->cursor;
                     prompt->text.remove(prompt->cursor);
@@ -772,6 +775,8 @@ static int process_events(Backlog_State* backlog,
                 ++num_events;
             }
             if (mod == (KMOD_CTRL | KMOD_ALT) && event.key.keysym.sym == SDLK_BACKSPACE) {
+                rend->auto_page = false;
+                rend->auto_scroll = true;
                 prompt->text.remove_range(0, prompt->cursor);
                 prompt->cursor = 0;
                 ensure_prompt_on_screen(rend, backlog);
@@ -779,6 +784,8 @@ static int process_events(Backlog_State* backlog,
             }
             if ((mod == 0 && event.key.keysym.sym == SDLK_LEFT) ||
                 (mod == KMOD_CTRL && event.key.keysym.sym == SDLK_b)) {
+                rend->auto_page = false;
+                rend->auto_scroll = true;
                 if (prompt->cursor > 0) {
                     --prompt->cursor;
                 }
@@ -787,6 +794,8 @@ static int process_events(Backlog_State* backlog,
             }
             if ((mod == 0 && event.key.keysym.sym == SDLK_RIGHT) ||
                 (mod == KMOD_CTRL && event.key.keysym.sym == SDLK_f)) {
+                rend->auto_page = false;
+                rend->auto_scroll = true;
                 if (prompt->cursor < prompt->text.len) {
                     ++prompt->cursor;
                 }
@@ -795,6 +804,8 @@ static int process_events(Backlog_State* backlog,
             }
             if ((mod == 0 && event.key.keysym.sym == SDLK_UP) ||
                 (mod == KMOD_ALT && event.key.keysym.sym == SDLK_p)) {
+                rend->auto_page = false;
+                rend->auto_scroll = true;
                 if (prompt->history_counter > 0) {
                     --prompt->history_counter;
                     prompt->text.len = 0;
@@ -808,6 +819,8 @@ static int process_events(Backlog_State* backlog,
             }
             if ((mod == 0 && event.key.keysym.sym == SDLK_DOWN) ||
                 (mod == KMOD_ALT && event.key.keysym.sym == SDLK_n)) {
+                rend->auto_page = false;
+                rend->auto_scroll = true;
                 if (prompt->history_counter < prompt->history.len) {
                     ++prompt->history_counter;
                     prompt->text.len = 0;
@@ -823,44 +836,57 @@ static int process_events(Backlog_State* backlog,
             }
             if ((mod == 0 && event.key.keysym.sym == SDLK_HOME) ||
                 (mod == KMOD_ALT && event.key.keysym.sym == SDLK_a)) {
+                rend->auto_page = false;
+                rend->auto_scroll = true;
                 prompt->cursor = 0;
                 ensure_prompt_on_screen(rend, backlog);
                 ++num_events;
             }
             if ((mod == 0 && event.key.keysym.sym == SDLK_END) ||
                 (mod == KMOD_ALT && event.key.keysym.sym == SDLK_e)) {
+                rend->auto_page = false;
+                rend->auto_scroll = true;
                 prompt->cursor = prompt->text.len;
                 ensure_prompt_on_screen(rend, backlog);
                 ++num_events;
             }
             if (mod == KMOD_CTRL && event.key.keysym.sym == SDLK_l) {
+                rend->auto_page = false;
+                rend->auto_scroll = true;
                 rend->backlog_start = {};
                 rend->backlog_start.index = backlog->length;
                 rend->complete_redraw = true;
                 ++num_events;
             }
             if (mod == KMOD_CTRL && event.key.keysym.sym == SDLK_v) {
+                rend->auto_page = false;
+                rend->auto_scroll = false;
                 int lines = cz::max(rend->window_rows, 6) - 3;
                 scroll_down(rend, backlog, lines);
                 rend->complete_redraw = true;
                 ++num_events;
             }
             if (mod == KMOD_ALT && event.key.keysym.sym == SDLK_v) {
+                rend->auto_page = false;
+                rend->auto_scroll = false;
                 int lines = cz::max(rend->window_rows, 6) - 3;
                 scroll_up(rend, backlog, lines);
                 rend->complete_redraw = true;
                 ++num_events;
             }
             if (mod == KMOD_ALT && event.key.keysym.sym == SDLK_GREATER) {
+                rend->auto_page = false;
+                rend->auto_scroll = true;
                 rend->backlog_start = {};
                 rend->backlog_start.index = backlog->length;
                 int lines = cz::max(rend->window_rows, 3) - 3;
                 scroll_up(rend, backlog, lines);
-                rend->auto_scroll = true;
                 rend->complete_redraw = true;
                 ++num_events;
             }
             if (mod == KMOD_ALT && event.key.keysym.sym == SDLK_LESS) {
+                rend->auto_page = false;
+                rend->auto_scroll = false;
                 size_t event_index = backlog->events.len;
                 while (event_index-- > 0) {
                     Backlog_Event* event = &backlog->events[event_index];
@@ -874,6 +900,8 @@ static int process_events(Backlog_State* backlog,
                 }
             }
             if (mod == (KMOD_CTRL | KMOD_ALT) && event.key.keysym.sym == SDLK_b) {
+                rend->auto_page = false;
+                rend->auto_scroll = false;
                 size_t event_index = 0;
                 while (event_index < backlog->events.len &&
                        backlog->events[event_index].index < rend->backlog_start.index) {
@@ -891,6 +919,8 @@ static int process_events(Backlog_State* backlog,
                 }
             }
             if (mod == (KMOD_CTRL | KMOD_ALT) && event.key.keysym.sym == SDLK_f) {
+                rend->auto_page = false;
+                rend->auto_scroll = false;
                 size_t event_index = 0;
                 while (event_index < backlog->events.len &&
                        backlog->events[event_index].index <= rend->backlog_start.index) {
@@ -912,6 +942,8 @@ static int process_events(Backlog_State* backlog,
                 ++num_events;
             }
             if (mod == KMOD_SHIFT && event.key.keysym.sym == SDLK_INSERT) {
+                rend->auto_page = false;
+                rend->auto_scroll = true;
                 char* clip = SDL_GetClipboardText();
                 if (clip) {
                     CZ_DEFER(SDL_free(clip));
@@ -954,7 +986,7 @@ static int process_events(Backlog_State* backlog,
 
         case SDL_TEXTINPUT: {
             rend->auto_page = false;
-            rend->auto_scroll = false;
+            rend->auto_scroll = true;
 
             const Uint8* state = SDL_GetKeyboardState(NULL);
             if (state[SDL_SCANCODE_LCTRL] || state[SDL_SCANCODE_RCTRL])
