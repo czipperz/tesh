@@ -19,6 +19,7 @@ struct Shell_State {
     cz::Vector<cz::Str> alias_values;
 
     cz::Vector<Running_Line> lines;
+    uint64_t active_process = -1;
 
     cz::Vector<cz::Buffer_Array> arenas;
 
@@ -28,7 +29,11 @@ struct Shell_State {
 bool get_env_var(const Shell_State* shell, cz::Str key, cz::Str* value);
 void set_env_var(Shell_State* shell, cz::Str key, cz::Str value);
 
+void cleanup_process(Running_Line* line);
 void cleanup_processes(Shell_State* shell);
+
+/// Get the active process, or `nullptr` if there is none.
+Running_Line* active_process(Shell_State* shell);
 
 ///////////////////////////////////////////////////////////////////////////////
 

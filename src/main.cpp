@@ -713,6 +713,14 @@ static int process_events(Backlog_State* backlog,
                     }
                 } else {
                     // TODO: kill active process
+                    Running_Line * line = active_process(shell);
+                    if (line) {
+                        cleanup_process(line);
+                        shell->arenas.reserve(cz::heap_allocator(), 1);
+                        shell->arenas.push(line->arena);
+                        shell->lines.remove(line - shell->lines.elems);
+                        shell->active_process = -1;
+                    }
                 }
 
                 if (prompt->text.len > 0) {
