@@ -68,6 +68,7 @@ struct Prompt_State {
     uint64_t history_counter;
     cz::Vector<cz::Str> history;
     cz::Buffer_Array history_arena;
+    bool history_searching;
 };
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -306,19 +307,36 @@ static void render_prompt(SDL_Surface* window_surface,
     }
 
     // Fill rest of line.
-    {
-        SDL_Rect fill_rect = {point.x * rend->font_width, point.y * rend->font_height, 0,
-                              rend->font_height};
-        fill_rect.w = window_surface->w - fill_rect.x;
-        SDL_FillRect(window_surface, &fill_rect, background);
-    }
+    Visual_Point eol = point;
+    render_char(window_surface, rend, &point, rend->backlog_cache, background,
+                rend->backlog_fg_color, '\n');
 
     if (prompt->cursor == prompt->text.len) {
-        SDL_Rect fill_rect = {point.x * rend->font_width - 1, point.y * rend->font_height, 2,
+        SDL_Rect fill_rect = {eol.x * rend->font_width - 1, eol.y * rend->font_height, 2,
                               rend->font_height};
         uint32_t foreground = SDL_MapRGB(window_surface->format, rend->prompt_fg_color.r,
                                          rend->prompt_fg_color.g, rend->prompt_fg_color.b);
         SDL_FillRect(window_surface, &fill_rect, foreground);
+    }
+
+    if (prompt->history_searching) {
+        cz::Str prefix = "HISTORY: ";
+        for (size_t i = 0; i < prefix.len; ++i) {
+            char c = prefix[i];
+            render_char(window_surface, rend, &point, rend->backlog_cache, background,
+                        rend->backlog_fg_color, c);
+        }
+        if (prompt->history_counter < prompt->history.len) {
+            cz::Str hist = prompt->history[prompt->history_counter];
+            for (size_t i = 0; i < hist.len; ++i) {
+                char c = hist[i];
+                render_char(window_surface, rend, &point, rend->backlog_cache, background,
+                            rend->backlog_fg_color, c);
+            }
+        }
+
+        render_char(window_surface, rend, &point, rend->backlog_cache, background,
+                    rend->backlog_fg_color, '\n');
     }
 }
 
@@ -602,6 +620,19 @@ static void transform_shift_numbers(SDL_Keysym* keysym) {
     keysym->mod &= ~KMOD_SHIFT;
 }
 
+static void resolve_history_searching(Prompt_State* prompt) {
+    if (prompt->history_searching) {
+        prompt->history_searching = false;
+        prompt->text.len = 0;
+        if (prompt->history_counter < prompt->history.len) {
+            cz::Str hist = prompt->history[prompt->history_counter];
+            prompt->text.reserve(cz::heap_allocator(), hist.len);
+            prompt->text.append(hist);
+            prompt->cursor = prompt->text.len;
+        }
+    }
+}
+
 static int process_events(Backlog_State* backlog,
                           Prompt_State* prompt,
                           Render_State* rend,
@@ -646,6 +677,9 @@ static int process_events(Backlog_State* backlog,
                 event.key.keysym.sym == SDLK_RETURN) {
                 rend->auto_page = false;
                 rend->auto_scroll = true;
+
+                resolve_history_searching(prompt);
+
                 Running_Line* line = active_process(shell);
                 if (line) {
                     set_backlog_process(backlog, line->id);
@@ -791,6 +825,51 @@ static int process_events(Backlog_State* backlog,
                     }
                     prompt->cursor = prompt->text.len;
                 }
+                ensure_prompt_on_screen(rend, backlog);
+                ++num_events;
+            }
+            if (mod == KMOD_CTRL && event.key.keysym.sym == SDLK_r) {
+                rend->auto_page = false;
+                rend->auto_scroll = true;
+                if (!prompt->history_searching) {
+                    prompt->history_searching = true;
+                    prompt->history_counter = prompt->history.len;
+                }
+                while (1) {
+                    if (prompt->history_counter == 0) {
+                        prompt->history_counter = prompt->history.len;
+                        break;
+                    }
+                    --prompt->history_counter;
+                    cz::Str hist = prompt->history[prompt->history_counter];
+                    if (hist.contains_case_insensitive(prompt->text))
+                        break;
+                }
+                ensure_prompt_on_screen(rend, backlog);
+                ++num_events;
+            }
+            if (mod == KMOD_ALT && event.key.keysym.sym == SDLK_r) {
+                rend->auto_page = false;
+                rend->auto_scroll = true;
+                if (prompt->history_searching) {
+                    while (1) {
+                        ++prompt->history_counter;
+                        if (prompt->history_counter >= prompt->history.len) {
+                            prompt->history_searching = false;
+                            break;
+                        }
+                        cz::Str hist = prompt->history[prompt->history_counter];
+                        if (hist.contains_case_insensitive(prompt->text))
+                            break;
+                    }
+                }
+                ensure_prompt_on_screen(rend, backlog);
+                ++num_events;
+            }
+            if (mod == KMOD_CTRL && event.key.keysym.sym == SDLK_g) {
+                rend->auto_page = false;
+                rend->auto_scroll = true;
+                resolve_history_searching(prompt);
                 ensure_prompt_on_screen(rend, backlog);
                 ++num_events;
             }
