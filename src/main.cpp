@@ -1165,6 +1165,8 @@ static void load_environment_variables(Shell_State* shell) {
 
             cz::Str key, value;
             if (line.split_excluding('=', &key, &value)) {
+                // Windows special environment variables have
+                // a = as the first character so ignore those.
                 if (key.len > 0)
                     set_env_var(shell, key, value);
             }
@@ -1180,7 +1182,16 @@ static void load_environment_variables(Shell_State* shell) {
         }
     }
 #else
-#error TODO
+    // TODO: import environ?
+    // extern char** environ;
+    for (char** iter = environ; *iter; ++iter) {
+        cz::Str line = *iter;
+        cz::Str key, value;
+        if (line.split_excluding('=', &key, &value)) {
+            if (key.len > 0)
+                set_env_var(shell, key, value);
+        }
+    }
 #endif
 }
 
