@@ -76,6 +76,7 @@ struct Running_Program {
         LS,
         ALIAS,
         VARIABLES,
+        WHICH,
     } type;
     union {
         cz::Process process;

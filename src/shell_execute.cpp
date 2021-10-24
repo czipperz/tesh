@@ -251,5 +251,7 @@ static void recognize_builtins(Running_Program* program,
         program->type = Running_Program::LS;
     } else if (parse.args[0] == "alias") {
         program->type = Running_Program::ALIAS;
+    } else if (parse.args[0] == "which") {
+        program->type = Running_Program::WHICH;
     }
 }

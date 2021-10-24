@@ -6,8 +6,14 @@ bool find_in_path(Shell_State* shell,
                   cz::Str abbreviation,
                   cz::Allocator allocator,
                   cz::String* full_path) {
+#ifdef _WIN32
+    const char* path_env_var = "Path";
+#else
+    const char* path_env_var = "PATH";
+#endif
+
     cz::Str path;
-    if (!get_env_var(shell, "PATH", &path))
+    if (!get_env_var(shell, path_env_var, &path))
         return false;
 
 #ifdef _WIN32

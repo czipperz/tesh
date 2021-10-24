@@ -296,6 +296,26 @@ bool tick_program(Shell_State* shell, Running_Program* program, int* exit_code, 
         goto finish_builtin;
     } break;
 
+    case Running_Program::WHICH: {
+        auto& builtin = program->v.builtin;
+        auto& st = builtin.st.variables;
+        cz::String path = {};
+        for (size_t i = 1; i < builtin.args.len; ++i) {
+            cz::Str arg = builtin.args[i];
+            path.len = 0;
+            if (find_in_path(shell, arg, temp_allocator, &path)) {
+                (void)builtin.out.write(path);
+                (void)builtin.out.write("\n");
+            } else {
+                builtin.exit_code = 1;
+                (void)builtin.err.write("which: Couldn't find ");
+                (void)builtin.err.write(arg);
+                (void)builtin.err.write("\n");
+            }
+        }
+        goto finish_builtin;
+    } break;
+
     default:
         CZ_PANIC("unreachable");
     }

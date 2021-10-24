@@ -5,4 +5,5 @@ enum Error {
     Error_IO = 1,
     Error_Parse = 2,
     Error_InvalidPath = 3,
+    Error_InvalidProgram = 4,
 };
