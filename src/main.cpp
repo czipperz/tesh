@@ -700,26 +700,38 @@ static int process_events(Backlog_State* backlog,
                 return -1;
             if ((mod == KMOD_CTRL && event.key.keysym.sym == SDLK_c) ||
                 event.key.keysym.sym == SDLK_RETURN) {
-                append_text(backlog, -1, "\n");
-                if (rend->backlog_start.index + 1 == backlog->length) {
-                    ++rend->backlog_start.index;
-                    rend->backlog_end = rend->backlog_start;
+                Running_Line* line = active_process(shell);
+                if (line) {
+                    set_backlog_process(backlog, line->id);
+                } else {
+                    append_text(backlog, -1, "\n");
+                    if (rend->backlog_start.index + 1 == backlog->length) {
+                        ++rend->backlog_start.index;
+                        rend->backlog_end = rend->backlog_start;
+                    }
+
+                    set_backlog_process(backlog, -3);
+                    append_text(backlog, prompt->process_id, shell->working_directory);
+                    append_text(backlog, prompt->process_id, " ");
+                    append_text(backlog, prompt->process_id, prompt->prefix);
                 }
-                set_backlog_process(backlog, -3);
-                append_text(backlog, prompt->process_id, shell->working_directory);
-                append_text(backlog, prompt->process_id, " ");
-                append_text(backlog, prompt->process_id, prompt->prefix);
                 append_text(backlog, -2, prompt->text);
                 append_text(backlog, prompt->process_id, "\n");
 
                 if (event.key.keysym.sym == SDLK_RETURN) {
+                    Running_Line* line = active_process(shell);
+                    if (line) {
+                        (void)line->in.write(prompt->text);
+                        --prompt->process_id;
+                    } else {
 #if AUTO_PAGE
-                    rend->auto_page = true;
+                        rend->auto_page = true;
 #else
-                    rend->auto_scroll = true;
+                        rend->auto_scroll = true;
 #endif
-                    if (!run_line(shell, prompt->text, prompt->process_id)) {
-                        append_text(backlog, prompt->process_id, "Error: failed to execute\n");
+                        if (!run_line(shell, prompt->text, prompt->process_id)) {
+                            append_text(backlog, prompt->process_id, "Error: failed to execute\n");
+                        }
                     }
                 } else {
                     Running_Line* line = active_process(shell);
