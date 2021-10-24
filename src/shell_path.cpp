@@ -40,11 +40,12 @@ bool find_in_path(Shell_State* shell,
         full_path->append(abbreviation);
         full_path->null_terminate();
 
+#ifndef _WIN32
         if (is_executable(full_path->buffer))
             return true;
+#endif
 
 #ifdef _WIN32
-        full_path->push('.');
         size_t len = full_path->len;
         cz::Str path_ext_rest = path_ext;
         while (1) {
