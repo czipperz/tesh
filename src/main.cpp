@@ -855,6 +855,7 @@ static int process_events(Backlog_State* backlog,
                     while (1) {
                         ++prompt->history_counter;
                         if (prompt->history_counter >= prompt->history.len) {
+                            prompt->history_counter = prompt->history.len;
                             prompt->history_searching = false;
                             break;
                         }
