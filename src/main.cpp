@@ -725,7 +725,9 @@ static int process_events(Backlog_State* backlog,
                     } else {
 #if AUTO_PAGE
                         rend->auto_page = true;
+                        rend->auto_scroll = false;
 #else
+                        rend->auto_page = false;
                         rend->auto_scroll = true;
 #endif
                         if (!run_line(shell, prompt->text, prompt->process_id)) {
