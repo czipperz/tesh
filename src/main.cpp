@@ -651,10 +651,6 @@ static int process_events(Backlog_State* backlog,
     int num_events = 0;
     for (SDL_Event event; SDL_PollEvent(&event);) {
         ZoneScopedN("process_event");
-        if (event.type == SDL_KEYUP)
-            continue;
-        rend->auto_page = false;
-        rend->auto_scroll = false;
         switch (event.type) {
         case SDL_QUIT:
             return -1;
@@ -673,6 +669,9 @@ static int process_events(Backlog_State* backlog,
             break;
 
         case SDL_KEYDOWN: {
+            rend->auto_page = false;
+            rend->auto_scroll = false;
+
             transform_shift_numbers(&event.key.keysym);
 
             int mod = (event.key.keysym.mod & ~(KMOD_CAPS | KMOD_NUM));
@@ -918,6 +917,9 @@ static int process_events(Backlog_State* backlog,
         } break;
 
         case SDL_TEXTINPUT: {
+            rend->auto_page = false;
+            rend->auto_scroll = false;
+
             const Uint8* state = SDL_GetKeyboardState(NULL);
             if (state[SDL_SCANCODE_LCTRL] || state[SDL_SCANCODE_RCTRL])
                 break;
@@ -930,6 +932,9 @@ static int process_events(Backlog_State* backlog,
         } break;
 
         case SDL_MOUSEWHEEL: {
+            rend->auto_page = false;
+            rend->auto_scroll = false;
+
             if (event.wheel.direction == SDL_MOUSEWHEEL_FLIPPED) {
                 event.wheel.y *= -1;
                 event.wheel.x *= -1;
