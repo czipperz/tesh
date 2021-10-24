@@ -80,6 +80,9 @@ Error start_execute_script(Shell_State* shell,
         goto cleanup3;
     }
 
+    shell->scripts.reserve(cz::heap_allocator(), 1);
+    shell->scripts.push(running);
+
     if (cfg.on_spawn_attach)
         shell->active_process = running.id;
 
