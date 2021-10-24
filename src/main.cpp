@@ -1064,6 +1064,8 @@ int actual_main(int argc, char** argv) {
     temp_arena.init();
     temp_allocator = temp_arena.allocator();
 
+    CZ_DEFER(cleanup_processes(&shell));
+
     prompt.prefix = "$ ";
     rend.complete_redraw = true;
 
@@ -1164,10 +1166,8 @@ int actual_main(int argc, char** argv) {
         if (read_process_data(&shell, &backlog, &force_quit))
             status = 1;
 
-        if (force_quit) {
-            cleanup_processes(&shell);
+        if (force_quit)
             break;
-        }
 
         if (status > 0)
             render_frame(window, &rend, &backlog, &prompt, &shell);
