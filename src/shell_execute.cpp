@@ -211,8 +211,10 @@ static Error run_program(Shell_State* shell,
 
         program->v.builtin.args = parse.args;
         program->v.builtin.in = in;
-        program->v.builtin.out = out;
-        program->v.builtin.err = err;
+        program->v.builtin.out.type = Process_Output::FILE;
+        program->v.builtin.out.v.file = out;
+        program->v.builtin.err.type = Process_Output::FILE;
+        program->v.builtin.err.v.file = err;
         program->v.builtin.working_directory =
             shell->working_directory.clone_null_terminate(allocator);
         return Error_Success;

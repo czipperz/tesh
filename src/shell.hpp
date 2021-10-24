@@ -5,6 +5,7 @@
 #include <cz/process.hpp>
 #include <cz/str.hpp>
 #include <cz/vector.hpp>
+#include "backlog.hpp"
 #include "error.hpp"
 
 struct Running_Line;
@@ -19,7 +20,7 @@ struct Shell_State {
     cz::Vector<cz::Str> alias_values;
 
     cz::Vector<Running_Line> lines;
-    uint64_t active_process = -1;
+    uint64_t active_process = ~0ull;
 
     cz::Vector<cz::Buffer_Array> arenas;
 
@@ -36,6 +37,25 @@ void recycle_process(Shell_State* shell, Running_Line* line);
 
 /// Get the active process, or `nullptr` if there is none.
 Running_Line* active_process(Shell_State* shell);
+
+///////////////////////////////////////////////////////////////////////////////
+
+struct Process_Output {
+    enum {
+        FILE,
+        BACKLOG,
+    } type;
+    union {
+        cz::Output_File file;
+        struct {
+            Backlog_State* state;
+            uint64_t process_id;
+        } backlog;
+    } v;
+
+    int64_t write(cz::Str str) { return write(str.buffer, str.len); }
+    int64_t write(const void* buffer, size_t len);
+};
 
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -57,8 +77,8 @@ struct Running_Program {
         struct {
             cz::Slice<const cz::Str> args;
             cz::Input_File in;
-            cz::Output_File out;
-            cz::Output_File err;
+            Process_Output out;
+            Process_Output err;
             cz::Str working_directory;  // null terminated
             int exit_code;
             union {
