@@ -862,6 +862,7 @@ static int process_events(Backlog_State* backlog,
                 (mod == KMOD_CTRL && event.key.keysym.sym == SDLK_v)) {
                 rend->auto_page = false;
                 rend->auto_scroll = false;
+                shell->active_process = -1;
                 int lines = cz::max(rend->window_rows, 6) - 3;
                 scroll_down(rend, backlog, lines);
                 rend->complete_redraw = true;
@@ -871,6 +872,7 @@ static int process_events(Backlog_State* backlog,
                 (mod == KMOD_ALT && event.key.keysym.sym == SDLK_v)) {
                 rend->auto_page = false;
                 rend->auto_scroll = false;
+                shell->active_process = -1;
                 int lines = cz::max(rend->window_rows, 6) - 3;
                 scroll_up(rend, backlog, lines);
                 rend->complete_redraw = true;
@@ -889,6 +891,7 @@ static int process_events(Backlog_State* backlog,
             if (mod == KMOD_ALT && event.key.keysym.sym == SDLK_LESS) {
                 rend->auto_page = false;
                 rend->auto_scroll = false;
+                shell->active_process = -1;
                 size_t event_index = backlog->events.len;
                 while (event_index-- > 0) {
                     Backlog_Event* event = &backlog->events[event_index];
@@ -904,6 +907,7 @@ static int process_events(Backlog_State* backlog,
             if (mod == (KMOD_CTRL | KMOD_ALT) && event.key.keysym.sym == SDLK_b) {
                 rend->auto_page = false;
                 rend->auto_scroll = false;
+                shell->active_process = -1;
                 size_t event_index = 0;
                 while (event_index < backlog->events.len &&
                        backlog->events[event_index].index < rend->backlog_start.index) {
@@ -923,6 +927,7 @@ static int process_events(Backlog_State* backlog,
             if (mod == (KMOD_CTRL | KMOD_ALT) && event.key.keysym.sym == SDLK_f) {
                 rend->auto_page = false;
                 rend->auto_scroll = false;
+                shell->active_process = -1;
                 size_t event_index = 0;
                 while (event_index < backlog->events.len &&
                        backlog->events[event_index].index <= rend->backlog_start.index) {
@@ -1004,6 +1009,7 @@ static int process_events(Backlog_State* backlog,
         case SDL_MOUSEWHEEL: {
             rend->auto_page = false;
             rend->auto_scroll = false;
+            shell->active_process = -1;
 
             if (event.wheel.direction == SDL_MOUSEWHEEL_FLIPPED) {
                 event.wheel.y *= -1;
