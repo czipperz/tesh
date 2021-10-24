@@ -856,6 +856,42 @@ static int process_events(Backlog_State* backlog,
                 ensure_prompt_on_screen(rend, backlog);
                 ++num_events;
             }
+            if ((mod == KMOD_CTRL && event.key.keysym.sym == SDLK_LEFT) ||
+                (mod == KMOD_ALT && event.key.keysym.sym == SDLK_LEFT) ||
+                (mod == KMOD_ALT && event.key.keysym.sym == SDLK_b)) {
+                rend->auto_page = false;
+                rend->auto_scroll = true;
+                while (prompt->cursor > 0) {
+                    if (cz::is_alpha(prompt->text[prompt->cursor - 1]))
+                        break;
+                    --prompt->cursor;
+                }
+                while (prompt->cursor > 0) {
+                    if (!cz::is_alpha(prompt->text[prompt->cursor - 1]))
+                        break;
+                    --prompt->cursor;
+                }
+                ensure_prompt_on_screen(rend, backlog);
+                ++num_events;
+            }
+            if ((mod == KMOD_CTRL && event.key.keysym.sym == SDLK_RIGHT) ||
+                (mod == KMOD_ALT && event.key.keysym.sym == SDLK_RIGHT) ||
+                (mod == KMOD_ALT && event.key.keysym.sym == SDLK_f)) {
+                rend->auto_page = false;
+                rend->auto_scroll = true;
+                while (prompt->cursor < prompt->text.len) {
+                    if (cz::is_alpha(prompt->text[prompt->cursor]))
+                        break;
+                    ++prompt->cursor;
+                }
+                while (prompt->cursor < prompt->text.len) {
+                    if (!cz::is_alpha(prompt->text[prompt->cursor]))
+                        break;
+                    ++prompt->cursor;
+                }
+                ensure_prompt_on_screen(rend, backlog);
+                ++num_events;
+            }
             if (mod == KMOD_CTRL && event.key.keysym.sym == SDLK_l) {
                 rend->auto_page = false;
                 rend->auto_scroll = true;
