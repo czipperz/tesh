@@ -199,6 +199,12 @@ static Error run_program(Shell_State* shell,
         return Error_Success;
     }
 
+    cz::String full_path = {};
+    if (!find_in_path(shell, parse.args[0], allocator, &full_path)) {
+        return Error_InvalidProgram;
+    }
+    parse.args[0] = full_path;
+
     CZ_DEBUG_ASSERT(out.type == Process_Output::FILE);
     CZ_DEBUG_ASSERT(err.type == Process_Output::FILE);
 
