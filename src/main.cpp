@@ -38,6 +38,7 @@ struct Visual_Point {
 
 struct Render_State {
     TTF_Font* font;
+    int font_size;
     float dpi_scale;
     int font_width;
     int font_height;
@@ -67,25 +68,6 @@ struct Prompt_State {
     uint64_t history_counter;
     cz::Vector<cz::Str> history;
     cz::Buffer_Array history_arena;
-};
-
-///////////////////////////////////////////////////////////////////////////////
-// Configuration
-///////////////////////////////////////////////////////////////////////////////
-
-#define AUTO_PAGE 1
-
-#ifdef _WIN32
-const char* font_path = "C:/Windows/Fonts/MesloLGM-Regular.ttf";
-#else
-const char* font_path = "/usr/share/fonts/TTF/MesloLGMDZ-Regular.ttf";
-#endif
-int font_size = 12;
-int tab_width = 8;
-
-SDL_Color process_colors[] = {
-    {0x18, 0, 0, 0xff},    {0, 0x18, 0, 0xff},    {0, 0, 0x26, 0xff},
-    {0x11, 0x11, 0, 0xff}, {0, 0x11, 0x11, 0xff}, {0x11, 0, 0x17, 0xff},
 };
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -148,8 +130,8 @@ static int coord_trans(Visual_Point* point, int num_cols, char ch) {
     int width = 1;
     if (ch == '\t') {
         uint64_t lcol2 = point->column;
-        lcol2 += tab_width;
-        lcol2 -= lcol2 % tab_width;
+        lcol2 += cfg.tab_width;
+        lcol2 -= lcol2 % cfg.tab_width;
         width = (int)(lcol2 - point->column);
     }
 
@@ -220,7 +202,7 @@ static void render_backlog(SDL_Surface* window_surface,
         return;
 
     uint64_t process_id = 0;
-    SDL_Color bg_color = process_colors[process_id % CZ_DIM(process_colors)];
+    SDL_Color bg_color = cfg.process_colors[process_id % cfg.process_colors.len];
     uint32_t background = SDL_MapRGB(window_surface->format, bg_color.r, bg_color.g, bg_color.b);
 
     SDL_Surface** cache = rend->backlog_cache;
@@ -236,7 +218,7 @@ static void render_backlog(SDL_Surface* window_surface,
                 if (process_id == -1)
                     bg_color = {};
                 else
-                    bg_color = process_colors[process_id % CZ_DIM(process_colors)];
+                    bg_color = cfg.process_colors[process_id % cfg.process_colors.len];
                 background = SDL_MapRGB(window_surface->format, bg_color.r, bg_color.g, bg_color.b);
                 cache = rend->backlog_cache;
                 fg_color = rend->backlog_fg_color;
@@ -274,7 +256,7 @@ static void render_prompt(SDL_Surface* window_surface,
         ++point.y;
     }
 
-    SDL_Color bg_color = process_colors[prompt->process_id % CZ_DIM(process_colors)];
+    SDL_Color bg_color = cfg.process_colors[prompt->process_id % cfg.process_colors.len];
     uint32_t background = SDL_MapRGB(window_surface->format, bg_color.r, bg_color.g, bg_color.b);
 
     if (shell->active_process == -1) {
@@ -981,19 +963,20 @@ static int process_events(Backlog_State* backlog,
             // Note: C-= used to zoom in so you don't have to hold shift.
             if (mod == KMOD_CTRL &&
                 (event.key.keysym.sym == SDLK_EQUALS || event.key.keysym.sym == SDLK_MINUS)) {
-                int new_font_size = font_size;
+                int new_font_size = rend->font_size;
                 if (event.key.keysym.sym == SDLK_EQUALS) {
                     new_font_size += 4;
                 } else {
                     new_font_size = cz::max(new_font_size - 4, 4);
                 }
 
-                TTF_Font* new_font = open_font(font_path, (int)(new_font_size * rend->dpi_scale));
+                TTF_Font* new_font =
+                    open_font(cfg.font_path, (int)(new_font_size * rend->dpi_scale));
                 if (new_font) {
                     close_font(rend);
 
                     rend->font = new_font;
-                    font_size = new_font_size;
+                    rend->font_size = new_font_size;
                     rend->font_height = TTF_FontLineSkip(rend->font);
                     // TODO: handle failure
                     TTF_GlyphMetrics(rend->font, ' ', nullptr, nullptr, nullptr, nullptr,
@@ -1144,6 +1127,30 @@ static void save_history(Prompt_State* prompt, Shell_State* shell) {
 }
 
 ///////////////////////////////////////////////////////////////////////////////
+// configuration methods
+///////////////////////////////////////////////////////////////////////////////
+
+static void load_default_configuration() {
+    cfg.on_spawn_attach = false;
+    cfg.on_spawn_auto_page = true;
+    cfg.on_spawn_auto_scroll = false;
+
+#ifdef _WIN32
+    cfg.font_path = "C:/Windows/Fonts/MesloLGM-Regular.ttf";
+#else
+    cfg.font_path = "/usr/share/fonts/TTF/MesloLGMDZ-Regular.ttf";
+#endif
+    cfg.default_font_size = 12;
+    cfg.tab_width = 8;
+
+    static SDL_Color process_colors[] = {
+        {0x18, 0, 0, 0xff},    {0, 0x18, 0, 0xff},    {0, 0, 0x26, 0xff},
+        {0x11, 0x11, 0, 0xff}, {0, 0x11, 0x11, 0xff}, {0x11, 0, 0x17, 0xff},
+    };
+    cfg.process_colors = process_colors;
+}
+
+///////////////////////////////////////////////////////////////////////////////
 // main
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -1152,6 +1159,8 @@ int actual_main(int argc, char** argv) {
     Backlog_State backlog = {};
     Prompt_State prompt = {};
     Shell_State shell = {};
+
+    load_default_configuration();
 
     prompt.history_arena.init();
 
@@ -1163,6 +1172,8 @@ int actual_main(int argc, char** argv) {
 
     prompt.prefix = "$ ";
     rend.complete_redraw = true;
+
+    rend.font_size = cfg.default_font_size;
 
     if (!cz::get_working_directory(cz::heap_allocator(), &shell.working_directory)) {
         fprintf(stderr, "Failed to get working directory\n");
@@ -1232,7 +1243,7 @@ int actual_main(int argc, char** argv) {
     }
     CZ_DEFER(SDL_DestroyWindow(window));
 
-    rend.font = open_font(font_path, (int)(font_size * rend.dpi_scale));
+    rend.font = open_font(cfg.font_path, (int)(rend.font_size * rend.dpi_scale));
     if (!rend.font) {
         fprintf(stderr, "TTF_OpenFont failed: %s\n", SDL_GetError());
         return 1;
@@ -1246,7 +1257,6 @@ int actual_main(int argc, char** argv) {
     rend.backlog_fg_color = {0xdd, 0xdd, 0xdd, 0xff};
     rend.prompt_fg_color = {0x77, 0xf9, 0xff, 0xff};
 
-    cfg.on_spawn_auto_page = true;
     cz::env::set("PAGER", "cat");
 
     while (1) {
