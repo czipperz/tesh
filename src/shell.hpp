@@ -161,7 +161,7 @@ struct Parse_Line {
     Parse_Pipeline pipeline;
     enum Type {
         NONE,
-        // ALWAYS,  // ';', '\n'
+        ALWAYS,  // ';', '\n'
         // AND,     // '&&'
         // OR,      // '||'
         // ASYNC,   // '&'

@@ -16,7 +16,8 @@ struct Parse_State {
 static Error parse_pipeline(const Shell_State* shell,
                             cz::Allocator allocator,
                             Parse_Pipeline* out,
-                            cz::Str text);
+                            cz::Str text,
+                            size_t* index);
 
 static Error finish_program(Parse_Pipeline* out,
                             cz::Allocator allocator,
@@ -31,13 +32,35 @@ Error parse_script(const Shell_State* shell,
                    cz::Allocator allocator,
                    Parse_Script* out,
                    cz::Str text) {
-    Error error = parse_pipeline(shell, allocator, &out->first.pipeline, text);
-    if (error != Error_Success)
-        return error;
+    size_t index = 0;
 
-    out->first.type = Parse_Line::NONE;
-    out->first.continuation = nullptr;
-    return Error_Success;
+    Parse_Line* line = &out->first;
+    while (1) {
+        Error error = parse_pipeline(shell, allocator, &line->pipeline, text, &index);
+        if (error != Error_Success)
+            return error;
+
+        // End of script.
+        if (index == text.len) {
+            line->type = Parse_Line::NONE;
+            line->continuation = nullptr;
+            return Error_Success;
+        }
+
+        // Register continuation.
+        switch (text[index]) {
+        case '\n':
+        case ';':
+            line->type = Parse_Line::ALWAYS;
+            break;
+        }
+        ++index;
+
+        line->continuation = allocator.alloc<Parse_Line>();
+        CZ_ASSERT(line->continuation);
+        *line->continuation = {};
+        line = line->continuation;
+    }
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -45,7 +68,8 @@ Error parse_script(const Shell_State* shell,
 static Error parse_pipeline(const Shell_State* shell,
                             cz::Allocator allocator,
                             Parse_Pipeline* out,
-                            cz::Str text) {
+                            cz::Str text,
+                            size_t* index) {
     ZoneScoped;
 
     Parse_Program program = {};
@@ -60,39 +84,39 @@ static Error parse_pipeline(const Shell_State* shell,
         program.args.drop(cz::heap_allocator());
     });
 
-    size_t index = 0;
-
     while (1) {
         // Ignore whitespace.
-        while (index < text.len && cz::is_blank(text[index])) {
-            ++index;
+        while (*index < text.len && cz::is_blank(text[*index])) {
+            ++*index;
         }
 
         // Done.
-        if (index == text.len) {
+        if (*index == text.len) {
             break;
         }
 
         // Get the next word.
-        size_t start_word = index;
+        size_t start_word = *index;
         cz::String key = {};
         cz::String word = {};
         bool allow_empty = false;
         bool any_special = false;
         bool special_stderr = false;
-        while (index < text.len) {
-            switch (text[index]) {
+        while (*index < text.len) {
+            switch (text[*index]) {
             case CZ_BLANK_CASES:
             case '|':
+            case ';':
+            case '\n':
                 goto endofword;
 
             case '<':
             case '>':
-                if (text.slice(start_word, index) == "1") {
+                if (text.slice(start_word, *index) == "1") {
                     word.drop(allocator);
                     word = {};
                 }
-                if (text.slice(start_word, index) == "2") {
+                if (text.slice(start_word, *index) == "2") {
                     special_stderr = true;
                     word.drop(allocator);
                     word = {};
@@ -102,14 +126,14 @@ static Error parse_pipeline(const Shell_State* shell,
             case '\'': {
                 allow_empty = true;
                 any_special = true;
-                ++index;
+                ++*index;
                 while (1) {
-                    if (index == text.len)
+                    if (*index == text.len)
                         return Error_Parse;
-                    char c = text[index];
+                    char c = text[*index];
                     if (c == '\'')
                         break;
-                    ++index;
+                    ++*index;
                     word.reserve(allocator, 1);
                     word.push(c);
                 }
@@ -119,18 +143,18 @@ static Error parse_pipeline(const Shell_State* shell,
             case '"': {
                 allow_empty = true;
                 any_special = true;
-                ++index;
+                ++*index;
                 while (1) {
-                    if (index == text.len)
+                    if (*index == text.len)
                         return Error_Parse;
-                    char c = text[index];
+                    char c = text[*index];
                     if (c == '"')
                         break;
-                    ++index;
+                    ++*index;
                     if (c == '$') {
                         cz::Str key;
-                        if (get_var_at_point(text, index, &key)) {
-                            index += key.len;
+                        if (get_var_at_point(text, *index, &key)) {
+                            *index += key.len;
                             cz::Str value;
                             if (get_env_var(shell, key, &value)) {
                                 word.reserve(allocator, value.len);
@@ -140,15 +164,15 @@ static Error parse_pipeline(const Shell_State* shell,
                         }
                     }
                     if (c == '\\') {
-                        if (index == text.len)
+                        if (*index == text.len)
                             return Error_Parse;
-                        char c2 = text[index];
+                        char c2 = text[*index];
                         // From manual testing it looks like these are the only
                         // escape sequences that are processed.  Others are
                         // left (ie typing '\\' -> '\' but '\n' -> '\n').
                         if (c2 == '"' || c2 == '\\' || c2 == '`' || c2 == '$') {
                             c = c2;
-                            ++index;
+                            ++*index;
                         }
                     }
                     word.reserve(allocator, 1);
@@ -171,14 +195,14 @@ static Error parse_pipeline(const Shell_State* shell,
             }
 
             case '$': {
-                if (index + 1 == text.len)
+                if (*index + 1 == text.len)
                     goto def;
 
                 cz::Str var;
-                if (!get_var_at_point(text, index + 1, &var))
+                if (!get_var_at_point(text, *index + 1, &var))
                     goto def;
 
-                index += var.len;
+                *index += var.len;
 
                 cz::Str value;
                 if (get_env_var(shell, var, &value)) {
@@ -224,10 +248,10 @@ static Error parse_pipeline(const Shell_State* shell,
             default:
             def:
                 word.reserve(allocator, 1);
-                word.push(text[index]);
+                word.push(text[*index]);
                 break;
             }
-            ++index;
+            ++*index;
         }
 
     endofword:
@@ -249,21 +273,21 @@ static Error parse_pipeline(const Shell_State* shell,
         }
 
         // "echo $hi" when 'hi' is undefined should have 0 args.
-        if (index == text.len)
+        if (*index == text.len)
             break;
 
         // Special character.
-        switch (text[index]) {
+        switch (text[*index]) {
         case '|': {
             Error error = finish_program(out, allocator, &program, &state);
             if (error != Error_Success)
                 return error;
-            ++index;
+            ++*index;
         } break;
 
         case '<':
         case '>': {
-            bool is_stdin = text[index] == '<';
+            bool is_stdin = text[*index] == '<';
             if (is_stdin) {
                 state.in_file_i = program.args.len;
             } else if (special_stderr) {
@@ -271,11 +295,16 @@ static Error parse_pipeline(const Shell_State* shell,
             } else {
                 state.out_file_i = program.args.len;
             }
-            ++index;
+            ++*index;
         } break;
+
+        case ';':
+        case '\n':
+            goto break_outer;
         }
     }
 
+break_outer:
     if (program.variable_names.len > 0 || program.args.len > 0) {
         return finish_program(out, allocator, &program, &state);
     }

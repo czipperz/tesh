@@ -270,3 +270,49 @@ TEST_CASE("parse_script file indirection stderr must be 2> no space") {
 
     CHECK(pipeline.pipeline[0].out_file == "out");
 }
+
+TEST_CASE("parse_script semicolon combiner") {
+    Shell_State shell = {};
+    Parse_Script script = {};
+    Error error = parse_script(&shell, cz::heap_allocator(), &script, "echo hi; echo bye");
+    REQUIRE(error == Error_Success);
+    Parse_Pipeline pipeline = script.first.pipeline;
+    REQUIRE(pipeline.pipeline.len == 1);
+    REQUIRE(pipeline.pipeline[0].args.len == 2);
+    CHECK(pipeline.pipeline[0].args[0] == "echo");
+    CHECK(pipeline.pipeline[0].args[1] == "hi");
+
+    CHECK(script.first.type == Parse_Line::ALWAYS);
+    REQUIRE(script.first.continuation);
+    CHECK(script.first.continuation->type == Parse_Line::NONE);
+    CHECK_FALSE(script.first.continuation->continuation);
+
+    pipeline = script.first.continuation->pipeline;
+    REQUIRE(pipeline.pipeline.len == 1);
+    REQUIRE(pipeline.pipeline[0].args.len == 2);
+    CHECK(pipeline.pipeline[0].args[0] == "echo");
+    CHECK(pipeline.pipeline[0].args[1] == "bye");
+}
+
+TEST_CASE("parse_script newline combiner") {
+    Shell_State shell = {};
+    Parse_Script script = {};
+    Error error = parse_script(&shell, cz::heap_allocator(), &script, "echo hi \n echo bye");
+    REQUIRE(error == Error_Success);
+    Parse_Pipeline pipeline = script.first.pipeline;
+    REQUIRE(pipeline.pipeline.len == 1);
+    REQUIRE(pipeline.pipeline[0].args.len == 2);
+    CHECK(pipeline.pipeline[0].args[0] == "echo");
+    CHECK(pipeline.pipeline[0].args[1] == "hi");
+
+    CHECK(script.first.type == Parse_Line::ALWAYS);
+    REQUIRE(script.first.continuation);
+    CHECK(script.first.continuation->type == Parse_Line::NONE);
+    CHECK_FALSE(script.first.continuation->continuation);
+
+    pipeline = script.first.continuation->pipeline;
+    REQUIRE(pipeline.pipeline.len == 1);
+    REQUIRE(pipeline.pipeline[0].args.len == 2);
+    CHECK(pipeline.pipeline[0].args[0] == "echo");
+    CHECK(pipeline.pipeline[0].args[1] == "bye");
+}
