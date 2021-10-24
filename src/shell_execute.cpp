@@ -33,19 +33,29 @@ Error start_execute_line(Shell_State* shell,
     running_line.id = id;
     running_line.arena = arena;
     CZ_DEFER(running_line.pipeline.drop(cz::heap_allocator()));
+    CZ_DEFER({
+        for (size_t i = 0; i < running_line.files.len; ++i) {
+            running_line.files[i].close();
+        }
+        running_line.files.drop(cz::heap_allocator());
+    });
+
+    running_line.files.reserve(cz::heap_allocator(), 2);
 
     cz::Input_File line_in;
     cz::Output_File line_out;
     if (!cz::create_process_input_pipe(&line_in, &running_line.in)) {
     cleanup1:
-        line_in.close();
-        line_out.close();
         running_line.in.close();
         running_line.out.close();
         return Error_IO;
     }
+    running_line.files.push(line_in);
+
     if (!cz::create_process_output_pipe(&line_out, &running_line.out))
         goto cleanup1;
+    running_line.files.push(line_out);
+
     if (!running_line.in.set_non_blocking())
         goto cleanup1;
     if (!running_line.out.set_non_blocking())
@@ -63,7 +73,9 @@ Error start_execute_line(Shell_State* shell,
         if (parse_program.in_file.buffer) {
             if (!in.open(parse_program.in_file.buffer))
                 return Error_InvalidPath;  // TODO: cleanup file descriptors
-            pipe_in.close();
+            running_line.files.reserve(cz::heap_allocator(), 1);
+            running_line.files.push(in);
+            pipe_in = {};
         } else {
             in = pipe_in;
             pipe_in = {};
@@ -73,6 +85,8 @@ Error start_execute_line(Shell_State* shell,
         if (parse_program.out_file.buffer) {
             if (!out.open(parse_program.out_file.buffer))
                 return Error_InvalidPath;  // TODO: cleanup file descriptors
+            running_line.files.reserve(cz::heap_allocator(), 1);
+            running_line.files.push(out);
         } else {
             if (p + 1 == parse_line.pipeline.len) {
                 out = line_out;
@@ -80,6 +94,9 @@ Error start_execute_line(Shell_State* shell,
                 cz::Output_File pipe_out;
                 if (!cz::create_pipe(&pipe_in, &pipe_out))
                     return Error_IO;
+                running_line.files.reserve(cz::heap_allocator(), 2);
+                running_line.files.push(pipe_in);
+                running_line.files.push(pipe_out);
                 out = pipe_out;
             }
             out_pipe = true;
@@ -88,6 +105,8 @@ Error start_execute_line(Shell_State* shell,
         if (parse_program.err_file.buffer) {
             if (!err.open(parse_program.err_file.buffer))
                 return Error_InvalidPath;  // TODO: cleanup file descriptors
+            running_line.files.reserve(cz::heap_allocator(), 1);
+            running_line.files.push(err);
         } else {
             err = line_out;
             err_pipe = true;
@@ -110,6 +129,8 @@ Error start_execute_line(Shell_State* shell,
     shell->lines.reserve(cz::heap_allocator(), 1);
     shell->lines.push(running_line);
     shell->lines.last().pipeline = running_line.pipeline.clone(arena.allocator());
+    shell->lines.last().files = running_line.files.clone(arena.allocator());
+    running_line.files.len = 0;
 
     return Error_Success;
 }
@@ -157,7 +178,7 @@ static Error run_program(Shell_State* shell,
         program->type = Running_Program::CAT;
         program->v.builtin.st.cat = {};
         program->v.builtin.st.cat.buffer = (char*)allocator.alloc({4096, 1});
-        program->v.builtin.st.cat.outer = 1;
+        program->v.builtin.st.cat.outer = 0;
     }
     if (parse.args[0] == "exit") {
         program->type = Running_Program::EXIT;
@@ -202,7 +223,6 @@ static Error run_program(Shell_State* shell,
     options.std_out = out;
     options.std_err = err;
     options.working_directory = shell->working_directory.buffer;
-    CZ_DEFER(options.close_all());
 
     program->v.process = {};
     if (!program->v.process.launch_program(parse.args, options))

@@ -29,7 +29,15 @@ void set_env_var(Shell_State* shell, cz::Str key, cz::Str value) {
 }
 
 void cleanup_process(Running_Line* line) {
-    // TODO: cleanup fds
+    for (size_t i = 0; i < line->files.len; ++i) {
+        line->files[i].close();
+    }
+
+    line->in.close();
+    line->out.close();
+}
+
+void kill_process(Running_Line* line) {
     for (size_t i = 0; i < line->pipeline.len; ++i) {
         Running_Program* program = &line->pipeline[i];
         switch (program->type) {
@@ -44,12 +52,12 @@ void cleanup_processes(Shell_State* shell) {
     for (size_t i = 0; i < shell->lines.len; ++i) {
         Running_Line* line = &shell->lines[i];
         cleanup_process(line);
+        kill_process(line);
     }
 }
 
 void recycle_process(Shell_State* shell, Running_Line* process) {
-    process->in.close();
-    process->out.close();
+    cleanup_process(process);
 
     cz::Buffer_Array arena = process->arena;
     arena.clear();

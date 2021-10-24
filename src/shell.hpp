@@ -30,6 +30,7 @@ bool get_env_var(const Shell_State* shell, cz::Str key, cz::Str* value);
 void set_env_var(Shell_State* shell, cz::Str key, cz::Str value);
 
 void cleanup_process(Running_Line* line);
+void kill_process(Running_Line* line);
 void cleanup_processes(Shell_State* shell);
 void recycle_process(Shell_State* shell, Running_Line* line);
 
@@ -60,7 +61,6 @@ struct Running_Program {
             cz::Output_File err;
             cz::Str working_directory;  // null terminated
             int exit_code;
-            bool close_err;
             union {
                 struct {
                     size_t outer, inner;
@@ -83,6 +83,7 @@ struct Running_Program {
 struct Running_Line {
     uint64_t id;
     cz::Vector<Running_Program> pipeline;
+    cz::Vector<cz::File_Descriptor> files;
     cz::Output_File in;
     cz::Input_File out;
     cz::Carriage_Return_Carry out_carry;

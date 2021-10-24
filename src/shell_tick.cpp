@@ -114,9 +114,11 @@ bool tick_program(Shell_State* shell, Running_Program* program, int* exit_code, 
         auto& builtin = program->v.builtin;
         auto& st = builtin.st.cat;
 
-        if (builtin.args.len == 1 && builtin.in.is_open()) {
-            st.file = builtin.in;
-            builtin.in = {};
+        if (st.outer == 0) {
+            ++st.outer;
+            if (builtin.args.len == 1) {
+                st.file = builtin.in;
+            }
         }
 
         int64_t result = 0;
@@ -142,7 +144,6 @@ bool tick_program(Shell_State* shell, Running_Program* program, int* exit_code, 
                 cz::Str arg = builtin.args[st.outer];
                 if (arg == "-") {
                     st.file = builtin.in;
-                    builtin.in = {};
                 } else {
                     cz::String path = {};
                     cz::path::make_absolute(arg, shell->working_directory, temp_allocator, &path);
@@ -161,7 +162,8 @@ bool tick_program(Shell_State* shell, Running_Program* program, int* exit_code, 
             if (result <= 0) {
                 if (result < 0)
                     break;
-                st.file.close();
+                if (st.file.handle != builtin.in.handle)
+                    st.file.close();
                 st.file = {};
                 ++st.outer;
                 continue;
@@ -301,10 +303,6 @@ bool tick_program(Shell_State* shell, Running_Program* program, int* exit_code, 
 
 finish_builtin:
     auto& builtin = program->v.builtin;
-    builtin.in.close();
-    builtin.out.close();
-    if (builtin.close_err)
-        builtin.err.close();
     *exit_code = builtin.exit_code;
     return true;
 }
