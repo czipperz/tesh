@@ -1292,19 +1292,24 @@ int actual_main(int argc, char** argv) {
 
         temp_arena.clear();
 
-        int status = process_events(&backlog, &prompt, &rend, &shell);
-        if (status < 0)
-            break;
+        try {
+            int status = process_events(&backlog, &prompt, &rend, &shell);
+            if (status < 0)
+                break;
 
-        bool force_quit = false;
-        if (read_process_data(&shell, &backlog, &rend, &force_quit))
-            status = 1;
+            bool force_quit = false;
+            if (read_process_data(&shell, &backlog, &rend, &force_quit))
+                status = 1;
 
-        if (force_quit)
-            break;
+            if (force_quit)
+                break;
 
-        if (status > 0)
-            render_frame(window, &rend, &backlog, &prompt, &shell);
+            if (status > 0)
+                render_frame(window, &rend, &backlog, &prompt, &shell);
+        } catch (cz::PanicReachedException& ex) {
+            fprintf(stderr, "Fatal error: %s\n", ex.what());
+            return 1;
+        }
 
         const uint32_t frame_length = 1000 / 60;
         uint32_t wanted_end = start_frame + frame_length;
