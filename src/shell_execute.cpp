@@ -103,7 +103,9 @@ Error start_execute_line(Shell_State* shell,
         running_line.pipeline.push(running_program);
     }
 
+#ifdef ATTACH_ON_SPAWN
     shell->active_process = running_line.id;
+#endif
 
     shell->lines.reserve(cz::heap_allocator(), 1);
     shell->lines.push(running_line);
