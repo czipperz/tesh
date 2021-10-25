@@ -108,7 +108,13 @@ bool find_in_path(Shell_State* shell,
 ///////////////////////////////////////////////////////////////////////////////
 
 #ifdef _WIN32
+static bool has_valid_extension(cz::Str full_path, cz::Str path_ext);
+
 static bool is_executable_ext(cz::Str path_ext, cz::Allocator allocator, cz::String* full_path) {
+    // If it already has an extension then use it.
+    if (has_valid_extension(*full_path, path_ext))
+        return is_executable(full_path->buffer);
+
     size_t len = full_path->len;
     cz::Str path_ext_rest = path_ext;
     while (1) {
@@ -121,14 +127,45 @@ static bool is_executable_ext(cz::Str path_ext, cz::Allocator allocator, cz::Str
         full_path->reserve(allocator, ext.len + 1);
         full_path->append(ext);
         full_path->null_terminate();
-
         if (is_executable(full_path->buffer))
             return true;
 
         if (stop)
             break;
     }
+
+    {
+        cz::Str ext = ".PS1";
+        full_path->len = len;
+        full_path->reserve(allocator, ext.len + 1);
+        full_path->append(ext);
+        full_path->null_terminate();
+        if (is_executable(full_path->buffer))
+            return true;
+    }
+
     return false;
+}
+
+static bool has_valid_extension(cz::Str full_path, cz::Str path_ext) {
+    const char* dot = full_path.rfind('.');
+    if (!dot)
+        return false;
+    
+    cz::Str ext = full_path.slice_start(dot);
+    const char* point = path_ext.find(ext);
+    if (!point)
+        return false;
+
+    cz::Str before = path_ext.slice_end(point);
+    if (before.len > 0 && !before.ends_with(PATH_SPLIT))
+        return false;
+
+    cz::Str after = path_ext.slice_start(point + ext.len);
+    if (after.len > 0 && !after.starts_with(PATH_SPLIT))
+        return false;
+
+    return true;
 }
 #endif
 
