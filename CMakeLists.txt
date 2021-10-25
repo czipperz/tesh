@@ -72,6 +72,25 @@ if (WIN32)
     endif()
 endif()
 
+# Setup logo
+if (WIN32)
+    # Windows_RC.h does some Windows magic to set the app icon.
+    target_sources(${PROGRAM_NAME} PUBLIC ${CMAKE_SOURCE_DIR}/res/Windows_RC.rc)
+
+    # Build the icon from the png.
+    add_custom_target(icon DEPENDS ${CMAKE_SOURCE_DIR}/res/logo.ico)
+    add_custom_command(OUTPUT ${CMAKE_SOURCE_DIR}/res/logo.ico
+                       COMMAND magick convert ${CMAKE_SOURCE_DIR}/res/logo.png -define icon:auto-resize=256,128,96,64,48,32,16 ${CMAKE_SOURCE_DIR}/res/logo.ico
+                       DEPENDS ${CMAKE_SOURCE_DIR}/res/logo.png)
+else()
+    # Copy the icon to the output directory.
+    add_custom_target(icon DEPENDS ${CMAKE_BINARY_DIR}/logo.png)
+    add_custom_command(OUTPUT ${CMAKE_BINARY_DIR}/logo.png
+                       COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_SOURCE_DIR}/res/logo.png ${CMAKE_BINARY_DIR}
+                       DEPENDS ${CMAKE_SOURCE_DIR}/res/logo.png)
+endif()
+add_dependencies(${PROGRAM_NAME} icon)
+
 # Warnings.
 if(MSVC)
     add_definitions(-D_CRT_SECURE_CPP_OVERLOAD_STANDARD_NAMES=1)

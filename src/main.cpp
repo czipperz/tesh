@@ -1,4 +1,5 @@
 #include <SDL.h>
+#include <SDL_image.h>
 #include <SDL_ttf.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -16,8 +17,10 @@
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
+#include <SDL_syswm.h>
 #include <shellscalingapi.h>
 #include <windows.h>
+#include "../res/resources.h"
 #endif
 
 #include "config.hpp"
@@ -74,6 +77,35 @@ struct Prompt_State {
 ///////////////////////////////////////////////////////////////////////////////
 // Renderer methods
 ///////////////////////////////////////////////////////////////////////////////
+
+static void set_icon(SDL_Window* sdl_window) {
+    ZoneScoped;
+
+    // Try to set logo using Windows magic.  This results in
+    // much higher definition on Windows so is preferred.
+#ifdef _WIN32
+    SDL_SysWMinfo wminfo;
+    SDL_VERSION(&wminfo.version);
+    if (SDL_GetWindowWMInfo(sdl_window, &wminfo) == 1) {
+        HWND hwnd = wminfo.info.win.window;
+
+        HINSTANCE handle = GetModuleHandle(nullptr);
+        HICON icon = LoadIcon(handle, "IDI_MAIN_ICON");
+        if (icon) {
+            SetClassLongPtr(hwnd, GCLP_HICON, (LONG_PTR)icon);
+            return;
+        }
+    }
+#endif
+
+    // Fallback to letting SDL do it.
+    cz::String logo = cz::format(temp_allocator, program_directory, "logo.png");
+    SDL_Surface* icon = IMG_Load(logo.buffer);
+    if (icon) {
+        SDL_SetWindowIcon(sdl_window, icon);
+        SDL_FreeSurface(icon);
+    }
+}
 
 static void close_font(Render_State* rend) {
     ZoneScoped;
@@ -1330,11 +1362,18 @@ int actual_main(int argc, char** argv) {
 
     prompt.history_arena.init();
 
+    cz::Buffer_Array permanent_arena;
+    permanent_arena.init();
+    permanent_allocator = permanent_arena.allocator();
+
     cz::Buffer_Array temp_arena;
     temp_arena.init();
     temp_allocator = temp_arena.allocator();
 
     CZ_DEFER(cleanup_processes(&shell));
+
+    set_program_name(/*fallback=*/argv[0]);
+    set_program_directory();
 
     prompt.prefix = "$ ";
     rend.complete_redraw = true;
@@ -1374,6 +1413,13 @@ int actual_main(int argc, char** argv) {
     }
     CZ_DEFER(TTF_Quit());
 
+    int img_init_flags = IMG_INIT_PNG;
+    if (IMG_Init(img_init_flags) != img_init_flags) {
+        fprintf(stderr, "IMG_Init failed: %s\n", IMG_GetError());
+        return 1;
+    }
+    CZ_DEFER(IMG_Quit());
+
     rend.dpi_scale = 1.0f;
     {
         const float dpi_default = 96.0f;
@@ -1391,6 +1437,8 @@ int actual_main(int argc, char** argv) {
         return 1;
     }
     CZ_DEFER(SDL_DestroyWindow(window));
+
+    set_icon(window);
 
     rend.font = open_font(cfg.font_path, (int)(rend.font_size * rend.dpi_scale));
     if (!rend.font) {
