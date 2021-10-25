@@ -347,7 +347,10 @@ static void generate_environment(void* out_arg,
             if (key == shell->exported_vars[j])
                 goto skip2;
         }
-        push_environment(&table, key, variable_values[i]);
+        cz::Str value;
+        if (!get_var(shell, key, &value))
+            value = {};
+        push_environment(&table, key, value);
     skip2:;
     }
 
