@@ -6,6 +6,7 @@
 #include <cz/process.hpp>
 
 #include "config.hpp"
+#include "global.hpp"
 
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -254,11 +255,22 @@ static Error run_program(Shell_State* shell,
         return Error_Success;
     }
 
+    cz::Vector<cz::Str> args = parse.args.clone(temp_allocator);
+
     cz::String full_path = {};
-    if (!find_in_path(shell, parse.args[0], allocator, &full_path)) {
+    if (!find_in_path(shell, args[0], allocator, &full_path)) {
         return Error_InvalidProgram;
     }
-    parse.args[0] = full_path;
+    args[0] = full_path;
+
+#ifdef _WIN32
+    if (args[0].ends_with_case_insensitive(".ps1")) {
+        args.reserve(temp_allocator, 1);
+        args.insert(0, "powershell");
+    }
+#endif
+
+    parse.args = args;
 
     CZ_DEBUG_ASSERT(out.type == Process_Output::FILE);
     CZ_DEBUG_ASSERT(err.type == Process_Output::FILE);
