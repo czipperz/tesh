@@ -33,6 +33,8 @@ static void kill_program(Running_Program* program) {
     case Running_Program::PROCESS:
         program->v.process.kill();
         break;
+    default:
+    break;
     }
 }
 

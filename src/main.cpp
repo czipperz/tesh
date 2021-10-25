@@ -1283,8 +1283,7 @@ static void load_environment_variables(Shell_State* shell) {
         }
     }
 #else
-    // TODO: import environ?
-    // extern char** environ;
+    extern char** environ;
     for (char** iter = environ; *iter; ++iter) {
         cz::Str line = *iter;
         cz::Str key, value;
