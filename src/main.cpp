@@ -734,6 +734,177 @@ static void resolve_history_searching(Prompt_State* prompt) {
     }
 }
 
+static bool handle_prompt_manipulation_commands(Shell_State* shell,
+                                                Prompt_State* prompt,
+                                                Backlog_State* backlog,
+                                                Render_State* rend,
+                                                uint16_t mod,
+                                                SDL_Keycode key) {
+    if ((mod == KMOD_CTRL && key == SDLK_c) || key == SDLK_RETURN) {
+        resolve_history_searching(prompt);
+
+        Running_Script* script = active_process(shell);
+        if (script) {
+            set_backlog_process(backlog, script->id);
+        } else {
+            append_text(backlog, -1, "\n");
+            if (rend->backlog_start.index + 1 == backlog->length) {
+                ++rend->backlog_start.index;
+                rend->backlog_end = rend->backlog_start;
+            }
+
+            set_backlog_process(backlog, -3);
+            append_text(backlog, prompt->process_id, shell->working_directory);
+            append_text(backlog, prompt->process_id, " ");
+            append_text(backlog, prompt->process_id, prompt->prefix);
+        }
+        append_text(backlog, -2, prompt->text);
+        append_text(backlog, prompt->process_id, "\n");
+
+        if (key == SDLK_RETURN) {
+            if (script) {
+                (void)script->in.write(prompt->text);
+                --prompt->process_id;
+            } else {
+                rend->auto_page = cfg.on_spawn_auto_page;
+                rend->auto_scroll = cfg.on_spawn_auto_scroll;
+                if (!run_line(shell, backlog, prompt->text, prompt->process_id)) {
+                    append_text(backlog, prompt->process_id, "Error: failed to execute\n");
+                }
+            }
+        } else {
+            if (script) {
+#ifdef TRACY_ENABLE
+                cz::String message =
+                    cz::format(temp_allocator, "End: ", script->fg.pipeline.command_line);
+                TracyMessage(message.buffer, message.len);
+#endif
+
+                recycle_process(shell, script);
+            }
+        }
+
+        if (prompt->text.len > 0) {
+            if (prompt->history.len == 0 || prompt->history.last() != prompt->text) {
+                prompt->history.reserve(cz::heap_allocator(), 1);
+                prompt->history.push(prompt->text.clone(prompt->history_arena.allocator()));
+                prompt->history_counter = prompt->history.len;
+            }
+        }
+
+        prompt->text.len = 0;
+        prompt->cursor = 0;
+        ++prompt->process_id;
+    } else if ((mod & ~KMOD_SHIFT) == 0 && key == SDLK_BACKSPACE) {
+        if (prompt->cursor > 0) {
+            --prompt->cursor;
+            prompt->text.remove(prompt->cursor);
+        }
+    } else if (mod == (KMOD_CTRL | KMOD_ALT) && key == SDLK_BACKSPACE) {
+        prompt->text.remove_range(0, prompt->cursor);
+        prompt->cursor = 0;
+    } else if (((mod & ~KMOD_SHIFT) == 0 && key == SDLK_DELETE) ||
+               (mod == KMOD_CTRL && key == SDLK_d)) {
+        if (prompt->cursor < prompt->text.len) {
+            prompt->text.remove(prompt->cursor);
+        }
+    } else if ((mod == 0 && key == SDLK_LEFT) || (mod == KMOD_CTRL && key == SDLK_b)) {
+        if (prompt->cursor > 0) {
+            --prompt->cursor;
+        }
+    } else if ((mod == 0 && key == SDLK_RIGHT) || (mod == KMOD_CTRL && key == SDLK_f)) {
+        if (prompt->cursor < prompt->text.len) {
+            ++prompt->cursor;
+        }
+    } else if ((mod == 0 && key == SDLK_UP) || (mod == KMOD_CTRL && key == SDLK_p)) {
+        if (prompt->history_counter > 0) {
+            --prompt->history_counter;
+            prompt->text.len = 0;
+            cz::Str hist = prompt->history[prompt->history_counter];
+            prompt->text.reserve(cz::heap_allocator(), hist.len);
+            prompt->text.append(hist);
+            prompt->cursor = prompt->text.len;
+        }
+    } else if ((mod == 0 && key == SDLK_DOWN) || (mod == KMOD_CTRL && key == SDLK_n)) {
+        if (prompt->history_counter < prompt->history.len) {
+            ++prompt->history_counter;
+            prompt->text.len = 0;
+            if (prompt->history_counter < prompt->history.len) {
+                cz::Str hist = prompt->history[prompt->history_counter];
+                prompt->text.reserve(cz::heap_allocator(), hist.len);
+                prompt->text.append(hist);
+            }
+            prompt->cursor = prompt->text.len;
+        }
+    } else if (mod == KMOD_CTRL && key == SDLK_r) {
+        if (!prompt->history_searching) {
+            prompt->history_searching = true;
+            prompt->history_counter = prompt->history.len;
+        }
+        while (1) {
+            if (prompt->history_counter == 0) {
+                prompt->history_counter = prompt->history.len;
+                break;
+            }
+            --prompt->history_counter;
+            cz::Str hist = prompt->history[prompt->history_counter];
+            if (hist.contains_case_insensitive(prompt->text))
+                break;
+        }
+    } else if (mod == KMOD_ALT && key == SDLK_r) {
+        if (prompt->history_searching) {
+            while (1) {
+                ++prompt->history_counter;
+                if (prompt->history_counter >= prompt->history.len) {
+                    prompt->history_counter = prompt->history.len;
+                    prompt->history_searching = false;
+                    break;
+                }
+                cz::Str hist = prompt->history[prompt->history_counter];
+                if (hist.contains_case_insensitive(prompt->text))
+                    break;
+            }
+        }
+    } else if (mod == KMOD_CTRL && key == SDLK_g) {
+        resolve_history_searching(prompt);
+    } else if ((mod == 0 && key == SDLK_HOME) || (mod == KMOD_CTRL && key == SDLK_a)) {
+        prompt->cursor = 0;
+    } else if ((mod == 0 && key == SDLK_END) || (mod == KMOD_CTRL && key == SDLK_e)) {
+        prompt->cursor = prompt->text.len;
+    } else if ((mod == KMOD_CTRL && key == SDLK_LEFT) || (mod == KMOD_ALT && key == SDLK_LEFT) ||
+               (mod == KMOD_ALT && key == SDLK_b)) {
+        while (prompt->cursor > 0) {
+            if (cz::is_alpha(prompt->text[prompt->cursor - 1]))
+                break;
+            --prompt->cursor;
+        }
+        while (prompt->cursor > 0) {
+            if (!cz::is_alpha(prompt->text[prompt->cursor - 1]))
+                break;
+            --prompt->cursor;
+        }
+    } else if ((mod == KMOD_CTRL && key == SDLK_RIGHT) || (mod == KMOD_ALT && key == SDLK_RIGHT) ||
+               (mod == KMOD_ALT && key == SDLK_f)) {
+        while (prompt->cursor < prompt->text.len) {
+            if (cz::is_alpha(prompt->text[prompt->cursor]))
+                break;
+            ++prompt->cursor;
+        }
+        while (prompt->cursor < prompt->text.len) {
+            if (!cz::is_alpha(prompt->text[prompt->cursor]))
+                break;
+            ++prompt->cursor;
+        }
+    } else {
+        return false;
+    }
+
+    ensure_prompt_on_screen(rend, backlog);
+    rend->auto_page = false;
+    rend->auto_scroll = true;
+    return true;
+}
+
 static int process_events(Backlog_State* backlog,
                           Prompt_State* prompt,
                           Render_State* rend,
@@ -772,72 +943,16 @@ static int process_events(Backlog_State* backlog,
             // Ignore the GUI key.
             mod &= ~KMOD_GUI;
 
-            if (event.key.keysym.sym == SDLK_ESCAPE)
+            SDL_Keycode key = event.key.keysym.sym;
+            if (key == SDLK_ESCAPE)
                 return -1;
-            if ((mod == KMOD_CTRL && event.key.keysym.sym == SDLK_c) ||
-                event.key.keysym.sym == SDLK_RETURN) {
-                rend->auto_page = false;
-                rend->auto_scroll = true;
 
-                resolve_history_searching(prompt);
-
-                Running_Script* script = active_process(shell);
-                if (script) {
-                    set_backlog_process(backlog, script->id);
-                } else {
-                    append_text(backlog, -1, "\n");
-                    if (rend->backlog_start.index + 1 == backlog->length) {
-                        ++rend->backlog_start.index;
-                        rend->backlog_end = rend->backlog_start;
-                    }
-
-                    set_backlog_process(backlog, -3);
-                    append_text(backlog, prompt->process_id, shell->working_directory);
-                    append_text(backlog, prompt->process_id, " ");
-                    append_text(backlog, prompt->process_id, prompt->prefix);
-                }
-                append_text(backlog, -2, prompt->text);
-                append_text(backlog, prompt->process_id, "\n");
-
-                if (event.key.keysym.sym == SDLK_RETURN) {
-                    if (script) {
-                        (void)script->in.write(prompt->text);
-                        --prompt->process_id;
-                    } else {
-                        rend->auto_page = cfg.on_spawn_auto_page;
-                        rend->auto_scroll = cfg.on_spawn_auto_scroll;
-                        if (!run_line(shell, backlog, prompt->text, prompt->process_id)) {
-                            append_text(backlog, prompt->process_id, "Error: failed to execute\n");
-                        }
-                    }
-                } else {
-                    if (script) {
-#ifdef TRACY_ENABLE
-                        cz::String message =
-                            cz::format(temp_allocator, "End: ", script->fg.pipeline.command_line);
-                        TracyMessage(message.buffer, message.len);
-#endif
-
-                        recycle_process(shell, script);
-                    }
-                }
-
-                if (prompt->text.len > 0) {
-                    if (prompt->history.len == 0 || prompt->history.last() != prompt->text) {
-                        prompt->history.reserve(cz::heap_allocator(), 1);
-                        prompt->history.push(prompt->text.clone(prompt->history_arena.allocator()));
-                        prompt->history_counter = prompt->history.len;
-                    }
-                }
-
-                prompt->text.len = 0;
-                prompt->cursor = 0;
-                ++prompt->process_id;
-
-                ensure_prompt_on_screen(rend, backlog);
+            if (handle_prompt_manipulation_commands(shell, prompt, backlog, rend, mod, key)) {
                 ++num_events;
+                continue;
             }
-            if (mod == KMOD_CTRL && event.key.keysym.sym == SDLK_z) {
+
+            if (mod == KMOD_CTRL && key == SDLK_z) {
                 rend->auto_page = false;
                 rend->auto_scroll = true;
                 if (shell->active_process == -1) {
@@ -848,194 +963,13 @@ static int process_events(Backlog_State* backlog,
                 }
                 ++num_events;
             }
-            if ((mod & ~KMOD_SHIFT) == 0 && event.key.keysym.sym == SDLK_BACKSPACE) {
-                rend->auto_page = false;
-                rend->auto_scroll = true;
-                if (prompt->cursor > 0) {
-                    --prompt->cursor;
-                    prompt->text.remove(prompt->cursor);
-                }
-                ensure_prompt_on_screen(rend, backlog);
-                ++num_events;
-            }
-            if (mod == (KMOD_CTRL | KMOD_ALT) && event.key.keysym.sym == SDLK_BACKSPACE) {
-                rend->auto_page = false;
-                rend->auto_scroll = true;
-                prompt->text.remove_range(0, prompt->cursor);
-                prompt->cursor = 0;
-                ensure_prompt_on_screen(rend, backlog);
-                ++num_events;
-            }
-            if (((mod & ~KMOD_SHIFT) == 0 && event.key.keysym.sym == SDLK_DELETE) ||
-                (mod == KMOD_CTRL && event.key.keysym.sym == SDLK_d)) {
-                rend->auto_page = false;
-                rend->auto_scroll = true;
-                if (prompt->cursor < prompt->text.len) {
-                    prompt->text.remove(prompt->cursor);
-                }
-                ensure_prompt_on_screen(rend, backlog);
-                ++num_events;
-            }
-            if ((mod == 0 && event.key.keysym.sym == SDLK_LEFT) ||
-                (mod == KMOD_CTRL && event.key.keysym.sym == SDLK_b)) {
-                rend->auto_page = false;
-                rend->auto_scroll = true;
-                if (prompt->cursor > 0) {
-                    --prompt->cursor;
-                }
-                ensure_prompt_on_screen(rend, backlog);
-                ++num_events;
-            }
-            if ((mod == 0 && event.key.keysym.sym == SDLK_RIGHT) ||
-                (mod == KMOD_CTRL && event.key.keysym.sym == SDLK_f)) {
-                rend->auto_page = false;
-                rend->auto_scroll = true;
-                if (prompt->cursor < prompt->text.len) {
-                    ++prompt->cursor;
-                }
-                ensure_prompt_on_screen(rend, backlog);
-                ++num_events;
-            }
-            if ((mod == 0 && event.key.keysym.sym == SDLK_UP) ||
-                (mod == KMOD_CTRL && event.key.keysym.sym == SDLK_p)) {
-                rend->auto_page = false;
-                rend->auto_scroll = true;
-                if (prompt->history_counter > 0) {
-                    --prompt->history_counter;
-                    prompt->text.len = 0;
-                    cz::Str hist = prompt->history[prompt->history_counter];
-                    prompt->text.reserve(cz::heap_allocator(), hist.len);
-                    prompt->text.append(hist);
-                    prompt->cursor = prompt->text.len;
-                }
-                ensure_prompt_on_screen(rend, backlog);
-                ++num_events;
-            }
-            if ((mod == 0 && event.key.keysym.sym == SDLK_DOWN) ||
-                (mod == KMOD_CTRL && event.key.keysym.sym == SDLK_n)) {
-                rend->auto_page = false;
-                rend->auto_scroll = true;
-                if (prompt->history_counter < prompt->history.len) {
-                    ++prompt->history_counter;
-                    prompt->text.len = 0;
-                    if (prompt->history_counter < prompt->history.len) {
-                        cz::Str hist = prompt->history[prompt->history_counter];
-                        prompt->text.reserve(cz::heap_allocator(), hist.len);
-                        prompt->text.append(hist);
-                    }
-                    prompt->cursor = prompt->text.len;
-                }
-                ensure_prompt_on_screen(rend, backlog);
-                ++num_events;
-            }
-            if (mod == KMOD_CTRL && event.key.keysym.sym == SDLK_r) {
-                rend->auto_page = false;
-                rend->auto_scroll = true;
-                if (!prompt->history_searching) {
-                    prompt->history_searching = true;
-                    prompt->history_counter = prompt->history.len;
-                }
-                while (1) {
-                    if (prompt->history_counter == 0) {
-                        prompt->history_counter = prompt->history.len;
-                        break;
-                    }
-                    --prompt->history_counter;
-                    cz::Str hist = prompt->history[prompt->history_counter];
-                    if (hist.contains_case_insensitive(prompt->text))
-                        break;
-                }
-                ensure_prompt_on_screen(rend, backlog);
-                ++num_events;
-            }
-            if (mod == KMOD_ALT && event.key.keysym.sym == SDLK_r) {
-                rend->auto_page = false;
-                rend->auto_scroll = true;
-                if (prompt->history_searching) {
-                    while (1) {
-                        ++prompt->history_counter;
-                        if (prompt->history_counter >= prompt->history.len) {
-                            prompt->history_counter = prompt->history.len;
-                            prompt->history_searching = false;
-                            break;
-                        }
-                        cz::Str hist = prompt->history[prompt->history_counter];
-                        if (hist.contains_case_insensitive(prompt->text))
-                            break;
-                    }
-                }
-                ensure_prompt_on_screen(rend, backlog);
-                ++num_events;
-            }
-            if (mod == KMOD_CTRL && event.key.keysym.sym == SDLK_g) {
-                rend->auto_page = false;
-                rend->auto_scroll = true;
-                resolve_history_searching(prompt);
-                ensure_prompt_on_screen(rend, backlog);
-                ++num_events;
-            }
-            if ((mod == 0 && event.key.keysym.sym == SDLK_HOME) ||
-                (mod == KMOD_CTRL && event.key.keysym.sym == SDLK_a)) {
-                rend->auto_page = false;
-                rend->auto_scroll = true;
-                prompt->cursor = 0;
-                ensure_prompt_on_screen(rend, backlog);
-                ++num_events;
-            }
-            if ((mod == 0 && event.key.keysym.sym == SDLK_END) ||
-                (mod == KMOD_CTRL && event.key.keysym.sym == SDLK_e)) {
-                rend->auto_page = false;
-                rend->auto_scroll = true;
-                prompt->cursor = prompt->text.len;
-                ensure_prompt_on_screen(rend, backlog);
-                ++num_events;
-            }
-            if ((mod == KMOD_CTRL && event.key.keysym.sym == SDLK_LEFT) ||
-                (mod == KMOD_ALT && event.key.keysym.sym == SDLK_LEFT) ||
-                (mod == KMOD_ALT && event.key.keysym.sym == SDLK_b)) {
-                rend->auto_page = false;
-                rend->auto_scroll = true;
-                while (prompt->cursor > 0) {
-                    if (cz::is_alpha(prompt->text[prompt->cursor - 1]))
-                        break;
-                    --prompt->cursor;
-                }
-                while (prompt->cursor > 0) {
-                    if (!cz::is_alpha(prompt->text[prompt->cursor - 1]))
-                        break;
-                    --prompt->cursor;
-                }
-                ensure_prompt_on_screen(rend, backlog);
-                ++num_events;
-            }
-            if ((mod == KMOD_CTRL && event.key.keysym.sym == SDLK_RIGHT) ||
-                (mod == KMOD_ALT && event.key.keysym.sym == SDLK_RIGHT) ||
-                (mod == KMOD_ALT && event.key.keysym.sym == SDLK_f)) {
-                rend->auto_page = false;
-                rend->auto_scroll = true;
-                while (prompt->cursor < prompt->text.len) {
-                    if (cz::is_alpha(prompt->text[prompt->cursor]))
-                        break;
-                    ++prompt->cursor;
-                }
-                while (prompt->cursor < prompt->text.len) {
-                    if (!cz::is_alpha(prompt->text[prompt->cursor]))
-                        break;
-                    ++prompt->cursor;
-                }
-                ensure_prompt_on_screen(rend, backlog);
-                ++num_events;
-            }
-            if (mod == KMOD_CTRL && event.key.keysym.sym == SDLK_l) {
-                rend->auto_page = false;
-                rend->auto_scroll = true;
+            if (mod == KMOD_CTRL && key == SDLK_l) {
                 rend->backlog_start = {};
                 rend->backlog_start.index = backlog->length;
                 rend->complete_redraw = true;
                 ++num_events;
             }
-            if ((mod == 0 && event.key.keysym.sym == SDLK_PAGEDOWN) ||
-                (mod == KMOD_CTRL && event.key.keysym.sym == SDLK_v)) {
+            if ((mod == 0 && key == SDLK_PAGEDOWN) || (mod == KMOD_CTRL && key == SDLK_v)) {
                 rend->auto_page = false;
                 rend->auto_scroll = false;
                 shell->active_process = -1;
@@ -1044,8 +978,7 @@ static int process_events(Backlog_State* backlog,
                 rend->complete_redraw = true;
                 ++num_events;
             }
-            if ((mod == 0 && event.key.keysym.sym == SDLK_PAGEUP) ||
-                (mod == KMOD_ALT && event.key.keysym.sym == SDLK_v)) {
+            if ((mod == 0 && key == SDLK_PAGEUP) || (mod == KMOD_ALT && key == SDLK_v)) {
                 rend->auto_page = false;
                 rend->auto_scroll = false;
                 shell->active_process = -1;
@@ -1054,7 +987,7 @@ static int process_events(Backlog_State* backlog,
                 rend->complete_redraw = true;
                 ++num_events;
             }
-            if (mod == KMOD_ALT && event.key.keysym.sym == SDLK_GREATER) {
+            if (mod == KMOD_ALT && key == SDLK_GREATER) {
                 rend->auto_page = false;
                 rend->auto_scroll = true;
                 rend->backlog_start = {};
@@ -1064,7 +997,7 @@ static int process_events(Backlog_State* backlog,
                 rend->complete_redraw = true;
                 ++num_events;
             }
-            if (mod == KMOD_ALT && event.key.keysym.sym == SDLK_LESS) {
+            if (mod == KMOD_ALT && key == SDLK_LESS) {
                 rend->auto_page = false;
                 rend->auto_scroll = false;
                 shell->active_process = -1;
@@ -1080,7 +1013,7 @@ static int process_events(Backlog_State* backlog,
                     }
                 }
             }
-            if (mod == (KMOD_CTRL | KMOD_ALT) && event.key.keysym.sym == SDLK_b) {
+            if (mod == (KMOD_CTRL | KMOD_ALT) && key == SDLK_b) {
                 rend->auto_page = false;
                 rend->auto_scroll = false;
                 shell->active_process = -1;
@@ -1100,7 +1033,7 @@ static int process_events(Backlog_State* backlog,
                     }
                 }
             }
-            if (mod == (KMOD_CTRL | KMOD_ALT) && event.key.keysym.sym == SDLK_f) {
+            if (mod == (KMOD_CTRL | KMOD_ALT) && key == SDLK_f) {
                 rend->auto_page = false;
                 rend->auto_scroll = false;
                 shell->active_process = -1;
@@ -1124,7 +1057,7 @@ static int process_events(Backlog_State* backlog,
                 rend->complete_redraw = true;
                 ++num_events;
             }
-            if (mod == KMOD_SHIFT && event.key.keysym.sym == SDLK_INSERT) {
+            if (mod == KMOD_SHIFT && key == SDLK_INSERT) {
                 rend->auto_page = false;
                 rend->auto_scroll = true;
                 char* clip = SDL_GetClipboardText();
@@ -1141,10 +1074,9 @@ static int process_events(Backlog_State* backlog,
             }
 
             // Note: C-= used to zoom in so you don't have to hold shift.
-            if (mod == KMOD_CTRL &&
-                (event.key.keysym.sym == SDLK_EQUALS || event.key.keysym.sym == SDLK_MINUS)) {
+            if (mod == KMOD_CTRL && (key == SDLK_EQUALS || key == SDLK_MINUS)) {
                 int new_font_size = rend->font_size;
-                if (event.key.keysym.sym == SDLK_EQUALS) {
+                if (key == SDLK_EQUALS) {
                     new_font_size += 4;
                 } else {
                     new_font_size = cz::max(new_font_size - 4, 4);
