@@ -330,5 +330,7 @@ static void recognize_builtins(Running_Program* program,
         program->type = Running_Program::TRUE_;
     } else if (parse.args[0] == "false") {
         program->type = Running_Program::FALSE_;
+    } else if (parse.args[0] == "export") {
+        program->type = Running_Program::EXPORT;
     }
 }

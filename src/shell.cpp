@@ -28,6 +28,16 @@ void set_var(Shell_State* shell, cz::Str key, cz::Str value) {
     shell->variable_values.push(value.clone(cz::heap_allocator()));
 }
 
+void make_env_var(Shell_State* shell, cz::Str key) {
+    for (size_t i = 0; i < shell->exported_vars.len; ++i) {
+        if (key == shell->exported_vars[i])
+            return;
+    }
+
+    shell->exported_vars.reserve(cz::heap_allocator(), 1);
+    shell->exported_vars.push(key.clone(cz::heap_allocator()));
+}
+
 static void kill_program(Running_Program* program) {
     switch (program->type) {
     case Running_Program::PROCESS:

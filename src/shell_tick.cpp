@@ -14,53 +14,9 @@ static void standardize_arg(const Shell_State* shell,
                             cz::Str arg,
                             cz::Allocator allocator,
                             cz::String* new_wd,
-                            bool make_absolute) {
-    // Expand home directory.
-    if (arg == "~") {
-        cz::Str home = {};
-        get_var(shell, "HOME", &home);
-        new_wd->reserve_exact(allocator, home.len + 1);
-        new_wd->append(home);
-    } else if (arg.starts_with("~/")) {
-        cz::Str home = {};
-        get_var(shell, "HOME", &home);
-        new_wd->reserve_exact(allocator, home.len + arg.len);
-        new_wd->append(home);
-        new_wd->push('/');
-        new_wd->append(arg.slice_start(2));
-    } else {
-        if (make_absolute) {
-            cz::path::make_absolute(arg, shell->working_directory, allocator, new_wd);
-        } else {
-            new_wd->reserve_exact(allocator, arg.len);
-            new_wd->append(arg);
-        }
-    }
+                            bool make_absolute);
 
-#ifdef _WIN32
-    if (make_absolute)
-        cz::path::convert_to_forward_slashes(new_wd);
-#endif
-
-    cz::path::flatten(new_wd);
-    new_wd->null_terminate();
-
-    if (cz::path::is_absolute(*new_wd)) {
-#ifdef _WIN32
-        new_wd->get(0) = cz::to_upper(new_wd->get(0));
-#endif
-
-#ifdef _WIN32
-        bool pop = (new_wd->len > 3 && new_wd->ends_with('/'));
-#else
-        bool pop = (new_wd->len > 1 && new_wd->ends_with('/'));
-#endif
-        if (pop) {
-            new_wd->pop();
-            new_wd->null_terminate();
-        }
-    }
-}
+///////////////////////////////////////////////////////////////////////////////
 
 bool tick_program(Shell_State* shell, Running_Program* program, int* exit_code, bool* force_quit) {
     ZoneScoped;
@@ -323,6 +279,26 @@ bool tick_program(Shell_State* shell, Running_Program* program, int* exit_code, 
         program->v.builtin.exit_code = 1;
         goto finish_builtin;
 
+    case Running_Program::EXPORT: {
+        auto& builtin = program->v.builtin;
+        for (size_t i = 2; i < builtin.args.len; ++i) {
+            cz::Str arg = builtin.args[i];
+            cz::Str key = arg, value;
+            if (arg.split_excluding('=', &key, &value)) {
+                if (key.len == 0) {
+                    builtin.exit_code = 1;
+                    (void)builtin.err.write("export: Empty variable name");
+                    (void)builtin.err.write(arg);
+                    (void)builtin.err.write("\n");
+                    continue;
+                }
+                set_var(shell, key, value);
+            }
+            make_env_var(shell, key);
+        }
+        goto finish_builtin;
+    } break;
+
     default:
         CZ_PANIC("unreachable");
     }
@@ -332,4 +308,58 @@ finish_builtin:
     auto& builtin = program->v.builtin;
     *exit_code = builtin.exit_code;
     return true;
+}
+
+///////////////////////////////////////////////////////////////////////////////
+
+static void standardize_arg(const Shell_State* shell,
+                            cz::Str arg,
+                            cz::Allocator allocator,
+                            cz::String* new_wd,
+                            bool make_absolute) {
+    // Expand home directory.
+    if (arg == "~") {
+        cz::Str home = {};
+        get_var(shell, "HOME", &home);
+        new_wd->reserve_exact(allocator, home.len + 1);
+        new_wd->append(home);
+    } else if (arg.starts_with("~/")) {
+        cz::Str home = {};
+        get_var(shell, "HOME", &home);
+        new_wd->reserve_exact(allocator, home.len + arg.len);
+        new_wd->append(home);
+        new_wd->push('/');
+        new_wd->append(arg.slice_start(2));
+    } else {
+        if (make_absolute) {
+            cz::path::make_absolute(arg, shell->working_directory, allocator, new_wd);
+        } else {
+            new_wd->reserve_exact(allocator, arg.len);
+            new_wd->append(arg);
+        }
+    }
+
+#ifdef _WIN32
+    if (make_absolute)
+        cz::path::convert_to_forward_slashes(new_wd);
+#endif
+
+    cz::path::flatten(new_wd);
+    new_wd->null_terminate();
+
+    if (cz::path::is_absolute(*new_wd)) {
+#ifdef _WIN32
+        new_wd->get(0) = cz::to_upper(new_wd->get(0));
+#endif
+
+#ifdef _WIN32
+        bool pop = (new_wd->len > 3 && new_wd->ends_with('/'));
+#else
+        bool pop = (new_wd->len > 1 && new_wd->ends_with('/'));
+#endif
+        if (pop) {
+            new_wd->pop();
+            new_wd->null_terminate();
+        }
+    }
 }
