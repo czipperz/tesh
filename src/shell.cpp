@@ -34,7 +34,7 @@ static void kill_program(Running_Program* program) {
         program->v.process.kill();
         break;
     default:
-    break;
+        break;
     }
 }
 
@@ -78,7 +78,10 @@ void recycle_arena(Shell_State* shell, cz::Buffer_Array arena) {
 
 void recycle_pipeline(Shell_State* shell, Running_Pipeline* pipeline) {
     cleanup_pipeline(pipeline);
-    recycle_arena(shell, pipeline->arena);
+
+    // Empty pipelines don't have an arena.
+    if (pipeline->length > 0)
+        recycle_arena(shell, pipeline->arena);
 }
 
 void recycle_process(Shell_State* shell, Running_Script* script) {
