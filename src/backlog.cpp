@@ -56,7 +56,10 @@ void ensure_trailing_newline(Backlog_State* backlog, uint64_t id) {
     for (size_t e = backlog->events.len; e-- > 0;) {
         Backlog_Event* event = &backlog->events[e];
         if (event->type == BACKLOG_EVENT_START_PROCESS && event->v.process_id == id) {
-            end = event->index;
+            if (e + 1 == backlog->events.len)
+                end = backlog->length;
+            else
+                end = event[1].index;
             break;
         }
     }
