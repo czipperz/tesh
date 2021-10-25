@@ -580,6 +580,8 @@ static bool read_process_data(Shell_State* shell,
                 if (shell->active_process == script->id)
                     rend->auto_scroll = true;
 
+                ensure_trailing_newline(backlog, script->id);
+
                 recycle_process(shell, script);
                 changes = true;
                 --i;

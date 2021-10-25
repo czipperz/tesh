@@ -49,3 +49,22 @@ void append_text(Backlog_State* backlog, uint64_t process_id, cz::Str text) {
     }
     backlog->length += text.len;
 }
+
+void ensure_trailing_newline(Backlog_State* backlog, uint64_t id) {
+    uint64_t end = 0;
+
+    for (size_t e = backlog->events.len; e-- > 0;) {
+        Backlog_Event* event = &backlog->events[e];
+        if (event->type == BACKLOG_EVENT_START_PROCESS && event->v.process_id == id) {
+            end = event->index;
+            break;
+        }
+    }
+
+    if (end == 0)
+        return;
+
+    if (backlog->get(end - 1) != '\n') {
+        append_text(backlog, id, "\n");
+    }
+}
