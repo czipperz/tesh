@@ -122,7 +122,7 @@ static Error start_execute_pipeline(Shell_State* shell,
     ZoneScoped;
 
     if (parse.pipeline.len == 0)
-        return Error_Success;
+        return Error_Empty;
 
     running->arena = arena;
     // running->command_line = command_line.clone(arena.allocator());
