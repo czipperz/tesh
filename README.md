@@ -34,7 +34,7 @@ git submodule update
 ./build-release
 ```
 
-3. After building, tesh can be ran via `./build/release/tesh`.
+3. After building, Tesh can be ran via `./build/release/tesh`.
 
 ## Optimizing
 
@@ -42,10 +42,10 @@ You can use Tracy to profile your project.  See [the Tracy manual] for more info
 
 [the Tracy manual]: https://bitbucket.com/wolfpld/tracy/downloads/tracy.pdf
 
-First we have to build the Tracy configuration of tesh and build the Tracy
-profiler.  Then run the profiler, and finally run the Tracy build of tesh.
+First we have to build the Tracy configuration of Tesh and build the Tracy
+profiler.  Then run the profiler, and finally run the Tracy build of Tesh.
 
-Build tesh with Tracy enabled:
+Build Tesh with Tracy enabled:
 ```
 ./build-tracy
 ```
@@ -61,7 +61,7 @@ Then we run Tracy:
 ./tracy/profiler/build/unix/Tracy-release &
 ```
 
-Then run tesh with Tracy enabled.  Run it as the
+Then run Tesh with Tracy enabled.  Run it as the
 super user to enable context switching recognition.
 ```
 sudo ./build/tracy/tesh
