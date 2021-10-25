@@ -227,6 +227,11 @@ static Error start_execute_pipeline(Shell_State* shell,
 
 ///////////////////////////////////////////////////////////////////////////////
 
+static void generate_environment(void* out,
+                                 Shell_State* shell,
+                                 cz::Slice<const cz::Str> variable_names,
+                                 cz::Slice<const cz::Str> variable_values);
+
 static Error run_program(Shell_State* shell,
                          cz::Allocator allocator,
                          Running_Program* program,
@@ -280,12 +285,80 @@ static Error run_program(Shell_State* shell,
     options.std_out = out.v.file;
     options.std_err = err.v.file;
     options.working_directory = shell->working_directory.buffer;
+    generate_environment(&options.environment, shell, parse.variable_names, parse.variable_values);
 
     program->v.process = {};
     if (!program->v.process.launch_program(parse.args, options))
         return Error_IO;
 
     return Error_Success;
+}
+
+#ifdef _WIN32
+static void push_environment(cz::String* table, cz::Str key, cz::Str value) {
+    table->reserve(temp_allocator, key.len + value.len + 3);
+    table->append(key);
+    table->push('=');
+    table->append(value);
+    table->push('\0');
+}
+#else
+static void push_environment(cz::Vector<char*>* table, cz::Str key, cz::Str value) {
+    cz::String entry = {};
+    entry.reserve_exact(temp_allocator, key.len + value.len + 2);
+    entry.append(key);
+    entry.push('=');
+    entry.append(value);
+    entry.null_terminate();
+
+    table->reserve(cz::heap_allocator(), 1);
+    table->push(entry);
+}
+#endif
+
+static void generate_environment(void* out_arg,
+                                 Shell_State* shell,
+                                 cz::Slice<const cz::Str> variable_names,
+                                 cz::Slice<const cz::Str> variable_values) {
+#ifdef _WIN32
+    cz::String table = {};
+#else
+    cz::Vector<char*> table = {};
+    CZ_DEFER(table.drop(cz::heap_allocator()));
+#endif
+
+    for (size_t i = 0; i < variable_names.len; ++i) {
+        cz::Str key = variable_names[i];
+        for (size_t j = 0; j < i; ++j) {
+            if (key == variable_names[j])
+                goto skip1;
+        }
+        push_environment(&table, key, variable_values[i]);
+    skip1:;
+    }
+
+    for (size_t i = 0; i < shell->exported_vars.len; ++i) {
+        cz::Str key = shell->exported_vars[i];
+        for (size_t j = 0; j < variable_names.len; ++j) {
+            if (key == variable_names[j])
+                goto skip2;
+        }
+        for (size_t j = 0; j < i; ++j) {
+            if (key == shell->exported_vars[j])
+                goto skip2;
+        }
+        push_environment(&table, key, variable_values[i]);
+    skip2:;
+    }
+
+#ifdef _WIN32
+    char** out = (char**)out_arg;
+    table.null_terminate();
+    *out = table.buffer;
+#else
+    char*** out = (char***)out_arg;
+    *out = table.clone(temp_allocator).elems;
+#endif
 }
 
 static void recognize_builtins(Running_Program* program,
