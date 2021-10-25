@@ -383,3 +383,15 @@ TEST_CASE("parse_script & combiner") {
     CHECK(pipeline.pipeline[0].args[0] == "echo");
     CHECK(pipeline.pipeline[0].args[1] == "bye");
 }
+
+TEST_CASE("parse_script backslash escapes newline") {
+    Shell_State shell = {};
+    Parse_Script script = {};
+    Error error = parse_script(&shell, cz::heap_allocator(), &script, "abc d\\\nef");
+    REQUIRE(error == Error_Success);
+    Parse_Pipeline pipeline = script.first.pipeline;
+    REQUIRE(pipeline.pipeline.len == 1);
+    REQUIRE(pipeline.pipeline[0].args.len == 2);
+    CHECK(pipeline.pipeline[0].args[0] == "abc");
+    CHECK(pipeline.pipeline[0].args[1] == "def");
+}

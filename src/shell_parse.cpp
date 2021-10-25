@@ -262,6 +262,14 @@ static Error parse_pipeline(const Shell_State* shell,
                 break;
             }
 
+            case '\\':
+                // Skip backslash newline.
+                if (text.slice_start(*index + 1).starts_with('\n')) {
+                    ++*index;
+                    break;
+                }
+                goto def;
+
             default:
             def:
                 word.reserve(allocator, 1);
