@@ -18,7 +18,12 @@ static void standardize_arg(const Shell_State* shell,
 
 ///////////////////////////////////////////////////////////////////////////////
 
-bool tick_program(Shell_State* shell, Running_Program* program, int* exit_code, bool* force_quit) {
+bool tick_program(Shell_State* shell,
+                  Render_State* rend,
+                  Backlog_State* backlog,
+                  Running_Program* program,
+                  int* exit_code,
+                  bool* force_quit) {
     ZoneScoped;
 
     switch (program->type) {
@@ -296,6 +301,13 @@ bool tick_program(Shell_State* shell, Running_Program* program, int* exit_code, 
             }
             make_env_var(shell, key);
         }
+        goto finish_builtin;
+    } break;
+
+    case Running_Program::CLEAR: {
+        rend->backlog_start = {};
+        rend->backlog_start.index = backlog->length;
+        rend->complete_redraw = true;
         goto finish_builtin;
     } break;
 

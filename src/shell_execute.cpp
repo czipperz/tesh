@@ -408,5 +408,7 @@ static void recognize_builtins(Running_Program* program,
         program->type = Running_Program::FALSE_;
     } else if (parse.args[0] == "export") {
         program->type = Running_Program::EXPORT;
+    } else if (parse.args[0] == "clear") {
+        program->type = Running_Program::CLEAR;
     }
 }

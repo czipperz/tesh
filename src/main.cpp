@@ -322,11 +322,15 @@ static void run_rc(Shell_State* shell, Backlog_State* backlog) {
     run_line(shell, backlog, contents, id);
 }
 
-static void tick_pipeline(Shell_State* shell, Running_Pipeline* pipeline, bool* force_quit) {
+static void tick_pipeline(Shell_State* shell,
+                          Render_State* rend,
+                          Backlog_State* backlog,
+                          Running_Pipeline* pipeline,
+                          bool* force_quit) {
     for (size_t p = 0; p < pipeline->pipeline.len; ++p) {
         Running_Program* program = &pipeline->pipeline[p];
         int exit_code = 1;
-        if (tick_program(shell, program, &exit_code, force_quit)) {
+        if (tick_program(shell, rend, backlog, program, &exit_code, force_quit)) {
             if (p + 1 == pipeline->length)
                 pipeline->last_exit_code = exit_code;
             pipeline->pipeline.remove(p);
@@ -347,7 +351,7 @@ static bool read_process_data(Shell_State* shell,
     for (size_t i = 0; i < shell->scripts.len; ++i) {
         Running_Script* script = &shell->scripts[i];
 
-        tick_pipeline(shell, &script->fg.pipeline, force_quit);
+        tick_pipeline(shell, rend, backlog, &script->fg.pipeline, force_quit);
         if (*force_quit)
             return true;
 

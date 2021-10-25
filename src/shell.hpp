@@ -7,6 +7,7 @@
 #include <cz/vector.hpp>
 #include "backlog.hpp"
 #include "error.hpp"
+#include "render.hpp"
 
 struct Running_Pipeline;
 struct Running_Script;
@@ -86,6 +87,7 @@ struct Running_Program {
         TRUE_,
         FALSE_,
         EXPORT,
+        CLEAR,
     } type;
     union {
         cz::Process process;
@@ -196,4 +198,9 @@ Error start_execute_line(Shell_State* shell,
 
 ///////////////////////////////////////////////////////////////////////////////
 
-bool tick_program(Shell_State* shell, Running_Program* program, int* exit_code, bool* force_exit);
+bool tick_program(Shell_State* shell,
+                  Render_State* rend,
+                  Backlog_State* backlog,
+                  Running_Program* program,
+                  int* exit_code,
+                  bool* force_exit);
