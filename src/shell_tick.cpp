@@ -316,6 +316,13 @@ bool tick_program(Shell_State* shell, Running_Program* program, int* exit_code, 
         goto finish_builtin;
     } break;
 
+    case Running_Program::TRUE_:
+        program->v.builtin.exit_code = 0;
+        goto finish_builtin;
+    case Running_Program::FALSE_:
+        program->v.builtin.exit_code = 1;
+        goto finish_builtin;
+
     default:
         CZ_PANIC("unreachable");
     }

@@ -81,6 +81,8 @@ struct Running_Program {
         ALIAS,
         VARIABLES,
         WHICH,
+        TRUE_,
+        FALSE_,
     } type;
     union {
         cz::Process process;
