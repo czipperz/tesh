@@ -18,12 +18,12 @@ static void standardize_arg(const Shell_State* shell,
     // Expand home directory.
     if (arg == "~") {
         cz::Str home = {};
-        get_env_var(shell, "HOME", &home);
+        get_var(shell, "HOME", &home);
         new_wd->reserve_exact(allocator, home.len + 1);
         new_wd->append(home);
     } else if (arg.starts_with("~/")) {
         cz::Str home = {};
-        get_env_var(shell, "HOME", &home);
+        get_var(shell, "HOME", &home);
         new_wd->reserve_exact(allocator, home.len + arg.len);
         new_wd->append(home);
         new_wd->push('/');
@@ -291,7 +291,7 @@ bool tick_program(Shell_State* shell, Running_Program* program, int* exit_code, 
     case Running_Program::VARIABLES: {
         auto& st = program->v.builtin.st.variables;
         for (size_t i = 0; i < st.names.len; ++i) {
-            set_env_var(shell, st.names[i], st.values[i]);
+            set_var(shell, st.names[i], st.values[i]);
         }
         goto finish_builtin;
     } break;

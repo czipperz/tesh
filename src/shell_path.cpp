@@ -41,7 +41,7 @@ bool find_in_path(Shell_State* shell,
                   cz::String* full_path) {
 #ifdef _WIN32
     cz::Str path_ext = ".EXE";
-    (void)get_env_var(shell, "PATHEXT", &path_ext);
+    (void)get_var(shell, "PATHEXT", &path_ext);
 #endif
 
     // Absolute paths are only looked up verbatim.
@@ -74,7 +74,7 @@ bool find_in_path(Shell_State* shell,
     }
 
     cz::Str path;
-    if (!get_env_var(shell, PATH_ENV_VAR, &path))
+    if (!get_var(shell, PATH_ENV_VAR, &path))
         return false;
 
     while (1) {

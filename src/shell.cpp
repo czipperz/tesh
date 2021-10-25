@@ -2,7 +2,7 @@
 
 #include <cz/heap.hpp>
 
-bool get_env_var(const Shell_State* shell, cz::Str key, cz::Str* value) {
+bool get_var(const Shell_State* shell, cz::Str key, cz::Str* value) {
     for (size_t i = 0; i < shell->variable_names.len; ++i) {
         if (key == shell->variable_names[i]) {
             *value = shell->variable_values[i];
@@ -13,7 +13,7 @@ bool get_env_var(const Shell_State* shell, cz::Str key, cz::Str* value) {
     return false;
 }
 
-void set_env_var(Shell_State* shell, cz::Str key, cz::Str value) {
+void set_var(Shell_State* shell, cz::Str key, cz::Str value) {
     for (size_t i = 0; i < shell->variable_names.len; ++i) {
         if (key == shell->variable_names[i]) {
             shell->variable_values[i].drop(cz::heap_allocator());

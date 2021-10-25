@@ -483,7 +483,7 @@ fail:;
 
 static void run_rc(Shell_State* shell, Backlog_State* backlog) {
     cz::Str home;
-    if (!get_env_var(shell, "HOME", &home))
+    if (!get_var(shell, "HOME", &home))
         return;
 
     cz::Input_File file;
@@ -1225,7 +1225,7 @@ cz::Buffer_Array history_arena;
 
 static void load_history(Prompt_State* prompt, Shell_State* shell) {
     cz::Str home = {};
-    if (!get_env_var(shell, "HOME", &home))
+    if (!get_var(shell, "HOME", &home))
         return;
 
     cz::String path = cz::format(temp_allocator, home, "/.tesh_history");
@@ -1270,7 +1270,7 @@ static void load_history(Prompt_State* prompt, Shell_State* shell) {
 
 static void save_history(Prompt_State* prompt, Shell_State* shell) {
     cz::Str home = {};
-    if (!get_env_var(shell, "HOME", &home))
+    if (!get_var(shell, "HOME", &home))
         return;
 
     cz::String path = cz::format(temp_allocator, home, "/.tesh_history");
@@ -1348,17 +1348,17 @@ static void load_environment_variables(Shell_State* shell) {
                 // Windows special environment variables have
                 // a = as the first character so ignore those.
                 if (key.len > 0)
-                    set_env_var(shell, key, value);
+                    set_var(shell, key, value);
             }
         }
     }
 
     // Set HOME to the user home directory.
     cz::Str temp;
-    if (!get_env_var(shell, "HOME", &temp)) {
+    if (!get_var(shell, "HOME", &temp)) {
         cz::String home = {};
         if (cz::env::get_home(cz::heap_allocator(), &home)) {
-            set_env_var(shell, "HOME", home);
+            set_var(shell, "HOME", home);
         }
     }
 #else
@@ -1368,7 +1368,7 @@ static void load_environment_variables(Shell_State* shell) {
         cz::Str key, value;
         if (line.split_excluding('=', &key, &value)) {
             if (key.len > 0)
-                set_env_var(shell, key, value);
+                set_var(shell, key, value);
         }
     }
 #endif

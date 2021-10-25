@@ -177,7 +177,7 @@ TEST_CASE("parse_script variable after arg is arg") {
 
 TEST_CASE("parse_script variable expand simple") {
     Shell_State shell = {};
-    set_env_var(&shell, "var", "$value");
+    set_var(&shell, "var", "$value");
     Parse_Script script = {};
     Error error = parse_script(&shell, cz::heap_allocator(), &script, "$var$var");
     REQUIRE(error == Error_Success);
@@ -189,7 +189,7 @@ TEST_CASE("parse_script variable expand simple") {
 
 TEST_CASE("parse_script variable expand inside quotes") {
     Shell_State shell = {};
-    set_env_var(&shell, "var", "$value");
+    set_var(&shell, "var", "$value");
     Parse_Script script = {};
     Error error = parse_script(&shell, cz::heap_allocator(), &script, "\"$var$var\"");
     REQUIRE(error == Error_Success);
@@ -212,7 +212,7 @@ TEST_CASE("parse_script 'echo $hi' hi is undefined") {
 
 TEST_CASE("parse_script multi word variable expanded") {
     Shell_State shell = {};
-    set_env_var(&shell, "var", "a b");
+    set_var(&shell, "var", "a b");
     Parse_Script script = {};
     Error error = parse_script(&shell, cz::heap_allocator(), &script, "\"$var\" echo $var");
     REQUIRE(error == Error_Success);
@@ -227,7 +227,7 @@ TEST_CASE("parse_script multi word variable expanded") {
 
 TEST_CASE("parse_script multi word variable a=$var keeps one word") {
     Shell_State shell = {};
-    set_env_var(&shell, "var", "multi word");
+    set_var(&shell, "var", "multi word");
     Parse_Script script = {};
     Error error = parse_script(&shell, cz::heap_allocator(), &script, "a=$var");
     REQUIRE(error == Error_Success);

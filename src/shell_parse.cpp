@@ -173,7 +173,7 @@ static Error parse_pipeline(const Shell_State* shell,
                         if (get_var_at_point(text, *index, &key)) {
                             *index += key.len;
                             cz::Str value;
-                            if (get_env_var(shell, key, &value)) {
+                            if (get_var(shell, key, &value)) {
                                 word.reserve(allocator, value.len);
                                 word.append(value);
                             }
@@ -222,7 +222,7 @@ static Error parse_pipeline(const Shell_State* shell,
                 *index += var.len;
 
                 cz::Str value;
-                if (get_env_var(shell, var, &value)) {
+                if (get_var(shell, var, &value)) {
                     if (key.len > 0) {
                         // a=$var is equivalent to a="$var"
                         word.reserve(allocator, value.len);

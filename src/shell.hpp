@@ -29,8 +29,8 @@ struct Shell_State {
     cz::String working_directory;
 };
 
-bool get_env_var(const Shell_State* shell, cz::Str key, cz::Str* value);
-void set_env_var(Shell_State* shell, cz::Str key, cz::Str value);
+bool get_var(const Shell_State* shell, cz::Str key, cz::Str* value);
+void set_var(Shell_State* shell, cz::Str key, cz::Str value);
 
 void cleanup_processes(Shell_State* shell);
 void recycle_process(Shell_State* shell, Running_Script* script);
