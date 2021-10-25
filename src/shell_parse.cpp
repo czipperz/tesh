@@ -190,6 +190,10 @@ static Error parse_pipeline(const Shell_State* shell,
                         if (c2 == '"' || c2 == '\\' || c2 == '`' || c2 == '$') {
                             c = c2;
                             ++*index;
+                        } else if (c2 == '\n') {
+                            // Skip backslash newline.
+                            ++*index;
+                            continue;
                         }
                     }
                     word.reserve(allocator, 1);
