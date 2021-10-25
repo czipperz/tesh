@@ -11,6 +11,7 @@ compile_commands.json
 GPATH
 GRTAGS
 GTAGS
+/res/logo.ico
 
 # Downloaded files
 SDL
