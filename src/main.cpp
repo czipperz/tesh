@@ -1347,8 +1347,10 @@ static void load_environment_variables(Shell_State* shell) {
             if (line.split_excluding('=', &key, &value)) {
                 // Windows special environment variables have
                 // a = as the first character so ignore those.
-                if (key.len > 0)
+                if (key.len > 0) {
                     set_var(shell, key, value);
+                    make_env_var(shell, key);
+                }
             }
         }
     }
@@ -1359,6 +1361,7 @@ static void load_environment_variables(Shell_State* shell) {
         cz::String home = {};
         if (cz::env::get_home(cz::heap_allocator(), &home)) {
             set_var(shell, "HOME", home);
+            make_env_var(shell, "HOME");
         }
     }
 #else
@@ -1367,8 +1370,10 @@ static void load_environment_variables(Shell_State* shell) {
         cz::Str line = *iter;
         cz::Str key, value;
         if (line.split_excluding('=', &key, &value)) {
-            if (key.len > 0)
+            if (key.len > 0) {
                 set_var(shell, key, value);
+                make_env_var(shell, key);
+            }
         }
     }
 #endif
