@@ -36,7 +36,7 @@ static void kill_program(Running_Program* program) {
     }
 }
 
-static void cleanup_pipeline(Running_Pipeline* pipeline) {
+void cleanup_pipeline(Running_Pipeline* pipeline) {
     for (size_t p = 0; p < pipeline->pipeline.len; ++p) {
         kill_program(&pipeline->pipeline[p]);
     }
@@ -72,6 +72,11 @@ void recycle_arena(Shell_State* shell, cz::Buffer_Array arena) {
     arena.clear();
     shell->arenas.reserve(cz::heap_allocator(), 1);
     shell->arenas.push(arena);
+}
+
+void recycle_pipeline(Shell_State* shell, Running_Pipeline* pipeline) {
+    cleanup_pipeline(pipeline);
+    recycle_arena(shell, pipeline->arena);
 }
 
 void recycle_process(Shell_State* shell, Running_Script* script) {

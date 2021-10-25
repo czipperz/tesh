@@ -41,8 +41,6 @@ Error start_execute_script(Shell_State* shell,
                            uint64_t id) {
     Error error = Error_Success;
 
-    cz::Buffer_Array pipeline_arena;
-
     Running_Script running = {};
     running.id = id;
 
@@ -64,21 +62,9 @@ Error start_execute_script(Shell_State* shell,
 
     running.arena = arena;
 
-    switch (parse.first.type) {
-    case Parse_Line::NONE:
-        running.fg.type = Running_Line::NONE;
-        break;
-    }
-    running.fg.continuation = parse.first.continuation;
-
-    // TODO: I think we should refactor this to create the
-    // Running_Script then adding a Running_Line to it.  Idk.
-    pipeline_arena = alloc_arena(shell);
-    error = start_execute_pipeline(shell, backlog, pipeline_arena, running, parse.first.pipeline,
-                                   &running.fg.pipeline);
-    if (error != Error_Success) {
-        goto cleanup3;
-    }
+    error = start_execute_line(shell, backlog, &running, parse.first);
+    if (error != Error_Success)
+        goto cleanup2;
 
     shell->scripts.reserve(cz::heap_allocator(), 1);
     shell->scripts.push(running);
@@ -88,14 +74,40 @@ Error start_execute_script(Shell_State* shell,
 
     return Error_Success;
 
-cleanup3:
-    recycle_arena(shell, pipeline_arena);
 cleanup2:
     running.script_out.close();
     running.out.close();
 cleanup1:
     running.script_in.close();
     running.in.close();
+    return error;
+}
+
+///////////////////////////////////////////////////////////////////////////////
+
+Error start_execute_line(Shell_State* shell,
+                         Backlog_State* backlog,
+                         Running_Script* running,
+                         const Parse_Line& line) {
+    switch (line.type) {
+    case Parse_Line::NONE:
+        running->fg.type = Running_Line::NONE;
+        break;
+    case Parse_Line::ALWAYS:
+        running->fg.type = Running_Line::ALWAYS;
+        break;
+    default:
+        CZ_PANIC("unreachable");
+    }
+    running->fg.continuation = line.continuation;
+
+    // TODO: I think we should refactor this to create the
+    // Running_Script then adding a Running_Line to it.  Idk.
+    cz::Buffer_Array pipeline_arena = alloc_arena(shell);
+    Error error = start_execute_pipeline(shell, backlog, pipeline_arena, *running, line.pipeline,
+                                         &running->fg.pipeline);
+    if (error != Error_Success)
+        recycle_arena(shell, pipeline_arena);
     return error;
 }
 

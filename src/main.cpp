@@ -495,15 +495,37 @@ static bool read_process_data(Shell_State* shell,
             }
 #endif
 
-            // If we're attached then we auto scroll but we can hit an edge case where the
-            // final output isn't scrolled to.  So we stop halfway through the output.  I think
-            // it would be better if this just called `ensure_prompt_on_screen`.
-            if (shell->active_process == script->id)
-                rend->auto_scroll = true;
+            if (script->fg.continuation) {
+                // TODO: we shouldn't throw away the arena and then immediately realloc it.
+                // It's essentially free we're not even calling `free` but still.  Bad design.
+                recycle_pipeline(shell, &script->fg.pipeline);
+                script->fg.pipeline = {};
 
-            recycle_process(shell, script);
-            changes = true;
-            --i;
+                Error error = Error_Success;
+                switch (script->fg.type) {
+                case Running_Line::ALWAYS:
+                    error = start_execute_line(shell, backlog, script, *script->fg.continuation);
+                    break;
+
+                default:
+                    CZ_PANIC("unreachable");
+                    break;
+                }
+
+                if (error != Error_Success) {
+                    append_text(backlog, script->id, "Error: failed to execute continuation\n");
+                }
+            } else {
+                // If we're attached then we auto scroll but we can hit an edge case where the
+                // final output isn't scrolled to.  So we stop halfway through the output.  I think
+                // it would be better if this just called `ensure_prompt_on_screen`.
+                if (shell->active_process == script->id)
+                    rend->auto_scroll = true;
+
+                recycle_process(shell, script);
+                changes = true;
+                --i;
+            }
         }
     }
     return backlog->length != starting_length || changes;

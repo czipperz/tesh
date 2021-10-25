@@ -8,6 +8,7 @@
 #include "backlog.hpp"
 #include "error.hpp"
 
+struct Running_Pipeline;
 struct Running_Script;
 struct Parse_Line;
 
@@ -33,6 +34,7 @@ void set_env_var(Shell_State* shell, cz::Str key, cz::Str value);
 
 void cleanup_processes(Shell_State* shell);
 void recycle_process(Shell_State* shell, Running_Script* script);
+void recycle_pipeline(Shell_State* shell, Running_Pipeline* script);
 
 cz::Buffer_Array alloc_arena(Shell_State* shell);
 void recycle_arena(Shell_State* shell, cz::Buffer_Array arena);
@@ -119,7 +121,7 @@ struct Running_Line {
     Running_Pipeline pipeline;
     enum Type {
         NONE,
-        // ALWAYS,
+        ALWAYS,
         // AND,
         // OR,
     } type;
@@ -186,6 +188,11 @@ Error start_execute_script(Shell_State* shell,
                            const Parse_Script& script,
                            cz::Str command_line,
                            uint64_t id);
+
+Error start_execute_line(Shell_State* shell,
+                         Backlog_State* backlog,
+                         Running_Script* running_script,
+                         const Parse_Line& line);
 
 ///////////////////////////////////////////////////////////////////////////////
 
