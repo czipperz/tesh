@@ -916,6 +916,71 @@ static bool handle_prompt_manipulation_commands(Shell_State* shell,
     return true;
 }
 
+static bool handle_scroll_commands(Shell_State* shell,
+                                   Prompt_State* prompt,
+                                   Backlog_State* backlog,
+                                   Render_State* rend,
+                                   uint16_t mod,
+                                   SDL_Keycode key) {
+    if ((mod == 0 && key == SDLK_PAGEDOWN) || (mod == KMOD_CTRL && key == SDLK_v)) {
+        int lines = cz::max(rend->window_rows, 6) - 3;
+        scroll_down(rend, backlog, lines);
+    } else if ((mod == 0 && key == SDLK_PAGEUP) || (mod == KMOD_ALT && key == SDLK_v)) {
+        int lines = cz::max(rend->window_rows, 6) - 3;
+        scroll_up(rend, backlog, lines);
+    } else if (mod == KMOD_ALT && key == SDLK_LESS) {
+        size_t event_index = backlog->events.len;
+        while (event_index-- > 0) {
+            Backlog_Event* event = &backlog->events[event_index];
+            if (event->type == BACKLOG_EVENT_START_PROMPT) {
+                rend->backlog_start = {};
+                rend->backlog_start.index = backlog->events[event_index].index;
+                break;
+            }
+        }
+    } else if (mod == (KMOD_CTRL | KMOD_ALT) && key == SDLK_b) {
+        size_t event_index = 0;
+        while (event_index < backlog->events.len &&
+               backlog->events[event_index].index < rend->backlog_start.index) {
+            ++event_index;
+        }
+        while (event_index-- > 0) {
+            Backlog_Event* event = &backlog->events[event_index];
+            if (event->type == BACKLOG_EVENT_START_PROMPT) {
+                rend->backlog_start = {};
+                rend->backlog_start.index = backlog->events[event_index].index;
+                break;
+            }
+        }
+    } else if (mod == (KMOD_CTRL | KMOD_ALT) && key == SDLK_f) {
+        size_t event_index = 0;
+        while (event_index < backlog->events.len &&
+               backlog->events[event_index].index <= rend->backlog_start.index) {
+            ++event_index;
+        }
+        for (; event_index < backlog->events.len; ++event_index) {
+            Backlog_Event* event = &backlog->events[event_index];
+            if (event->type == BACKLOG_EVENT_START_PROMPT) {
+                rend->backlog_start = {};
+                rend->backlog_start.index = backlog->events[event_index].index;
+                break;
+            }
+        }
+        if (event_index >= backlog->events.len) {
+            rend->backlog_start = {};
+            rend->backlog_start.index = backlog->length;
+        }
+    } else {
+        return false;
+    }
+
+    shell->active_process = -1;
+    rend->auto_page = false;
+    rend->auto_scroll = false;
+    rend->complete_redraw = true;
+    return true;
+}
+
 static int process_events(Backlog_State* backlog,
                           Prompt_State* prompt,
                           Render_State* rend,
@@ -963,6 +1028,11 @@ static int process_events(Backlog_State* backlog,
                 continue;
             }
 
+            if (handle_scroll_commands(shell, prompt, backlog, rend, mod, key)) {
+                ++num_events;
+                continue;
+            }
+
             if (mod == KMOD_CTRL && key == SDLK_z) {
                 rend->auto_page = false;
                 rend->auto_scroll = true;
@@ -974,30 +1044,14 @@ static int process_events(Backlog_State* backlog,
                 }
                 ++num_events;
             }
+
             if (mod == KMOD_CTRL && key == SDLK_l) {
                 rend->backlog_start = {};
                 rend->backlog_start.index = backlog->length;
                 rend->complete_redraw = true;
                 ++num_events;
             }
-            if ((mod == 0 && key == SDLK_PAGEDOWN) || (mod == KMOD_CTRL && key == SDLK_v)) {
-                rend->auto_page = false;
-                rend->auto_scroll = false;
-                shell->active_process = -1;
-                int lines = cz::max(rend->window_rows, 6) - 3;
-                scroll_down(rend, backlog, lines);
-                rend->complete_redraw = true;
-                ++num_events;
-            }
-            if ((mod == 0 && key == SDLK_PAGEUP) || (mod == KMOD_ALT && key == SDLK_v)) {
-                rend->auto_page = false;
-                rend->auto_scroll = false;
-                shell->active_process = -1;
-                int lines = cz::max(rend->window_rows, 6) - 3;
-                scroll_up(rend, backlog, lines);
-                rend->complete_redraw = true;
-                ++num_events;
-            }
+
             if (mod == KMOD_ALT && key == SDLK_GREATER) {
                 rend->auto_page = false;
                 rend->auto_scroll = true;
@@ -1005,66 +1059,6 @@ static int process_events(Backlog_State* backlog,
                 rend->backlog_start.index = backlog->length;
                 int lines = cz::max(rend->window_rows, 3) - 3;
                 scroll_up(rend, backlog, lines);
-                rend->complete_redraw = true;
-                ++num_events;
-            }
-            if (mod == KMOD_ALT && key == SDLK_LESS) {
-                rend->auto_page = false;
-                rend->auto_scroll = false;
-                shell->active_process = -1;
-                size_t event_index = backlog->events.len;
-                while (event_index-- > 0) {
-                    Backlog_Event* event = &backlog->events[event_index];
-                    if (event->type == BACKLOG_EVENT_START_PROMPT) {
-                        rend->backlog_start = {};
-                        rend->backlog_start.index = backlog->events[event_index].index;
-                        rend->complete_redraw = true;
-                        ++num_events;
-                        break;
-                    }
-                }
-            }
-            if (mod == (KMOD_CTRL | KMOD_ALT) && key == SDLK_b) {
-                rend->auto_page = false;
-                rend->auto_scroll = false;
-                shell->active_process = -1;
-                size_t event_index = 0;
-                while (event_index < backlog->events.len &&
-                       backlog->events[event_index].index < rend->backlog_start.index) {
-                    ++event_index;
-                }
-                while (event_index-- > 0) {
-                    Backlog_Event* event = &backlog->events[event_index];
-                    if (event->type == BACKLOG_EVENT_START_PROMPT) {
-                        rend->backlog_start = {};
-                        rend->backlog_start.index = backlog->events[event_index].index;
-                        rend->complete_redraw = true;
-                        ++num_events;
-                        break;
-                    }
-                }
-            }
-            if (mod == (KMOD_CTRL | KMOD_ALT) && key == SDLK_f) {
-                rend->auto_page = false;
-                rend->auto_scroll = false;
-                shell->active_process = -1;
-                size_t event_index = 0;
-                while (event_index < backlog->events.len &&
-                       backlog->events[event_index].index <= rend->backlog_start.index) {
-                    ++event_index;
-                }
-                for (; event_index < backlog->events.len; ++event_index) {
-                    Backlog_Event* event = &backlog->events[event_index];
-                    if (event->type == BACKLOG_EVENT_START_PROMPT) {
-                        rend->backlog_start = {};
-                        rend->backlog_start.index = backlog->events[event_index].index;
-                        break;
-                    }
-                }
-                if (event_index >= backlog->events.len) {
-                    rend->backlog_start = {};
-                    rend->backlog_start.index = backlog->length;
-                }
                 rend->complete_redraw = true;
                 ++num_events;
             }
