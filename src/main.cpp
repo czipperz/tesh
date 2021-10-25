@@ -545,7 +545,8 @@ static bool read_process_data(Shell_State* shell,
         if (script->fg.pipeline.pipeline.len == 0) {
 #ifdef TRACY_ENABLE
             {
-                cz::String message = cz::format(temp_allocator, "End: ", script->command_line);
+                cz::String message =
+                    cz::format(temp_allocator, "End: ", script->fg.pipeline.command_line);
                 TracyMessage(message.buffer, message.len);
             }
 #endif
@@ -807,7 +808,7 @@ static int process_events(Backlog_State* backlog,
                     if (script) {
 #ifdef TRACY_ENABLE
                         cz::String message =
-                            cz::format(temp_allocator, "End: ", script->command_line);
+                            cz::format(temp_allocator, "End: ", script->fg.pipeline.command_line);
                         TracyMessage(message.buffer, message.len);
 #endif
 
