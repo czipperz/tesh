@@ -570,6 +570,7 @@ static bool read_process_data(Shell_State* shell,
                 }
 
                 // Rerun to prevent long scripts from only doing one command per frame.
+                // TODO: rate limit to prevent big scripts (with all builtins) from hanging.
                 --i;
             } else {
             stop:
