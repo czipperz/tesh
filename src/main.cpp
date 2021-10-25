@@ -566,11 +566,13 @@ static bool read_process_data(Shell_State* shell,
                 Error error = start_execute_line(shell, backlog, script, *next);
                 if (error != Error_Success && error != Error_Empty) {
                     append_text(backlog, script->id, "Error: failed to execute continuation\n");
+                    goto stop;
                 }
 
                 // Rerun to prevent long scripts from only doing one command per frame.
                 --i;
             } else {
+            stop:
                 // If we're attached then we auto scroll but we can hit an edge case where the
                 // final output isn't scrolled to.  So we stop halfway through the output.  I think
                 // it would be better if this just called `ensure_prompt_on_screen`.
