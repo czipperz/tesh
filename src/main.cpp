@@ -17,51 +17,20 @@
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
-#include <SDL_syswm.h>
 #include <shellscalingapi.h>
 #include <windows.h>
 #include "../res/resources.h"
 #endif
 
+#include "backlog.hpp"
 #include "config.hpp"
 #include "global.hpp"
+#include "render.hpp"
 #include "shell.hpp"
 
 ///////////////////////////////////////////////////////////////////////////////
 // Type definitions
 ///////////////////////////////////////////////////////////////////////////////
-
-struct Visual_Point {
-    int y;            // visual y
-    int x;            // visual x
-    uint64_t index;   // absolute position
-    uint64_t line;    // line number
-    uint64_t column;  // column number
-};
-
-struct Render_State {
-    TTF_Font* font;
-    int font_size;
-    float dpi_scale;
-    int font_width;
-    int font_height;
-    int window_cols;
-    int window_rows;
-    int window_rows_ru;
-    SDL_Surface* backlog_cache[256];
-    SDL_Surface* prompt_cache[256];
-
-    bool complete_redraw;
-
-    SDL_Color backlog_fg_color;
-    Visual_Point backlog_start;  // First point that was drawn
-    Visual_Point backlog_end;    // Last point that was drawn
-
-    bool auto_page;
-    bool auto_scroll;
-
-    SDL_Color prompt_fg_color;
-};
 
 struct Prompt_State {
     cz::Str prefix;
@@ -77,151 +46,6 @@ struct Prompt_State {
 ///////////////////////////////////////////////////////////////////////////////
 // Renderer methods
 ///////////////////////////////////////////////////////////////////////////////
-
-static void set_icon(SDL_Window* sdl_window) {
-    ZoneScoped;
-
-    // Try to set logo using Windows magic.  This results in
-    // much higher definition on Windows so is preferred.
-#ifdef _WIN32
-    SDL_SysWMinfo wminfo;
-    SDL_VERSION(&wminfo.version);
-    if (SDL_GetWindowWMInfo(sdl_window, &wminfo) == 1) {
-        HWND hwnd = wminfo.info.win.window;
-
-        HINSTANCE handle = GetModuleHandle(nullptr);
-        HICON icon = LoadIcon(handle, "IDI_MAIN_ICON");
-        if (icon) {
-            SetClassLongPtr(hwnd, GCLP_HICON, (LONG_PTR)icon);
-            return;
-        }
-    }
-#endif
-
-    // Fallback to letting SDL do it.
-    cz::String logo = cz::format(temp_allocator, program_directory, "logo.png");
-    SDL_Surface* icon = IMG_Load(logo.buffer);
-    if (icon) {
-        SDL_SetWindowIcon(sdl_window, icon);
-        SDL_FreeSurface(icon);
-    }
-}
-
-static void close_font(Render_State* rend) {
-    ZoneScoped;
-    for (int i = 0; i < CZ_DIM(rend->backlog_cache); i++) {
-        SDL_FreeSurface(rend->backlog_cache[i]);
-        rend->backlog_cache[i] = NULL;
-    }
-    for (int i = 0; i < CZ_DIM(rend->prompt_cache); i++) {
-        SDL_FreeSurface(rend->prompt_cache[i]);
-        rend->prompt_cache[i] = NULL;
-    }
-    TTF_CloseFont(rend->font);
-}
-
-static TTF_Font* open_font(const char* path, int font_size) {
-    ZoneScoped;
-    return TTF_OpenFont(path, font_size);
-}
-
-static SDL_Surface* rasterize_character(const char* text,
-                                        TTF_Font* font,
-                                        int style,
-                                        SDL_Color fgc) {
-    ZoneScoped;
-    TTF_SetFontStyle(font, style);
-    return TTF_RenderText_Blended(font, text, fgc);
-}
-
-static SDL_Surface* rasterize_character_cached(Render_State* rend,
-                                               SDL_Surface** cache,
-                                               char ch,
-                                               SDL_Color color) {
-    uint8_t index = (uint8_t)ch;
-    if (cache[index])
-        return cache[index];
-
-    char text[2] = {ch, 0};
-    SDL_Surface* surface = rasterize_character(text, rend->font, 0, color);
-    CZ_ASSERT(surface);
-    cache[index] = surface;
-    return surface;
-}
-
-static int coord_trans(Visual_Point* point, int num_cols, char ch) {
-    ++point->index;
-
-    if (ch == '\n') {
-        ++point->y;
-        point->x = 0;
-        ++point->line;
-        point->column = 0;
-        return 0;
-    }
-
-    int width = 1;
-    if (ch == '\t') {
-        uint64_t lcol2 = point->column;
-        lcol2 += cfg.tab_width;
-        lcol2 -= lcol2 % cfg.tab_width;
-        width = (int)(lcol2 - point->column);
-    }
-
-    // TODO: should this be >=?
-    if (point->x + width > num_cols) {
-        ++point->y;
-        point->x = 0;
-    }
-
-    point->x += width;
-    point->column += width;
-    return width;
-}
-
-static bool render_char(SDL_Surface* window_surface,
-                        Render_State* rend,
-                        Visual_Point* point,
-                        SDL_Surface** cache,
-                        uint32_t background,
-                        SDL_Color foreground,
-                        char c) {
-    SDL_Rect rect = {point->x * rend->font_width, point->y * rend->font_height};
-    uint64_t old_y = point->y;
-    int width = coord_trans(point, rend->window_cols, c);
-
-    if (point->y != old_y) {
-        rect.w = window_surface->w - rect.x;
-        rect.h = rend->font_height;
-        SDL_FillRect(window_surface, &rect, background);
-
-        rect.x = 0;
-        rect.y += rend->font_height;
-
-        // Beyond bottom of screen.
-        if (point->y >= rend->window_rows_ru)
-            return false;
-
-        // Newlines aren't drawn.
-        if (width == 0)
-            return true;
-    }
-
-    ZoneScopedN("blit_character");
-    if (c == '\t') {
-        rect.w = width * rend->font_width;
-        rect.h = rend->font_height;
-        SDL_FillRect(window_surface, &rect, background);
-    } else {
-        SDL_Surface* s = rasterize_character_cached(rend, cache, c, foreground);
-        rect.w = rend->font_width;
-        rect.h = rend->font_height;
-        SDL_FillRect(window_surface, &rect, background);
-        SDL_BlitSurface(s, NULL, window_surface, &rect);
-    }
-
-    return true;
-}
 
 static void render_backlog(SDL_Surface* window_surface,
                            Render_State* rend,
