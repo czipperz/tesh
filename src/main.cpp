@@ -567,6 +567,9 @@ static bool read_process_data(Shell_State* shell,
                 if (error != Error_Success && error != Error_Empty) {
                     append_text(backlog, script->id, "Error: failed to execute continuation\n");
                 }
+
+                // Rerun to prevent long scripts from only doing one command per frame.
+                --i;
             } else {
                 // If we're attached then we auto scroll but we can hit an edge case where the
                 // final output isn't scrolled to.  So we stop halfway through the output.  I think
