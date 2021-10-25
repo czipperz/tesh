@@ -1455,7 +1455,7 @@ int actual_main(int argc, char** argv) {
     }
 
     SDL_Window* window =
-        SDL_CreateWindow("tesh", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
+        SDL_CreateWindow("Tesh", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
                          (int)(800 * rend.dpi_scale), (int)(800 * rend.dpi_scale),
                          SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI);
     if (!window) {
