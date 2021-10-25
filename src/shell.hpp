@@ -115,19 +115,21 @@ struct Running_Program {
 struct Running_Pipeline {
     cz::Str command_line;
     cz::Vector<Running_Program> pipeline;
+    size_t length;
+    int last_error_code;
     cz::Vector<cz::File_Descriptor> files;
     cz::Buffer_Array arena;
 };
 
+struct Parse_Continuation {
+    Parse_Line* start;
+    Parse_Line* success;
+    Parse_Line* failure;
+};
+
 struct Running_Line {
     Running_Pipeline pipeline;
-    enum Type {
-        NONE,
-        ALWAYS,
-        // AND,
-        // OR,
-    } type;
-    Parse_Line* continuation;
+    Parse_Continuation on;
 };
 
 struct Running_Script {
@@ -163,14 +165,7 @@ struct Parse_Pipeline {
 
 struct Parse_Line {
     Parse_Pipeline pipeline;
-    enum Type {
-        NONE,
-        ALWAYS,  // ';', '\n'
-        // AND,     // '&&'
-        // OR,      // '||'
-        // ASYNC,   // '&'
-    } type;
-    Parse_Line* continuation;
+    Parse_Continuation on;
 };
 
 struct Parse_Script {

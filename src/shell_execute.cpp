@@ -89,17 +89,7 @@ Error start_execute_line(Shell_State* shell,
                          Backlog_State* backlog,
                          Running_Script* running,
                          const Parse_Line& line) {
-    switch (line.type) {
-    case Parse_Line::NONE:
-        running->fg.type = Running_Line::NONE;
-        break;
-    case Parse_Line::ALWAYS:
-        running->fg.type = Running_Line::ALWAYS;
-        break;
-    default:
-        CZ_PANIC("unreachable");
-    }
-    running->fg.continuation = line.continuation;
+    running->fg.on = line.on;
 
     // TODO: I think we should refactor this to create the
     // Running_Script then adding a Running_Line to it.  Idk.
@@ -120,6 +110,8 @@ static Error start_execute_pipeline(Shell_State* shell,
                                     const Parse_Pipeline& parse,
                                     Running_Pipeline* running) {
     ZoneScoped;
+
+    running->length = parse.pipeline.len;
 
     if (parse.pipeline.len == 0)
         return Error_Empty;

@@ -134,7 +134,8 @@ TEST_CASE("parse_script double quote basic") {
 TEST_CASE("parse_script double quote escape") {
     Shell_State shell = {};
     Parse_Script script = {};
-    Error error = parse_script(&shell, cz::heap_allocator(), &script, "\"\\\\ \\n \\a \\$ \\` \\\"\"");
+    Error error =
+        parse_script(&shell, cz::heap_allocator(), &script, "\"\\\\ \\n \\a \\$ \\` \\\"\"");
     REQUIRE(error == Error_Success);
     Parse_Pipeline pipeline = script.first.pipeline;
     REQUIRE(pipeline.pipeline.len == 1);
@@ -242,7 +243,8 @@ TEST_CASE("parse_script multi word variable a=$var keeps one word") {
 TEST_CASE("parse_script file indirection") {
     Shell_State shell = {};
     Parse_Script script = {};
-    Error error = parse_script(&shell, cz::heap_allocator(), &script, "echo < in arg1 > out arg2 2> err arg3");
+    Error error = parse_script(&shell, cz::heap_allocator(), &script,
+                               "echo < in arg1 > out arg2 2> err arg3");
     REQUIRE(error == Error_Success);
     Parse_Pipeline pipeline = script.first.pipeline;
     REQUIRE(pipeline.pipeline.len == 1);
@@ -282,12 +284,11 @@ TEST_CASE("parse_script semicolon combiner") {
     CHECK(pipeline.pipeline[0].args[0] == "echo");
     CHECK(pipeline.pipeline[0].args[1] == "hi");
 
-    CHECK(script.first.type == Parse_Line::ALWAYS);
-    REQUIRE(script.first.continuation);
-    CHECK(script.first.continuation->type == Parse_Line::NONE);
-    CHECK_FALSE(script.first.continuation->continuation);
+    REQUIRE(script.first.on.success);
+    CHECK(script.first.on.success == script.first.on.failure);
+    CHECK_FALSE(script.first.on.success->on.success);
 
-    pipeline = script.first.continuation->pipeline;
+    pipeline = script.first.on.success->pipeline;
     REQUIRE(pipeline.pipeline.len == 1);
     REQUIRE(pipeline.pipeline[0].args.len == 2);
     CHECK(pipeline.pipeline[0].args[0] == "echo");
@@ -305,12 +306,78 @@ TEST_CASE("parse_script newline combiner") {
     CHECK(pipeline.pipeline[0].args[0] == "echo");
     CHECK(pipeline.pipeline[0].args[1] == "hi");
 
-    CHECK(script.first.type == Parse_Line::ALWAYS);
-    REQUIRE(script.first.continuation);
-    CHECK(script.first.continuation->type == Parse_Line::NONE);
-    CHECK_FALSE(script.first.continuation->continuation);
+    REQUIRE(script.first.on.success);
+    CHECK(script.first.on.success == script.first.on.failure);
+    CHECK_FALSE(script.first.on.success->on.success);
 
-    pipeline = script.first.continuation->pipeline;
+    pipeline = script.first.on.success->pipeline;
+    REQUIRE(pipeline.pipeline.len == 1);
+    REQUIRE(pipeline.pipeline[0].args.len == 2);
+    CHECK(pipeline.pipeline[0].args[0] == "echo");
+    CHECK(pipeline.pipeline[0].args[1] == "bye");
+}
+
+TEST_CASE("parse_script && combiner") {
+    Shell_State shell = {};
+    Parse_Script script = {};
+    Error error = parse_script(&shell, cz::heap_allocator(), &script, "echo hi && echo bye");
+    REQUIRE(error == Error_Success);
+    Parse_Pipeline pipeline = script.first.pipeline;
+    REQUIRE(pipeline.pipeline.len == 1);
+    REQUIRE(pipeline.pipeline[0].args.len == 2);
+    CHECK(pipeline.pipeline[0].args[0] == "echo");
+    CHECK(pipeline.pipeline[0].args[1] == "hi");
+
+    REQUIRE(script.first.on.success);
+    CHECK_FALSE(script.first.on.failure);
+    CHECK_FALSE(script.first.on.success->on.success);
+
+    pipeline = script.first.on.success->pipeline;
+    REQUIRE(pipeline.pipeline.len == 1);
+    REQUIRE(pipeline.pipeline[0].args.len == 2);
+    CHECK(pipeline.pipeline[0].args[0] == "echo");
+    CHECK(pipeline.pipeline[0].args[1] == "bye");
+}
+
+TEST_CASE("parse_script || combiner") {
+    Shell_State shell = {};
+    Parse_Script script = {};
+    Error error = parse_script(&shell, cz::heap_allocator(), &script, "echo hi || echo bye");
+    REQUIRE(error == Error_Success);
+    Parse_Pipeline pipeline = script.first.pipeline;
+    REQUIRE(pipeline.pipeline.len == 1);
+    REQUIRE(pipeline.pipeline[0].args.len == 2);
+    CHECK(pipeline.pipeline[0].args[0] == "echo");
+    CHECK(pipeline.pipeline[0].args[1] == "hi");
+
+    REQUIRE(script.first.on.failure);
+    CHECK_FALSE(script.first.on.success);
+    CHECK_FALSE(script.first.on.failure->on.success);
+
+    pipeline = script.first.on.failure->pipeline;
+    REQUIRE(pipeline.pipeline.len == 1);
+    REQUIRE(pipeline.pipeline[0].args.len == 2);
+    CHECK(pipeline.pipeline[0].args[0] == "echo");
+    CHECK(pipeline.pipeline[0].args[1] == "bye");
+}
+
+TEST_CASE("parse_script & combiner") {
+    Shell_State shell = {};
+    Parse_Script script = {};
+    Error error = parse_script(&shell, cz::heap_allocator(), &script, "echo hi & echo bye");
+    REQUIRE(error == Error_Success);
+    Parse_Pipeline pipeline = script.first.pipeline;
+    REQUIRE(pipeline.pipeline.len == 1);
+    REQUIRE(pipeline.pipeline[0].args.len == 2);
+    CHECK(pipeline.pipeline[0].args[0] == "echo");
+    CHECK(pipeline.pipeline[0].args[1] == "hi");
+
+    REQUIRE(script.first.on.start);
+    CHECK_FALSE(script.first.on.success);
+    CHECK_FALSE(script.first.on.failure);
+    CHECK_FALSE(script.first.on.start->on.success);
+
+    pipeline = script.first.on.start->pipeline;
     REQUIRE(pipeline.pipeline.len == 1);
     REQUIRE(pipeline.pipeline[0].args.len == 2);
     CHECK(pipeline.pipeline[0].args[0] == "echo");

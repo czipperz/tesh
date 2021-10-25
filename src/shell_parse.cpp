@@ -34,6 +34,9 @@ Error parse_script(const Shell_State* shell,
                    cz::Str text) {
     size_t index = 0;
 
+    Parse_Line* outer_success = nullptr;
+    Parse_Line* outer_failure = nullptr;
+
     Parse_Line* line = &out->first;
     while (1) {
         Error error = parse_pipeline(shell, allocator, &line->pipeline, text, &index);
@@ -41,25 +44,38 @@ Error parse_script(const Shell_State* shell,
             return error;
 
         // End of script.
-        if (index == text.len) {
-            line->type = Parse_Line::NONE;
-            line->continuation = nullptr;
+        if (index == text.len)
             return Error_Success;
-        }
+
+        Parse_Line* next = allocator.alloc<Parse_Line>();
+        CZ_ASSERT(next);
+        *next = {};
 
         // Register continuation.
         switch (text[index]) {
         case '\n':
         case ';':
-            line->type = Parse_Line::ALWAYS;
+            line->on.success = next;
+            line->on.failure = next;
             break;
+        case '|':
+            CZ_DEBUG_ASSERT(text[index + 1] == '|');
+            ++index;
+            line->on.success = outer_success;
+            line->on.failure = next;
+            break;
+        case '&':
+            if (text.slice_start(index + 1).starts_with('&')) {
+                line->on.success = next;
+                line->on.failure = outer_failure;
+                ++index;
+            } else {
+                line->on.start = next;
+            }
         }
         ++index;
 
-        line->continuation = allocator.alloc<Parse_Line>();
-        CZ_ASSERT(line->continuation);
-        *line->continuation = {};
-        line = line->continuation;
+        line = next;
     }
 }
 
@@ -106,6 +122,7 @@ static Error parse_pipeline(const Shell_State* shell,
             switch (text[*index]) {
             case CZ_BLANK_CASES:
             case '|':
+            case '&':
             case ';':
             case '\n':
                 goto endofword;
@@ -279,6 +296,9 @@ static Error parse_pipeline(const Shell_State* shell,
         // Special character.
         switch (text[*index]) {
         case '|': {
+            if (text.slice_start(*index + 1).starts_with('|'))  // '||'
+                goto break_outer;
+
             Error error = finish_program(out, allocator, &program, &state);
             if (error != Error_Success)
                 return error;
@@ -300,6 +320,7 @@ static Error parse_pipeline(const Shell_State* shell,
 
         case ';':
         case '\n':
+        case '&':
             goto break_outer;
         }
     }

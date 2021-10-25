@@ -499,23 +499,19 @@ static bool read_process_data(Shell_State* shell,
             }
 #endif
 
-            if (script->fg.continuation) {
+            Parse_Line* next = nullptr;
+            if (script->fg.pipeline.last_error_code == 0)
+                next = script->fg.on.success;
+            else
+                next = script->fg.on.failure;
+
+            if (next) {
                 // TODO: we shouldn't throw away the arena and then immediately realloc it.
                 // It's essentially free we're not even calling `free` but still.  Bad design.
                 recycle_pipeline(shell, &script->fg.pipeline);
                 script->fg.pipeline = {};
 
-                Error error = Error_Success;
-                switch (script->fg.type) {
-                case Running_Line::ALWAYS:
-                    error = start_execute_line(shell, backlog, script, *script->fg.continuation);
-                    break;
-
-                default:
-                    CZ_PANIC("unreachable");
-                    break;
-                }
-
+                Error error = start_execute_line(shell, backlog, script, *next);
                 if (error != Error_Success && error != Error_Empty) {
                     append_text(backlog, script->id, "Error: failed to execute continuation\n");
                 }
