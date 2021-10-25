@@ -742,62 +742,7 @@ static bool handle_prompt_manipulation_commands(Shell_State* shell,
                                                 Render_State* rend,
                                                 uint16_t mod,
                                                 SDL_Keycode key) {
-    if ((mod == KMOD_CTRL && key == SDLK_c) || key == SDLK_RETURN) {
-        resolve_history_searching(prompt);
-
-        Running_Script* script = active_process(shell);
-        if (script) {
-            set_backlog_process(backlog, script->id);
-        } else {
-            append_text(backlog, -1, "\n");
-            if (rend->backlog_start.index + 1 == backlog->length) {
-                ++rend->backlog_start.index;
-                rend->backlog_end = rend->backlog_start;
-            }
-
-            set_backlog_process(backlog, -3);
-            append_text(backlog, prompt->process_id, shell->working_directory);
-            append_text(backlog, prompt->process_id, " ");
-            append_text(backlog, prompt->process_id, prompt->prefix);
-        }
-        append_text(backlog, -2, prompt->text);
-        append_text(backlog, prompt->process_id, "\n");
-
-        if (key == SDLK_RETURN) {
-            if (script) {
-                (void)script->in.write(prompt->text);
-                --prompt->process_id;
-            } else {
-                rend->auto_page = cfg.on_spawn_auto_page;
-                rend->auto_scroll = cfg.on_spawn_auto_scroll;
-                if (!run_line(shell, backlog, prompt->text, prompt->process_id)) {
-                    append_text(backlog, prompt->process_id, "Error: failed to execute\n");
-                }
-            }
-        } else {
-            if (script) {
-#ifdef TRACY_ENABLE
-                cz::String message =
-                    cz::format(temp_allocator, "End: ", script->fg.pipeline.command_line);
-                TracyMessage(message.buffer, message.len);
-#endif
-
-                recycle_process(shell, script);
-            }
-        }
-
-        if (prompt->text.len > 0) {
-            if (prompt->history.len == 0 || prompt->history.last() != prompt->text) {
-                prompt->history.reserve(cz::heap_allocator(), 1);
-                prompt->history.push(prompt->text.clone(prompt->history_arena.allocator()));
-                prompt->history_counter = prompt->history.len;
-            }
-        }
-
-        prompt->text.len = 0;
-        prompt->cursor = 0;
-        ++prompt->process_id;
-    } else if ((mod & ~KMOD_SHIFT) == 0 && key == SDLK_BACKSPACE) {
+    if ((mod & ~KMOD_SHIFT) == 0 && key == SDLK_BACKSPACE) {
         if (prompt->cursor > 0) {
             --prompt->cursor;
             prompt->text.remove(prompt->cursor);
@@ -1033,6 +978,70 @@ static int process_events(Backlog_State* backlog,
             if (handle_scroll_commands(shell, prompt, backlog, rend, mod, key)) {
                 ++num_events;
                 continue;
+            }
+
+            if ((mod == KMOD_CTRL && event.key.keysym.sym == SDLK_c) ||
+                event.key.keysym.sym == SDLK_RETURN) {
+                rend->auto_page = false;
+                rend->auto_scroll = true;
+
+                resolve_history_searching(prompt);
+
+                Running_Script* script = active_process(shell);
+                if (script) {
+                    set_backlog_process(backlog, script->id);
+                } else {
+                    append_text(backlog, -1, "\n");
+                    if (rend->backlog_start.index + 1 == backlog->length) {
+                        ++rend->backlog_start.index;
+                        rend->backlog_end = rend->backlog_start;
+                    }
+
+                    set_backlog_process(backlog, -3);
+                    append_text(backlog, prompt->process_id, shell->working_directory);
+                    append_text(backlog, prompt->process_id, " ");
+                    append_text(backlog, prompt->process_id, prompt->prefix);
+                }
+                append_text(backlog, -2, prompt->text);
+                append_text(backlog, prompt->process_id, "\n");
+
+                if (event.key.keysym.sym == SDLK_RETURN) {
+                    if (script) {
+                        (void)script->in.write(prompt->text);
+                        --prompt->process_id;
+                    } else {
+                        rend->auto_page = cfg.on_spawn_auto_page;
+                        rend->auto_scroll = cfg.on_spawn_auto_scroll;
+                        if (!run_line(shell, backlog, prompt->text, prompt->process_id)) {
+                            append_text(backlog, prompt->process_id, "Error: failed to execute\n");
+                        }
+                    }
+                } else {
+                    if (script) {
+#ifdef TRACY_ENABLE
+                        cz::String message =
+                            cz::format(temp_allocator, "End: ", script->fg.pipeline.command_line);
+                        TracyMessage(message.buffer, message.len);
+#endif
+
+                        recycle_process(shell, script);
+                    }
+                }
+
+                if (prompt->text.len > 0) {
+                    if (prompt->history.len == 0 || prompt->history.last() != prompt->text) {
+                        prompt->history.reserve(cz::heap_allocator(), 1);
+                        prompt->history.push(prompt->text.clone(prompt->history_arena.allocator()));
+                        prompt->history_counter = prompt->history.len;
+                    }
+                }
+
+                prompt->text.len = 0;
+                prompt->cursor = 0;
+                ++prompt->process_id;
+
+                ensure_prompt_on_screen(rend, backlog);
+                ++num_events;
             }
 
             if (mod == KMOD_CTRL && key == SDLK_z) {
