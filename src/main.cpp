@@ -454,6 +454,8 @@ static void tick_pipeline(Shell_State* shell, Running_Pipeline* pipeline, bool* 
         Running_Program* program = &pipeline->pipeline[p];
         int exit_code = 1;
         if (tick_program(shell, program, &exit_code, force_quit)) {
+            if (p + 1 == pipeline->length)
+                pipeline->last_exit_code = exit_code;
             pipeline->pipeline.remove(p);
             --p;
         }
@@ -500,7 +502,7 @@ static bool read_process_data(Shell_State* shell,
 #endif
 
             Parse_Line* next = nullptr;
-            if (script->fg.pipeline.last_error_code == 0)
+            if (script->fg.pipeline.last_exit_code == 0)
                 next = script->fg.on.success;
             else
                 next = script->fg.on.failure;

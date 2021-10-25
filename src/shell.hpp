@@ -116,7 +116,7 @@ struct Running_Pipeline {
     cz::Str command_line;
     cz::Vector<Running_Program> pipeline;
     size_t length;
-    int last_error_code;
+    int last_exit_code;
     cz::Vector<cz::File_Descriptor> files;
     cz::Buffer_Array arena;
 };
