@@ -549,20 +549,40 @@ static void scroll_up(Render_State* rend, Backlog_State* backlog, int lines) {
     ++lines;
     Visual_Point* line_start = &rend->backlog_start;
     uint64_t cursor = line_start->index;
-    uint64_t line_chars = 0;
+    uint64_t line_chars    = 0;
+    uint64_t backwards_tab = 0;
     while (lines > 0 && cursor > 0) {
         --cursor;
         char c = backlog->get(cursor);
-        line_chars++;
+        if (backwards_tab == 0) {
+            line_chars++;
+        } else {
+            backwards_tab--;
+        }
+
         if (c == '\n') {
             line_start->index = cursor + 1;
             --lines;
-            line_chars = 0;
+            line_chars    = 0;
+            backwards_tab = 0;
+        } else if (c == '\t') {
+            line_chars--;
+            if (line_chars + (8 - (line_chars % 8)) > rend->window_cols) {
+                ++cursor; // Don't consume the tab, it was actually on the previous line
+                --lines;
+                line_chars = 0;
+                backwards_tab = 0;
+                continue;
+            }
+            backwards_tab = (8 - (line_chars % 8));
+            line_chars   += backwards_tab;
+            
         }
         if (line_chars == rend->window_cols) {
             line_start->index = cursor + 1;
             --lines;
             line_chars = 0;
+            backwards_tab = 0;
         }
     }
     line_start->y = 0;
