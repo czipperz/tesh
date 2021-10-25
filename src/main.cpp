@@ -860,13 +860,13 @@ static int process_events(Backlog_State* backlog,
                     if (prompt->history.len == 0 || prompt->history.last() != prompt->text) {
                         prompt->history.reserve(cz::heap_allocator(), 1);
                         prompt->history.push(prompt->text.clone(prompt->history_arena.allocator()));
-                        prompt->history_counter = prompt->history.len;
                     }
                 }
 
                 prompt->text.len = 0;
                 prompt->cursor = 0;
                 ++prompt->process_id;
+                prompt->history_counter = prompt->history.len;
 
                 ensure_prompt_on_screen(rend, backlog);
                 ++num_events;
