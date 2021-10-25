@@ -6,6 +6,17 @@ Focused on increasing scanability, readability, and navigatability of output.
 This repository is licensed under GPL3.  If you wish to
 purchase a different license, email czipperz AT gmail DOT com.
 
+Features:
+* Unique color -- each script (a line of input) is given a unique background
+  color allowing you to easily see which script cause which outputs.
+* Auto paging -- terminal scrolls until the prompt is at the top of the screen.
+* Easily distinguished input -- all user input has a
+  teal foreground color making it easily stand out.
+* Script navigation -- `Ctrl + Alt + b` and `Ctrl + Alt
+  + f` seek backwards and forwards based on prompt.
+* Attach -- toggle having the terminal attached to a script with `Ctrl
+  + Z`.  When attached, user input is sent to the process's `stdin`.
+
 ## Building
 
 1. Clone the repository and the submodules.
