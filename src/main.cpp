@@ -897,7 +897,7 @@ static int process_events(Backlog_State* backlog,
                 ++num_events;
             }
             if ((mod == 0 && event.key.keysym.sym == SDLK_UP) ||
-                (mod == KMOD_ALT && event.key.keysym.sym == SDLK_p)) {
+                (mod == KMOD_CTRL && event.key.keysym.sym == SDLK_p)) {
                 rend->auto_page = false;
                 rend->auto_scroll = true;
                 if (prompt->history_counter > 0) {
@@ -912,7 +912,7 @@ static int process_events(Backlog_State* backlog,
                 ++num_events;
             }
             if ((mod == 0 && event.key.keysym.sym == SDLK_DOWN) ||
-                (mod == KMOD_ALT && event.key.keysym.sym == SDLK_n)) {
+                (mod == KMOD_CTRL && event.key.keysym.sym == SDLK_n)) {
                 rend->auto_page = false;
                 rend->auto_scroll = true;
                 if (prompt->history_counter < prompt->history.len) {
@@ -975,7 +975,7 @@ static int process_events(Backlog_State* backlog,
                 ++num_events;
             }
             if ((mod == 0 && event.key.keysym.sym == SDLK_HOME) ||
-                (mod == KMOD_ALT && event.key.keysym.sym == SDLK_a)) {
+                (mod == KMOD_CTRL && event.key.keysym.sym == SDLK_a)) {
                 rend->auto_page = false;
                 rend->auto_scroll = true;
                 prompt->cursor = 0;
@@ -983,7 +983,7 @@ static int process_events(Backlog_State* backlog,
                 ++num_events;
             }
             if ((mod == 0 && event.key.keysym.sym == SDLK_END) ||
-                (mod == KMOD_ALT && event.key.keysym.sym == SDLK_e)) {
+                (mod == KMOD_CTRL && event.key.keysym.sym == SDLK_e)) {
                 rend->auto_page = false;
                 rend->auto_scroll = true;
                 prompt->cursor = prompt->text.len;
