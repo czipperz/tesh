@@ -1263,7 +1263,7 @@ int actual_main(int argc, char** argv) {
             if (force_quit)
                 break;
 
-            if (status > 0)
+            if (rend.complete_redraw || status > 0)
                 render_frame(window, &rend, &backlog, &prompt, &shell);
         } catch (cz::PanicReachedException& ex) {
             fprintf(stderr, "Fatal error: %s\n", ex.what());
