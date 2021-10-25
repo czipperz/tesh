@@ -481,6 +481,23 @@ fail:;
     return false;
 }
 
+static void run_rc(Shell_State* shell, Backlog_State* backlog) {
+    cz::Str home;
+    if (!get_env_var(shell, "HOME", &home))
+        return;
+
+    cz::Input_File file;
+    if (!file.open(cz::format(temp_allocator, home, "/.teshrc").buffer))
+        return;
+    CZ_DEFER(file.close());
+
+    cz::String contents = {};
+    read_to_string(file, temp_allocator, &contents);
+
+    uint64_t id = -1;
+    run_line(shell, backlog, contents, id);
+}
+
 static void tick_pipeline(Shell_State* shell, Running_Pipeline* pipeline, bool* force_quit) {
     for (size_t p = 0; p < pipeline->pipeline.len; ++p) {
         Running_Program* program = &pipeline->pipeline[p];
@@ -1455,6 +1472,8 @@ int actual_main(int argc, char** argv) {
     rend.prompt_fg_color = {0x77, 0xf9, 0xff, 0xff};
 
     cz::env::set("PAGER", "cat");
+
+    run_rc(&shell, &backlog);
 
     while (1) {
         uint32_t start_frame = SDL_GetTicks();
