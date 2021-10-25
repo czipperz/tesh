@@ -895,6 +895,17 @@ static bool handle_prompt_manipulation_commands(Shell_State* shell,
                 break;
             ++prompt->cursor;
         }
+    } else if (mod == KMOD_SHIFT && key == SDLK_INSERT) {
+        char* clip = SDL_GetClipboardText();
+        if (clip) {
+            CZ_DEFER(SDL_free(clip));
+            size_t len = strlen(clip);
+            cz::String str = {clip, len, len};
+            cz::strip_carriage_returns(&str);
+            prompt->text.reserve(cz::heap_allocator(), str.len);
+            prompt->text.insert(prompt->cursor, str);
+            prompt->cursor += str.len;
+        }
     } else {
         return false;
     }
@@ -1056,21 +1067,6 @@ static int process_events(Backlog_State* backlog,
                 }
                 rend->complete_redraw = true;
                 ++num_events;
-            }
-            if (mod == KMOD_SHIFT && key == SDLK_INSERT) {
-                rend->auto_page = false;
-                rend->auto_scroll = true;
-                char* clip = SDL_GetClipboardText();
-                if (clip) {
-                    CZ_DEFER(SDL_free(clip));
-                    size_t len = strlen(clip);
-                    cz::String str = {clip, len, len};
-                    cz::strip_carriage_returns(&str);
-                    prompt->text.reserve(cz::heap_allocator(), str.len);
-                    prompt->text.insert(prompt->cursor, str);
-                    prompt->cursor += str.len;
-                    ++num_events;
-                }
             }
 
             // Note: C-= used to zoom in so you don't have to hold shift.
