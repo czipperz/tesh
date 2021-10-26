@@ -140,8 +140,9 @@ struct Running_Line {
 struct Running_Script {
     uint64_t id;
     cz::Buffer_Array arena;
-    // cz::Vector<Running_Pipeline> bg;
+    cz::Vector<Running_Line> bg;
     Running_Line fg;
+    bool fg_finished;
     cz::Output_File in;
     cz::Input_File out;
     cz::Carriage_Return_Carry out_carry;
@@ -194,7 +195,8 @@ Error start_execute_script(Shell_State* shell,
 Error start_execute_line(Shell_State* shell,
                          Backlog_State* backlog,
                          Running_Script* running_script,
-                         const Parse_Line& line);
+                         const Parse_Line& line,
+                         bool background);
 
 ///////////////////////////////////////////////////////////////////////////////
 

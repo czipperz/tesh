@@ -323,7 +323,7 @@ static void run_rc(Shell_State* shell, Backlog_State* backlog) {
     run_line(shell, backlog, contents, id);
 }
 
-static void tick_pipeline(Shell_State* shell,
+static bool tick_pipeline(Shell_State* shell,
                           Render_State* rend,
                           Backlog_State* backlog,
                           Running_Pipeline* pipeline,
@@ -336,10 +336,67 @@ static void tick_pipeline(Shell_State* shell,
                 pipeline->last_exit_code = exit_code;
             pipeline->pipeline.remove(p);
             --p;
+            if (pipeline->pipeline.len == 0)
+                return true;
         }
         if (*force_quit)
-            return;
+            return false;
     }
+    return false;
+}
+
+static bool finish_line(Shell_State* shell,
+                        Backlog_State* backlog,
+                        Running_Script* script,
+                        Running_Line* line,
+                        bool background) {
+#ifdef TRACY_ENABLE
+    {
+        cz::String message = cz::format(temp_allocator, "End: ", line->pipeline.command_line);
+        TracyMessage(message.buffer, message.len);
+    }
+#endif
+
+    Parse_Line* next = nullptr;
+    if (line->pipeline.last_exit_code == 0)
+        next = line->on.success;
+    else
+        next = line->on.failure;
+
+    if (!next)
+        return false;
+
+    // TODO: we shouldn't throw away the arena and then immediately realloc it.
+    // It's essentially free we're not even calling `free` but still.  Bad design.
+    recycle_pipeline(shell, &line->pipeline);
+
+    if (background) {
+        script->bg.remove(line - script->bg.elems);
+    } else {
+        line->pipeline = {};
+    }
+
+    Error error = start_execute_line(shell, backlog, script, *next, background);
+    if (error != Error_Success && error != Error_Empty) {
+        append_text(backlog, script->id, "Error: failed to execute continuation\n");
+    }
+
+    return true;
+}
+
+static void finish_script(Shell_State* shell,
+                          Backlog_State* backlog,
+                          Render_State* rend,
+                          Running_Script* script) {
+    // If we're attached then we auto scroll but we can hit an edge case where the
+    // final output isn't scrolled to.  So we stop halfway through the output.  I
+    // think it would be better if this just called `ensure_prompt_on_screen`.
+    if (shell->active_process == script->id)
+        rend->auto_scroll = true;
+
+    ensure_trailing_newline(backlog, script->id);
+
+    recycle_process(shell, script);
 }
 
 static bool read_process_data(Shell_State* shell,
@@ -352,7 +409,16 @@ static bool read_process_data(Shell_State* shell,
     for (size_t i = 0; i < shell->scripts.len; ++i) {
         Running_Script* script = &shell->scripts[i];
 
-        tick_pipeline(shell, rend, backlog, &script->fg.pipeline, force_quit);
+        for (size_t b = 0; b < script->bg.len; ++b) {
+            Running_Line* line = &script->bg[b];
+            if (tick_pipeline(shell, rend, backlog, &line->pipeline, force_quit)) {
+                finish_line(shell, backlog, script, line, /*background=*/true);
+                --b;
+            }
+        }
+
+        bool finish_fg = tick_pipeline(shell, rend, backlog, &script->fg.pipeline, force_quit);
+
         if (*force_quit)
             return true;
 
@@ -371,50 +437,22 @@ static bool read_process_data(Shell_State* shell,
             }
         }
 
-        if (script->fg.pipeline.pipeline.len == 0) {
-#ifdef TRACY_ENABLE
-            {
-                cz::String message =
-                    cz::format(temp_allocator, "End: ", script->fg.pipeline.command_line);
-                TracyMessage(message.buffer, message.len);
-            }
-#endif
-
-            Parse_Line* next = nullptr;
-            if (script->fg.pipeline.last_exit_code == 0)
-                next = script->fg.on.success;
-            else
-                next = script->fg.on.failure;
-
-            if (next) {
-                // TODO: we shouldn't throw away the arena and then immediately realloc it.
-                // It's essentially free we're not even calling `free` but still.  Bad design.
-                recycle_pipeline(shell, &script->fg.pipeline);
-                script->fg.pipeline = {};
-
-                Error error = start_execute_line(shell, backlog, script, *next);
-                if (error != Error_Success && error != Error_Empty) {
-                    append_text(backlog, script->id, "Error: failed to execute continuation\n");
-                    goto stop;
-                }
-
+        if (finish_fg) {
+            bool started = finish_line(shell, backlog, script, &script->fg, /*background=*/false);
+            if (started) {
                 // Rerun to prevent long scripts from only doing one command per frame.
                 // TODO: rate limit to prevent big scripts (with all builtins) from hanging.
                 --i;
             } else {
-            stop:
-                // If we're attached then we auto scroll but we can hit an edge case where the
-                // final output isn't scrolled to.  So we stop halfway through the output.  I think
-                // it would be better if this just called `ensure_prompt_on_screen`.
-                if (shell->active_process == script->id)
-                    rend->auto_scroll = true;
-
-                ensure_trailing_newline(backlog, script->id);
-
-                recycle_process(shell, script);
-                changes = true;
+                script->fg_finished = true;
                 --i;
             }
+        }
+
+        if (script->fg_finished && script->bg.len == 0) {
+            finish_script(shell, backlog, rend, script);
+            changes = true;
+            --i;
         }
     }
     return backlog->length != starting_length || changes;

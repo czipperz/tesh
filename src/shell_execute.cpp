@@ -15,7 +15,8 @@ static Error start_execute_pipeline(Shell_State* shell,
                                     cz::Buffer_Array arena,
                                     const Running_Script& script,
                                     const Parse_Pipeline& parse,
-                                    Running_Pipeline* running);
+                                    Running_Pipeline* running,
+                                    cz::Input_File pipe_in);
 
 static Error run_program(Shell_State* shell,
                          cz::Allocator allocator,
@@ -63,7 +64,7 @@ Error start_execute_script(Shell_State* shell,
 
     running.arena = arena;
 
-    error = start_execute_line(shell, backlog, &running, parse.first);
+    error = start_execute_line(shell, backlog, &running, parse.first, /*background=*/false);
     if (error != Error_Success)
         goto cleanup2;
 
@@ -89,17 +90,42 @@ cleanup1:
 Error start_execute_line(Shell_State* shell,
                          Backlog_State* backlog,
                          Running_Script* running,
-                         const Parse_Line& line) {
-    running->fg.on = line.on;
+                         const Parse_Line& parse_in,
+                         bool background) {
+    const Parse_Line* parse = &parse_in;
+
+again:
+    Running_Line* line = &running->fg;
+    cz::Input_File pipe_in = running->script_in;
+
+    // If another line starts at the start of this line, then
+    // this line is async and should be ran in the background.
+    if (parse->on.start || background) {
+        running->bg.reserve(cz::heap_allocator(), 1);
+        running->bg.push({});
+        line = &running->bg.last();
+        pipe_in = {};
+    }
+
+    line->on = parse->on;
 
     // TODO: I think we should refactor this to create the
     // Running_Script then adding a Running_Line to it.  Idk.
     cz::Buffer_Array pipeline_arena = alloc_arena(shell);
-    Error error = start_execute_pipeline(shell, backlog, pipeline_arena, *running, line.pipeline,
-                                         &running->fg.pipeline);
-    if (error != Error_Success)
+    Error error = start_execute_pipeline(shell, backlog, pipeline_arena, *running, parse->pipeline,
+                                         &line->pipeline, pipe_in);
+    if (error != Error_Success) {
         recycle_arena(shell, pipeline_arena);
-    return error;
+        return error;
+    }
+
+    // Recurse on the next line since this one is async.
+    if (parse->on.start) {
+        parse = parse->on.start;
+        goto again;
+    }
+
+    return Error_Success;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -109,7 +135,8 @@ static Error start_execute_pipeline(Shell_State* shell,
                                     cz::Buffer_Array arena,
                                     const Running_Script& script,
                                     const Parse_Pipeline& parse,
-                                    Running_Pipeline* running) {
+                                    Running_Pipeline* running,
+                                    cz::Input_File pipe_in) {
     ZoneScoped;
 
     running->length = parse.pipeline.len;
@@ -129,8 +156,6 @@ static Error start_execute_pipeline(Shell_State* shell,
         }
         files.drop(cz::heap_allocator());
     });
-
-    cz::Input_File pipe_in = script.script_in;
 
     for (size_t p = 0; p < parse.pipeline.len; ++p) {
         Parse_Program parse_program = parse.pipeline[p];
@@ -244,7 +269,7 @@ static Error run_program(Shell_State* shell,
                          bool err_pipe) {
     // If command is a builtin.
     if (program->type != Running_Program::PROCESS) {
-        if (in_pipe && !in.set_non_blocking())
+        if (in_pipe && in.is_open() && !in.set_non_blocking())
             return Error_IO;
         if (out_pipe && out.type == Process_Output::FILE && !out.v.file.set_non_blocking())
             return Error_IO;
