@@ -619,8 +619,7 @@ static bool handle_prompt_manipulation_commands(Shell_State* shell,
     } else if (mod == (KMOD_CTRL | KMOD_ALT) && key == SDLK_BACKSPACE) {
         prompt->text.remove_range(0, prompt->cursor);
         prompt->cursor = 0;
-    } else if (((mod & ~KMOD_SHIFT) == 0 && key == SDLK_DELETE) ||
-               (mod == KMOD_CTRL && key == SDLK_d)) {
+    } else if ((mod & ~KMOD_SHIFT) == 0 && key == SDLK_DELETE) {
         if (prompt->cursor < prompt->text.len) {
             prompt->text.remove(prompt->cursor);
         }
@@ -919,12 +918,30 @@ static int process_events(Backlog_State* backlog,
                 rend->auto_page = false;
                 rend->auto_scroll = true;
                 if (shell->active_process == -1) {
-                    if (shell->scripts.len > 0)
-                        shell->active_process = shell->scripts.last().id;
+                    for (size_t i = shell->scripts.len; i-- > 0;) {
+                        Running_Script* script = &shell->scripts[i];
+                        if (script->in.is_open()) {
+                            shell->active_process = script->id;
+                            break;
+                        }
+                    }
                 } else {
                     shell->active_process = -1;
                 }
                 ++num_events;
+            }
+
+            if (mod == KMOD_CTRL && key == SDLK_d) {
+                if (shell->active_process == -1) {
+                    // Should we exit Tesh?  I don't like when you're using 'less' and close
+                    // your term accidentally.  But we're also not using 'less' so idk.
+                } else {
+                    Running_Script* script = active_process(shell);
+                    script->in.close();
+                    script->in = {};
+                    shell->active_process = -1;
+                    ++num_events;
+                }
             }
 
             if (mod == KMOD_CTRL && key == SDLK_l) {
