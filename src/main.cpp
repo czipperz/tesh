@@ -114,7 +114,9 @@ static void render_prompt(SDL_Surface* window_surface,
         ++point.y;
     }
 
-    SDL_Color bg_color = cfg.process_colors[prompt->process_id % cfg.process_colors.len];
+    uint64_t process_id =
+        (shell->active_process == -1 ? prompt->process_id : shell->active_process);
+    SDL_Color bg_color = cfg.process_colors[process_id % cfg.process_colors.len];
     uint32_t background = SDL_MapRGB(window_surface->format, bg_color.r, bg_color.g, bg_color.b);
 
     if (shell->active_process == -1) {
@@ -855,6 +857,7 @@ static int process_events(Backlog_State* backlog,
                 resolve_history_searching(prompt);
 
                 Running_Script* script = active_process(shell);
+                uint64_t process_id = (script ? script->id : prompt->process_id);
                 if (script) {
                     set_backlog_process(backlog, script->id);
                 } else {
@@ -870,7 +873,7 @@ static int process_events(Backlog_State* backlog,
                     append_text(backlog, prompt->process_id, prompt->prefix);
                 }
                 append_text(backlog, -2, prompt->text);
-                append_text(backlog, prompt->process_id, "\n");
+                append_text(backlog, process_id, "\n");
 
                 if (event.key.keysym.sym == SDLK_RETURN) {
                     if (script) {
