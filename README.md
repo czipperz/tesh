@@ -12,10 +12,10 @@ Features:
 * Auto paging -- terminal scrolls until the prompt is at the top of the screen.
 * Easily distinguished input -- all user input has a
   teal foreground color making it easily stand out.
-* Script navigation -- `Ctrl + Alt + b` and `Ctrl + Alt
-  + f` seek backwards and forwards based on prompt.
-* Attach -- toggle having the terminal attached to a script with `Ctrl
-  + Z`.  When attached, user input is sent to the process's `stdin`.
+* Script navigation -- `Ctrl + Alt + b` and `Ctrl + Alt + f`
+  seek backwards and forwards based on prompt.
+* Attach -- toggle having the terminal attached to a script with `Ctrl + Z`.
+  When attached, user input is sent to the process's `stdin`.
 
 ## Building
 
