@@ -28,6 +28,7 @@
 #include "render.hpp"
 #include "shell.hpp"
 
+void resize_font(int font_size, Render_State* rend);
 ///////////////////////////////////////////////////////////////////////////////
 // Type definitions
 ///////////////////////////////////////////////////////////////////////////////
@@ -910,22 +911,8 @@ static int process_events(Backlog_State* backlog,
                 } else {
                     new_font_size = cz::max(new_font_size - 4, 4);
                 }
-
-                TTF_Font* new_font =
-                    open_font(cfg.font_path, (int)(new_font_size * rend->dpi_scale));
-                if (new_font) {
-                    close_font(rend);
-
-                    rend->font = new_font;
-                    rend->font_size = new_font_size;
-                    rend->font_height = TTF_FontLineSkip(rend->font);
-                    // TODO: handle failure
-                    TTF_GlyphMetrics(rend->font, ' ', nullptr, nullptr, nullptr, nullptr,
-                                     &rend->font_width);
-
-                    rend->complete_redraw = true;
-                    ++num_events;
-                }
+                resize_font(new_font_size, rend);   
+                ++num_events;
             }
         } break;
 
@@ -961,11 +948,22 @@ static int process_events(Backlog_State* backlog,
 
             event.wheel.y *= 4;
             event.wheel.x *= 10;
-
-            if (event.wheel.y < 0) {
-                scroll_down(rend, backlog, -event.wheel.y);
-            } else if (event.wheel.y > 0) {
-                scroll_up(rend, backlog, event.wheel.y);
+            
+            const Uint8* state = SDL_GetKeyboardState(NULL);
+            if (state[SDL_SCANCODE_LCTRL] || state[SDL_SCANCODE_RCTRL]) {
+                int new_font_size = rend->font_size;
+                if (event.wheel.y > 0) {
+                    new_font_size += 2;
+                } else {
+                    new_font_size = cz::max(new_font_size - 2, 2);
+                }
+                resize_font(new_font_size, rend);
+            } else {
+                if (event.wheel.y < 0) {
+                    scroll_down(rend, backlog, -event.wheel.y);
+                } else if (event.wheel.y > 0) {
+                    scroll_up(rend, backlog, event.wheel.y);
+                }
             }
 
             rend->complete_redraw = true;
@@ -1285,4 +1283,21 @@ int actual_main(int argc, char** argv) {
     }
 
     return 0;
+}
+
+void resize_font(int font_size, Render_State* rend) {
+    TTF_Font* new_font =
+        open_font(cfg.font_path, (int)(font_size * rend->dpi_scale));
+    if (new_font) {
+        close_font(rend);
+
+        rend->font = new_font;
+        rend->font_size = font_size;
+        rend->font_height = TTF_FontLineSkip(rend->font);
+        // TODO: handle failure
+        TTF_GlyphMetrics(rend->font, ' ', nullptr, nullptr, nullptr, nullptr,
+                         &rend->font_width);
+
+        rend->complete_redraw = true;
+    }
 }
