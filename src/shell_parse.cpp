@@ -219,6 +219,8 @@ static Error parse_pipeline(const Shell_State* shell,
                 if (*index + 1 == text.len)
                     goto def;
 
+                any_special = true;
+
                 cz::Str var;
                 if (!get_var_at_point(text, *index + 1, &var))
                     goto def;
@@ -263,6 +265,26 @@ static Error parse_pipeline(const Shell_State* shell,
                         }
                     }
                 }
+                break;
+            }
+
+            case '~': {
+                if (any_special || word.len > 0)
+                    goto def;
+
+                cz::Str after = text.slice_start(*index + 1);
+                if (!after.starts_with('/'))
+                    goto def;
+
+                cz::Str home;
+                if (!get_var(shell, "HOME", &home))
+                    goto def;
+
+                any_special = true;
+                word.reserve(allocator, home.len + 1);
+                word.append(home);
+                word.push('/');
+                ++*index;
                 break;
             }
 

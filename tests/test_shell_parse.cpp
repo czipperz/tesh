@@ -421,3 +421,28 @@ TEST_CASE("parse_script tilde not expanded") {
     CHECK(pipeline.pipeline[0].args[2] == "~");
     CHECK(pipeline.pipeline[0].args[3] == "~/");
 }
+
+TEST_CASE("parse_script tilde not expanded after start of word") {
+    Shell_State shell = {};
+    Parse_Script script = {};
+    Error error = parse_script(&shell, cz::heap_allocator(), &script, "a~/ $abc~/");
+    REQUIRE(error == Error_Success);
+    Parse_Pipeline pipeline = script.first.pipeline;
+    REQUIRE(pipeline.pipeline.len == 1);
+    REQUIRE(pipeline.pipeline[0].args.len == 2);
+    CHECK(pipeline.pipeline[0].args[0] == "a~/");
+    CHECK(pipeline.pipeline[0].args[1] == "~/");
+}
+
+TEST_CASE("parse_script tilde expanded simple") {
+    Shell_State shell = {};
+    set_var(&shell, "HOME", "/path/to/my/home");
+    Parse_Script script = {};
+    Error error = parse_script(&shell, cz::heap_allocator(), &script, "~/ ~/abc/123");
+    REQUIRE(error == Error_Success);
+    Parse_Pipeline pipeline = script.first.pipeline;
+    REQUIRE(pipeline.pipeline.len == 1);
+    REQUIRE(pipeline.pipeline[0].args.len == 2);
+    CHECK(pipeline.pipeline[0].args[0] == "/path/to/my/home/");
+    CHECK(pipeline.pipeline[0].args[1] == "/path/to/my/home/abc/123");
+}
