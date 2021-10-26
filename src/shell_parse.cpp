@@ -266,13 +266,20 @@ static Error parse_pipeline(const Shell_State* shell,
                 break;
             }
 
-            case '\\':
+            case '\\': {
+                cz::Str after = text.slice_start(*index + 1);
                 // Skip backslash newline.
-                if (text.slice_start(*index + 1).starts_with('\n')) {
+                if (after.starts_with('\n')) {
                     ++*index;
                     break;
                 }
+                // Escape '~'.
+                if (after.starts_with('~')) {
+                    ++*index;
+                    goto def;
+                }
                 goto def;
+            }
 
             default:
             def:
