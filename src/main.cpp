@@ -878,6 +878,7 @@ static int process_events(Backlog_State* backlog,
                 if (event.key.keysym.sym == SDLK_RETURN) {
                     if (script) {
                         (void)script->in.write(prompt->text);
+                        (void)script->in.write("\n");
                         --prompt->process_id;
                     } else {
                         rend->auto_page = cfg.on_spawn_auto_page;
