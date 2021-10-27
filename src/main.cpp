@@ -605,6 +605,32 @@ static void resolve_history_searching(Prompt_State* prompt) {
     }
 }
 
+static void backward_word(cz::Str text, size_t* cursor) {
+    while (*cursor > 0) {
+        if (cz::is_alpha(text[*cursor - 1]))
+            break;
+        --*cursor;
+    }
+    while (*cursor > 0) {
+        if (!cz::is_alpha(text[*cursor - 1]))
+            break;
+        --*cursor;
+    }
+}
+
+static void forward_word(cz::Str text, size_t* cursor) {
+    while (*cursor < text.len) {
+        if (cz::is_alpha(text[*cursor]))
+            break;
+        ++*cursor;
+    }
+    while (*cursor < text.len) {
+        if (!cz::is_alpha(text[*cursor]))
+            break;
+        ++*cursor;
+    }
+}
+
 static bool handle_prompt_manipulation_commands(Shell_State* shell,
                                                 Prompt_State* prompt,
                                                 Backlog_State* backlog,
@@ -623,6 +649,15 @@ static bool handle_prompt_manipulation_commands(Shell_State* shell,
         if (prompt->cursor < prompt->text.len) {
             prompt->text.remove(prompt->cursor);
         }
+    } else if ((mod == KMOD_ALT && key == SDLK_DELETE) || (mod == KMOD_ALT && key == SDLK_d)) {
+        size_t end = prompt->cursor;
+        forward_word(prompt->text, &end);
+        prompt->text.remove_range(prompt->cursor, end);
+    } else if ((mod == KMOD_CTRL && key == SDLK_BACKSPACE) ||
+               (mod == KMOD_ALT && key == SDLK_BACKSPACE)) {
+        size_t end = prompt->cursor;
+        backward_word(prompt->text, &prompt->cursor);
+        prompt->text.remove_range(prompt->cursor, end);
     } else if ((mod == 0 && key == SDLK_LEFT) || (mod == KMOD_CTRL && key == SDLK_b)) {
         if (prompt->cursor > 0) {
             --prompt->cursor;
@@ -688,28 +723,10 @@ static bool handle_prompt_manipulation_commands(Shell_State* shell,
         prompt->cursor = prompt->text.len;
     } else if ((mod == KMOD_CTRL && key == SDLK_LEFT) || (mod == KMOD_ALT && key == SDLK_LEFT) ||
                (mod == KMOD_ALT && key == SDLK_b)) {
-        while (prompt->cursor > 0) {
-            if (cz::is_alpha(prompt->text[prompt->cursor - 1]))
-                break;
-            --prompt->cursor;
-        }
-        while (prompt->cursor > 0) {
-            if (!cz::is_alpha(prompt->text[prompt->cursor - 1]))
-                break;
-            --prompt->cursor;
-        }
+        backward_word(prompt->text, &prompt->cursor);
     } else if ((mod == KMOD_CTRL && key == SDLK_RIGHT) || (mod == KMOD_ALT && key == SDLK_RIGHT) ||
                (mod == KMOD_ALT && key == SDLK_f)) {
-        while (prompt->cursor < prompt->text.len) {
-            if (cz::is_alpha(prompt->text[prompt->cursor]))
-                break;
-            ++prompt->cursor;
-        }
-        while (prompt->cursor < prompt->text.len) {
-            if (!cz::is_alpha(prompt->text[prompt->cursor]))
-                break;
-            ++prompt->cursor;
-        }
+        forward_word(prompt->text, &prompt->cursor);
     } else if (mod == KMOD_SHIFT && key == SDLK_INSERT) {
         char* clip = SDL_GetClipboardText();
         if (clip) {
