@@ -1897,6 +1897,13 @@ int actual_main(int argc, char** argv) {
 
     cz::env::set("PAGER", "cat");
 
+    {
+        int w, h;
+        SDL_GetWindowSize(window, &w, &h);
+        shell.width = w / rend.font_width;
+        shell.height = h / rend.font_height;
+    }
+
     run_rc(&shell, push_backlog(&backlogs, 0));
 
     while (1) {
