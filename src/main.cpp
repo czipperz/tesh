@@ -325,7 +325,7 @@ static void run_rc(Shell_State* shell, Backlog_State* backlog) {
     run_line(shell, backlog, contents, id);
 }
 
-static bool tick_pipeline(Shell_State* shell,
+static void tick_pipeline(Shell_State* shell,
                           Render_State* rend,
                           Backlog_State* backlog,
                           Running_Pipeline* pipeline,
@@ -339,12 +339,11 @@ static bool tick_pipeline(Shell_State* shell,
             pipeline->pipeline.remove(p);
             --p;
             if (pipeline->pipeline.len == 0)
-                return true;
+                return;
         }
         if (*force_quit)
-            return false;
+            return;
     }
-    return false;
 }
 
 static bool finish_line(Shell_State* shell,
@@ -413,13 +412,14 @@ static bool read_process_data(Shell_State* shell,
 
         for (size_t b = 0; b < script->bg.len; ++b) {
             Running_Line* line = &script->bg[b];
-            if (tick_pipeline(shell, rend, backlog, &line->pipeline, force_quit)) {
+            tick_pipeline(shell, rend, backlog, &line->pipeline, force_quit);
+            if (line->pipeline.pipeline.len == 0) {
                 finish_line(shell, backlog, script, line, /*background=*/true);
                 --b;
             }
         }
 
-        bool finish_fg = tick_pipeline(shell, rend, backlog, &script->fg.pipeline, force_quit);
+        tick_pipeline(shell, rend, backlog, &script->fg.pipeline, force_quit);
 
         if (*force_quit)
             return true;
@@ -439,7 +439,7 @@ static bool read_process_data(Shell_State* shell,
             }
         }
 
-        if (finish_fg) {
+        if (script->fg.pipeline.pipeline.len == 0) {
             bool started = finish_line(shell, backlog, script, &script->fg, /*background=*/false);
             if (started) {
                 // Rerun to prevent long scripts from only doing one command per frame.
