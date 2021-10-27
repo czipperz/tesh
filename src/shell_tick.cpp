@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <Tracy.hpp>
 #include <cz/char_type.hpp>
+#include <cz/defer.hpp>
 #include <cz/directory.hpp>
 #include <cz/format.hpp>
 #include <cz/heap.hpp>
@@ -15,6 +16,11 @@ static void standardize_arg(const Shell_State* shell,
                             cz::Allocator allocator,
                             cz::String* new_wd,
                             bool make_absolute);
+
+static int run_ls(Process_Output out,
+                  cz::String* temp,
+                  cz::Str working_directory,
+                  cz::Str directory);
 
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -167,7 +173,14 @@ bool tick_program(Shell_State* shell,
     case Running_Program::CD: {
         auto& builtin = program->v.builtin;
         cz::String new_wd = {};
-        cz::Str arg = (builtin.args.len >= 2 ? builtin.args[1] : "~");
+        cz::Str arg;
+        if (builtin.args.len >= 2)
+            arg = builtin.args[1];
+        else if (!get_var(shell, "HOME", &arg)) {
+            builtin.exit_code = 1;
+            (void)builtin.err.write("cd: No home directory.\n");
+            goto finish_builtin;
+        }
         standardize_arg(shell, arg, temp_allocator, &new_wd, /*make_absolute=*/true);
         if (cz::file::is_directory(new_wd.buffer)) {
             shell->working_directory.len = 0;
@@ -185,25 +198,24 @@ bool tick_program(Shell_State* shell,
 
     case Running_Program::LS: {
         auto& builtin = program->v.builtin;
-        cz::Directory_Iterator iterator;
-        int result = iterator.init(shell->working_directory.buffer);
-        if (result == 1) {
-            while (1) {
-                (void)builtin.out.write(iterator.str_name());
-                (void)builtin.out.write("\n");
-
-                result = iterator.advance();
-                if (result <= 0)
-                    break;
+        cz::String temp = {};
+        CZ_DEFER(temp.drop(temp_allocator));
+        if (builtin.args.len == 1) {
+            int result = run_ls(builtin.out, &temp, shell->working_directory, ".");
+            if (result < 0) {
+                builtin.exit_code = 1;
+                (void)builtin.err.write("ls: error\n");
             }
-            iterator.drop();
+        } else {
+            for (size_t i = 1; i < builtin.args.len; ++i) {
+                int result = run_ls(builtin.out, &temp, shell->working_directory, builtin.args[i]);
+                if (result < 0) {
+                    builtin.exit_code = 1;
+                    (void)builtin.err.write("ls: error\n");
+                    break;
+                }
+            }
         }
-
-        if (result < 0) {
-            builtin.exit_code = 1;
-            (void)builtin.err.write("ls: error\n");
-        }
-
         goto finish_builtin;
     } break;
 
@@ -329,26 +341,11 @@ static void standardize_arg(const Shell_State* shell,
                             cz::Allocator allocator,
                             cz::String* new_wd,
                             bool make_absolute) {
-    // Expand home directory.
-    if (arg == "~") {
-        cz::Str home = {};
-        get_var(shell, "HOME", &home);
-        new_wd->reserve_exact(allocator, home.len + 1);
-        new_wd->append(home);
-    } else if (arg.starts_with("~/")) {
-        cz::Str home = {};
-        get_var(shell, "HOME", &home);
-        new_wd->reserve_exact(allocator, home.len + arg.len);
-        new_wd->append(home);
-        new_wd->push('/');
-        new_wd->append(arg.slice_start(2));
+    if (make_absolute) {
+        cz::path::make_absolute(arg, shell->working_directory, allocator, new_wd);
     } else {
-        if (make_absolute) {
-            cz::path::make_absolute(arg, shell->working_directory, allocator, new_wd);
-        } else {
-            new_wd->reserve_exact(allocator, arg.len);
-            new_wd->append(arg);
-        }
+        new_wd->reserve_exact(allocator, arg.len);
+        new_wd->append(arg);
     }
 
 #ifdef _WIN32
@@ -374,4 +371,31 @@ static void standardize_arg(const Shell_State* shell,
             new_wd->null_terminate();
         }
     }
+}
+
+///////////////////////////////////////////////////////////////////////////////
+
+static int run_ls(Process_Output out,
+                  cz::String* temp,
+                  cz::Str working_directory,
+                  cz::Str directory) {
+    temp->len = 0;
+    cz::path::make_absolute(directory, working_directory, temp_allocator, temp);
+
+    cz::Directory_Iterator iterator;
+    int result = iterator.init(temp->buffer);
+    if (result != 1)
+        return result;
+
+    while (1) {
+        (void)out.write(iterator.str_name());
+        (void)out.write("\n");
+
+        result = iterator.advance();
+        if (result <= 0)
+            break;
+    }
+
+    iterator.drop();
+    return result;
 }
