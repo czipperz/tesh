@@ -95,13 +95,13 @@ void recycle_pipeline(Shell_State* shell, Running_Pipeline* pipeline) {
 }
 
 void recycle_process(Shell_State* shell, Running_Script* script) {
+    cleanup_process(script);
+
     recycle_arena(shell, script->arena);
 
     // Empty pipelines don't have an arena.
     if (script->fg.pipeline.length > 0)
         recycle_arena(shell, script->fg.pipeline.arena);
-
-    cleanup_process(script);
 
     if (script->id == shell->active_process)
         shell->active_process = -1;
