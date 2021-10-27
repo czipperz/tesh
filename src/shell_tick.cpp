@@ -27,6 +27,8 @@ static int run_ls(Process_Output out,
 bool tick_program(Shell_State* shell,
                   Render_State* rend,
                   Backlog_State* backlog,
+                  Running_Script* script,
+                  Running_Line* line,
                   Running_Program* program,
                   int* exit_code,
                   bool* force_quit) {
@@ -320,6 +322,45 @@ bool tick_program(Shell_State* shell,
         rend->backlog_start = {};
         rend->backlog_start.index = backlog->length;
         rend->complete_redraw = true;
+        goto finish_builtin;
+    } break;
+
+    case Running_Program::SOURCE: {
+        auto& builtin = program->v.builtin;
+
+        if (builtin.args.len <= 1) {
+            builtin.exit_code = 1;
+            (void)builtin.err.write("source: No file specified\n");
+            goto finish_builtin;
+        }
+
+        cz::Input_File file;
+        if (!file.open(builtin.args[1].buffer)) {
+            builtin.exit_code = 1;
+            (void)builtin.err.write(
+                cz::format(temp_allocator, "source: Couldn't open file ", builtin.args[1], '\n'));
+            goto finish_builtin;
+        }
+        CZ_DEFER(file.close());
+
+        cz::String contents = {};
+        read_to_string(file, script->arena.allocator(), &contents);
+
+        Parse_Script subscript = {};
+        Error error =
+            parse_script(shell, script->arena.allocator(), &subscript, line->on, contents);
+        if (error != Error_Success) {
+            builtin.exit_code = 1;
+            (void)builtin.err.write(
+                cz::format(temp_allocator, "source: Error while parsing ", builtin.args[1], '\n'));
+            goto finish_builtin;
+        }
+
+        Parse_Line* first = script->arena.allocator().clone(subscript.first);
+        CZ_ASSERT(first);
+        line->on = {};
+        line->on.success = first;
+        line->on.failure = first;
         goto finish_builtin;
     } break;
 

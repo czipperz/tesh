@@ -437,5 +437,7 @@ static void recognize_builtins(Running_Program* program,
         program->type = Running_Program::EXPORT;
     } else if (parse.args[0] == "clear") {
         program->type = Running_Program::CLEAR;
+    } else if (parse.args[0] == "." || parse.args[0] == "source") {
+        program->type = Running_Program::SOURCE;
     }
 }

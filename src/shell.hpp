@@ -88,6 +88,7 @@ struct Running_Program {
         FALSE_,
         EXPORT,
         CLEAR,
+        SOURCE,
     } type;
     union {
         cz::Process process;
@@ -204,6 +205,8 @@ Error start_execute_line(Shell_State* shell,
 bool tick_program(Shell_State* shell,
                   Render_State* rend,
                   Backlog_State* backlog,
+                  Running_Script* script,
+                  Running_Line* line,
                   Running_Program* program,
                   int* exit_code,
                   bool* force_exit);
