@@ -271,7 +271,7 @@ static void render_frame(SDL_Window* window,
 // Process control
 ///////////////////////////////////////////////////////////////////////////////
 
-static bool run_line(Shell_State* shell, Backlog_State* backlog, cz::Str text, uint64_t id) {
+static bool run_script(Shell_State* shell, Backlog_State* backlog, cz::Str text, uint64_t id) {
     cz::Buffer_Array arena = alloc_arena(shell);
 
 #ifdef TRACY_ENABLE
@@ -322,7 +322,7 @@ static void run_rc(Shell_State* shell, Backlog_State* backlog) {
     read_to_string(file, temp_allocator, &contents);
 
     uint64_t id = -1;
-    run_line(shell, backlog, contents, id);
+    run_script(shell, backlog, contents, id);
 }
 
 static void tick_pipeline(Shell_State* shell,
@@ -905,7 +905,7 @@ static int process_events(Backlog_State* backlog,
                     } else {
                         rend->auto_page = cfg.on_spawn_auto_page;
                         rend->auto_scroll = cfg.on_spawn_auto_scroll;
-                        if (!run_line(shell, backlog, prompt->text, prompt->process_id)) {
+                        if (!run_script(shell, backlog, prompt->text, prompt->process_id)) {
                             append_text(backlog, prompt->process_id, "Error: failed to execute\n");
                         }
                     }
