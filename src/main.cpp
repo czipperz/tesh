@@ -396,6 +396,15 @@ static void render_frame(SDL_Window* window,
     rend->window_rows_ru = (window_surface->h + rend->font_height - 1) / rend->font_height;
     rend->window_cols = window_surface->w / rend->font_width;
 
+    if (rend->window_rows != shell->height || rend->window_cols != shell->width) {
+        shell->height = rend->window_rows;
+        shell->width = rend->window_cols;
+        for (size_t i = 0; i < shell->scripts.len; ++i) {
+            Running_Script* script = &shell->scripts[i];
+            set_window_size(&script->tty, shell->width, shell->height);
+        }
+    }
+
     if (rend->auto_page)
         auto_scroll_start_paging(rend, backlogs);
     if (rend->auto_scroll)
@@ -598,10 +607,20 @@ static bool read_process_data(Shell_State* shell,
         if (*force_quit)
             return true;
 
-        if (script->out.is_open()) {
+#ifdef _WIN32
+        cz::Input_File parent_out = script->tty.out;
+#else
+        cz::Input_File parent_out = {script->tty.parent_bi};
+#endif
+        if (parent_out.is_open()) {
             int64_t result = 0;
             for (int rounds = 0; rounds < 1024; ++rounds) {
-                result = script->out.read_text(buffer, sizeof(buffer), &script->out_carry);
+#ifdef _WIN32
+                result = parent_out.read_strip_carriage_returns(buffer, sizeof(buffer),
+                                                                &script->tty.out_carry);
+#else
+                result = parent_out.read(buffer, sizeof(buffer));
+#endif
                 if (result <= 0)
                     break;
 
@@ -609,11 +628,6 @@ static bool read_process_data(Shell_State* shell,
                 result = append_text(backlog, {buffer, (size_t)result});
                 if (result <= 0)
                     break;
-            }
-
-            if (result == 0) {
-                script->out.close();
-                script->out = {};
             }
         }
 
@@ -1289,7 +1303,12 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
 
                 if (event.key.keysym.sym == SDLK_RETURN) {
                     if (script) {
-                        (void)script->in.write(cz::format(temp_allocator, prompt->text, '\n'));
+                        cz::Str message = cz::format(temp_allocator, prompt->text, '\n');
+#ifdef _WIN32
+                        (void)script->tty.in.write(message);
+#else
+                        (void)cz::Output_File{script->tty.parent_bi}.write(message);
+#endif
                     } else {
                         rend->auto_page = cfg.on_spawn_auto_page;
                         rend->auto_scroll = cfg.on_spawn_auto_scroll;
@@ -1341,7 +1360,8 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
                 if (shell->active_process == -1) {
                     for (size_t i = shell->scripts.len; i-- > 0;) {
                         Running_Script* script = &shell->scripts[i];
-                        if (script->in.is_open()) {
+                        // TODO close stdin
+                        if (1) {
                             shell->active_process = script->id;
                             prompt->history_counter = prompt->stdin_history.len;
                             break;
@@ -1354,6 +1374,8 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
                 ++num_events;
             }
 
+            // TODO close stdin
+#if 0
             if (mod == KMOD_CTRL && key == SDLK_d) {
                 if (shell->active_process == -1) {
                     if (prompt->cursor < prompt->text.len) {
@@ -1368,6 +1390,7 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
                     ++num_events;
                 }
             }
+#endif
 
             if (mod == KMOD_CTRL && key == SDLK_l) {
                 clear_screen(rend, shell, *backlogs);

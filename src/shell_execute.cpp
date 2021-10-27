@@ -10,24 +10,39 @@
 
 ///////////////////////////////////////////////////////////////////////////////
 
+enum File_Type {
+    File_Type_Terminal,
+    File_Type_File,
+    File_Type_Pipe,
+    File_Type_None,
+};
+
+struct Stdio_State {
+    File_Type in_type = File_Type_Terminal;
+    File_Type out_type = File_Type_Terminal;
+    File_Type err_type = File_Type_Terminal;
+    cz::Input_File in;
+    cz::Output_File out;
+    cz::Output_File err;
+};
+
+///////////////////////////////////////////////////////////////////////////////
+
 static Error start_execute_pipeline(Shell_State* shell,
                                     Backlog_State* backlog,
                                     cz::Buffer_Array arena,
                                     const Running_Script& script,
                                     const Parse_Pipeline& parse,
                                     Running_Pipeline* running,
-                                    cz::Input_File pipe_in);
+                                    bool bind_stdin);
 
 static Error run_program(Shell_State* shell,
                          cz::Allocator allocator,
                          Running_Program* program,
                          Parse_Program parse,
-                         cz::Input_File in,
-                         Process_Output out,
-                         Process_Output err,
-                         bool in_pipe,
-                         bool out_pipe,
-                         bool err_pipe);
+                         Stdio_State stdio,
+                         Backlog_State* backlog,
+                         const Running_Script& script);
 
 static void recognize_builtins(Running_Program* program,
                                const Parse_Program& parse,
@@ -45,6 +60,10 @@ Error start_execute_script(Shell_State* shell,
     Running_Script running = {};
     running.id = backlog->id;
 
+    if (!create_pseudo_terminal(&running.tty, shell->width, shell->height))
+        return Error_IO;
+
+#if 0
     if (!cz::create_process_input_pipe(&running.script_in, &running.in))
         return Error_IO;
     if (!cz::create_process_output_pipe(&running.script_out, &running.out)) {
@@ -60,12 +79,13 @@ Error start_execute_script(Shell_State* shell,
         error = Error_IO;
         goto cleanup2;
     }
-
-    running.arena = arena;
+#endif
 
     error = start_execute_line(shell, backlog, &running, parse.first, /*background=*/false);
-    if (error != Error_Success)
-        goto cleanup2;
+    if (error != Error_Success) {
+        destroy_pseudo_terminal(&running.tty);
+        return error;
+    }
 
     shell->scripts.reserve(cz::heap_allocator(), 1);
     shell->scripts.push(running);
@@ -75,6 +95,7 @@ Error start_execute_script(Shell_State* shell,
 
     return Error_Success;
 
+#if 0
 cleanup2:
     running.script_out.close();
     running.out.close();
@@ -82,6 +103,7 @@ cleanup1:
     running.script_in.close();
     running.in.close();
     return error;
+#endif
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -95,7 +117,7 @@ Error start_execute_line(Shell_State* shell,
 
 again:
     Running_Line* line = &running->fg;
-    cz::Input_File pipe_in = running->script_in;
+    bool bind_stdin = true;
 
     // If another line starts at the start of this line, then
     // this line is async and should be ran in the background.
@@ -103,7 +125,7 @@ again:
         running->bg.reserve(cz::heap_allocator(), 1);
         running->bg.push({});
         line = &running->bg.last();
-        pipe_in = {};
+        bind_stdin = false;
     }
 
     line->on = parse->on;
@@ -112,7 +134,7 @@ again:
     // Running_Script then adding a Running_Line to it.  Idk.
     cz::Buffer_Array pipeline_arena = alloc_arena(shell);
     Error error = start_execute_pipeline(shell, backlog, pipeline_arena, *running, parse->pipeline,
-                                         &line->pipeline, pipe_in);
+                                         &line->pipeline, bind_stdin);
     if (error != Error_Success) {
         recycle_arena(shell, pipeline_arena);
         return error;
@@ -135,7 +157,7 @@ static Error start_execute_pipeline(Shell_State* shell,
                                     const Running_Script& script,
                                     const Parse_Pipeline& parse,
                                     Running_Pipeline* running,
-                                    cz::Input_File pipe_in) {
+                                    bool bind_stdin) {
     ZoneScoped;
 
     running->length = parse.pipeline.len;
@@ -156,73 +178,65 @@ static Error start_execute_pipeline(Shell_State* shell,
         files.drop(cz::heap_allocator());
     });
 
+    cz::Input_File pipe_in;
+
     for (size_t p = 0; p < parse.pipeline.len; ++p) {
         Parse_Program parse_program = parse.pipeline[p];
 
         Running_Program running_program = {};
         recognize_builtins(&running_program, parse_program, arena.allocator());
 
-        Process_Output my_line_out = {};
-        if (running_program.type == Running_Program::PROCESS) {
-            my_line_out.type = Process_Output::FILE;
-            my_line_out.v.file = script.script_out;
-        } else {
-            my_line_out.type = Process_Output::BACKLOG;
-            my_line_out.v.backlog = backlog;
-        }
-
-        bool in_pipe = false, out_pipe = false, err_pipe = false;
-        cz::Input_File in;
-        Process_Output out = {};
-        Process_Output err = {};
+        Stdio_State stdio = {};
 
         if (parse_program.in_file.buffer) {
-            if (!in.open(parse_program.in_file.buffer))
-                return Error_InvalidPath;  // TODO: cleanup file descriptors
+            stdio.in_type = File_Type_File;
+            if (!stdio.in.open(parse_program.in_file.buffer))
+                return Error_InvalidPath;
             files.reserve(cz::heap_allocator(), 1);
-            files.push(in);
-            pipe_in = {};
-        } else {
-            in = pipe_in;
-            pipe_in = {};
-            in_pipe = true;
+            files.push(stdio.in);
+        } else if (p > 0) {
+            stdio.in_type = File_Type_Pipe;
+            stdio.in = pipe_in;
+        } else if (!bind_stdin) {
+            stdio.in_type = File_Type_None;
         }
+        pipe_in = {};
 
         if (parse_program.out_file.buffer) {
-            out.type = Process_Output::FILE;
-            if (!out.v.file.open(parse_program.out_file.buffer))
-                return Error_InvalidPath;  // TODO: cleanup file descriptors
+            stdio.out_type = File_Type_File;
+            if (!stdio.out.open(parse_program.out_file.buffer))
+                return Error_InvalidPath;
             files.reserve(cz::heap_allocator(), 1);
-            files.push(out.v.file);
-        } else {
-            if (p + 1 == parse.pipeline.len) {
-                out = my_line_out;
-            } else {
-                cz::Output_File pipe_out;
-                if (!cz::create_pipe(&pipe_in, &pipe_out))
-                    return Error_IO;
-                files.reserve(cz::heap_allocator(), 2);
-                files.push(pipe_in);
-                files.push(pipe_out);
-                out.type = Process_Output::FILE;
-                out.v.file = pipe_out;
-            }
-            out_pipe = true;
+            files.push(stdio.out);
+        } else if (p + 1 < parse.pipeline.len) {
+            stdio.out_type = File_Type_Pipe;
         }
 
         if (parse_program.err_file.buffer) {
-            err.type = Process_Output::FILE;
-            if (!err.v.file.open(parse_program.err_file.buffer))
-                return Error_InvalidPath;  // TODO: cleanup file descriptors
+            stdio.err_type = File_Type_File;
+            if (!stdio.err.open(parse_program.err_file.buffer))
+                return Error_InvalidPath;
             files.reserve(cz::heap_allocator(), 1);
-            files.push(err.v.file);
-        } else {
-            err = my_line_out;
-            err_pipe = true;
+            files.push(stdio.err);
         }
 
-        Error error = run_program(shell, arena.allocator(), &running_program, parse_program, in,
-                                  out, err, in_pipe, out_pipe, err_pipe);
+        // Make pipes for the next iteration.
+        if (stdio.out_type == File_Type_Pipe || stdio.err_type == File_Type_Pipe) {
+            cz::Output_File pipe_out;
+            if (!cz::create_pipe(&pipe_in, &pipe_out))
+                return Error_IO;
+            files.reserve(cz::heap_allocator(), 2);
+            files.push(pipe_in);
+            files.push(pipe_out);
+
+            if (stdio.out_type == File_Type_Pipe)
+                stdio.out = pipe_out;
+            if (stdio.err_type == File_Type_Pipe)
+                stdio.err = pipe_out;
+        }
+
+        Error error = run_program(shell, arena.allocator(), &running_program, parse_program, stdio,
+                                  backlog, script);
         if (error != Error_Success)
             return error;
 
@@ -249,25 +263,41 @@ static Error run_program(Shell_State* shell,
                          cz::Allocator allocator,
                          Running_Program* program,
                          Parse_Program parse,
-                         cz::Input_File in,
-                         Process_Output out,
-                         Process_Output err,
-                         bool in_pipe,
-                         bool out_pipe,
-                         bool err_pipe) {
+                         Stdio_State stdio,
+                         Backlog_State* backlog,
+                         const Running_Script& script) {
     // If command is a builtin.
     if (program->type != Running_Program::PROCESS) {
-        if (in_pipe && in.is_open() && !in.set_non_blocking())
+        if (stdio.in_type == File_Type_Pipe && !stdio.in.set_non_blocking())
             return Error_IO;
-        if (out_pipe && out.type == Process_Output::FILE && !out.v.file.set_non_blocking())
+        if (stdio.out_type == File_Type_Pipe && !stdio.out.set_non_blocking())
             return Error_IO;
-        if (err_pipe && err.type == Process_Output::FILE && !err.v.file.set_non_blocking())
+        if (stdio.err_type == File_Type_Pipe && !stdio.err.set_non_blocking())
             return Error_IO;
 
+        if (stdio.in_type == File_Type_Terminal) {
+            program->v.builtin.in = script.tty.child_in;
+        } else {
+            program->v.builtin.in = stdio.in;
+        }
+        if (stdio.out_type == File_Type_Terminal) {
+            program->v.builtin.out.type = Process_Output::BACKLOG;
+            program->v.builtin.out.v.backlog.state = backlog;
+            program->v.builtin.out.v.backlog.process_id = script.id;
+        } else {
+            program->v.builtin.out.type = Process_Output::FILE;
+            program->v.builtin.out.v.file = stdio.out;
+        }
+        if (stdio.err_type == File_Type_Terminal) {
+            program->v.builtin.err.type = Process_Output::BACKLOG;
+            program->v.builtin.err.v.backlog.state = backlog;
+            program->v.builtin.err.v.backlog.process_id = script.id;
+        } else {
+            program->v.builtin.err.type = Process_Output::FILE;
+            program->v.builtin.err.v.file = stdio.err;
+        }
+
         program->v.builtin.args = parse.args;
-        program->v.builtin.in = in;
-        program->v.builtin.out = out;
-        program->v.builtin.err = err;
         program->v.builtin.working_directory =
             shell->working_directory.clone_null_terminate(allocator);
         return Error_Success;
@@ -288,20 +318,51 @@ static Error run_program(Shell_State* shell,
     }
 #endif
 
-    parse.args = args;
-
-    CZ_DEBUG_ASSERT(out.type == Process_Output::FILE);
-    CZ_DEBUG_ASSERT(err.type == Process_Output::FILE);
-
     cz::Process_Options options;
-    options.std_in = in;
-    options.std_out = out.v.file;
-    options.std_err = err.v.file;
+#ifdef _WIN32
+    if (stdio.in_type == File_Type_Terminal && stdio.out_type == File_Type_Terminal && stdio.err_type == File_Type_Terminal) {
+        // TODO: test pseudo console + stdio.
+        options.pseudo_console = script.tty.pseudo_console;
+    } else {
+        if (stdio.in_type == File_Type_Terminal) {
+            options.std_in = script.tty.child_in;
+        } else {
+            options.std_in = stdio.in;
+        }
+        if (stdio.out_type == File_Type_Terminal) {
+            options.std_out = script.tty.child_out;
+        } else {
+            options.std_out = stdio.out;
+        }
+        if (stdio.err_type == File_Type_Terminal) {
+            options.std_err = script.tty.child_out;  // yes, out!
+        } else {
+            options.std_err = stdio.err;
+        }
+    }
+#else
+    if (stdio.in_type == File_Type_Terminal) {
+        options.std_in = {script.tty.child_bi};
+    } else {
+        options.std_in = stdio.in;
+    }
+    if (stdio.out_type == File_Type_Terminal) {
+        options.std_out = {script.tty.child_bi};
+    } else {
+        options.std_out = stdio.out;
+    }
+    if (stdio.err_type == File_Type_Terminal) {
+        options.std_err = {script.tty.child_bi};
+    } else {
+        options.std_err = stdio.err;
+    }
+#endif
+
     options.working_directory = shell->working_directory.buffer;
     generate_environment(&options.environment, shell, parse.variable_names, parse.variable_values);
 
     program->v.process = {};
-    if (!program->v.process.launch_program(parse.args, options))
+    if (!program->v.process.launch_program(args, options))
         return Error_IO;
 
     return Error_Success;

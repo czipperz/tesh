@@ -85,9 +85,7 @@ void cleanup_pipeline(Running_Pipeline* pipeline) {
 
 static void cleanup_process(Running_Script* script) {
     cleanup_pipeline(&script->fg.pipeline);
-
-    script->in.close();
-    script->out.close();
+    destroy_pseudo_terminal(&script->tty);
 }
 
 void cleanup_processes(Shell_State* shell) {

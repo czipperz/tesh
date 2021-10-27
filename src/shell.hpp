@@ -13,10 +13,13 @@
 struct Running_Pipeline;
 struct Running_Script;
 struct Parse_Line;
+struct Pseudo_Terminal;
 
 ///////////////////////////////////////////////////////////////////////////////
 
 struct Shell_State {
+    int width, height;
+
     cz::Vector<cz::String> exported_vars;
     cz::Vector<cz::String> variable_names;
     cz::Vector<cz::String> variable_values;
@@ -70,6 +73,30 @@ struct Process_Output {
     int64_t write(cz::Str str) { return write(str.buffer, str.len); }
     int64_t write(const void* buffer, size_t len);
 };
+
+///////////////////////////////////////////////////////////////////////////////
+
+struct Pseudo_Terminal {
+#ifdef _WIN32
+    /// The child state.
+    void* pseudo_console;
+    cz::Input_File child_in;
+    cz::Output_File child_out;
+    /// The parent state.
+    cz::Output_File in;
+    cz::Input_File out;
+    cz::Carriage_Return_Carry out_carry;
+#else
+    /// The child state.
+    int child_bi;
+    /// The parent state.
+    int parent_bi;
+#endif
+};
+
+bool create_pseudo_terminal(Pseudo_Terminal* tty, int width, int height);
+bool set_window_size(Pseudo_Terminal* tty, int width, int height);
+void destroy_pseudo_terminal(Pseudo_Terminal* tty);
 
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -148,16 +175,12 @@ struct Running_Line {
 struct Running_Script {
     uint64_t id;
     cz::Buffer_Array arena;
+
     cz::Vector<Running_Line> bg;
     Running_Line fg;
     bool fg_finished;
-    cz::Output_File in;
-    cz::Input_File out;
-    cz::Carriage_Return_Carry out_carry;
 
-    /// Default stdin/stdout for a newly launched program in this script.
-    cz::Input_File script_in;
-    cz::Output_File script_out;
+    Pseudo_Terminal tty;
 };
 
 ///////////////////////////////////////////////////////////////////////////////
