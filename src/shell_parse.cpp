@@ -272,9 +272,15 @@ static Error parse_pipeline(const Shell_State* shell,
                 if (any_special || word.len > 0)
                     goto def;
 
+                bool slash = false;
                 cz::Str after = text.slice_start(*index + 1);
-                if (!after.starts_with('/'))
-                    goto def;
+                if (after.len > 0) {
+                    char ch = after[0];
+                    if (ch == '/') {
+                        slash = true;
+                    } else if (!cz::is_space(ch))
+                        goto def;
+                }
 
                 cz::Str home;
                 if (!get_var(shell, "HOME", &home))
@@ -283,8 +289,10 @@ static Error parse_pipeline(const Shell_State* shell,
                 any_special = true;
                 word.reserve(allocator, home.len + 1);
                 word.append(home);
-                word.push('/');
-                ++*index;
+                if (slash) {
+                    word.push('/');
+                    ++*index;
+                }
                 break;
             }
 
