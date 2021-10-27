@@ -31,11 +31,9 @@ static bool get_var_at_point(cz::Str text, size_t index, cz::Str* key);
 Error parse_script(const Shell_State* shell,
                    cz::Allocator allocator,
                    Parse_Script* out,
+                   Parse_Continuation outer,
                    cz::Str text) {
     size_t index = 0;
-
-    Parse_Line* outer_success = nullptr;
-    Parse_Line* outer_failure = nullptr;
 
     Parse_Line* line = &out->first;
     while (1) {
@@ -44,8 +42,10 @@ Error parse_script(const Shell_State* shell,
             return error;
 
         // End of script.
-        if (index == text.len)
+        if (index == text.len) {
+            line->on = outer;
             return Error_Success;
+        }
 
         Parse_Line* next = allocator.alloc<Parse_Line>();
         CZ_ASSERT(next);
@@ -57,17 +57,23 @@ Error parse_script(const Shell_State* shell,
         case ';':
             line->on.success = next;
             line->on.failure = next;
+            line->on.start = outer.start;
+            outer.start = nullptr;
             break;
         case '|':
             CZ_DEBUG_ASSERT(text[index + 1] == '|');
             ++index;
-            line->on.success = outer_success;
+            line->on.success = outer.success;
             line->on.failure = next;
+            line->on.start = outer.start;
+            outer.start = nullptr;
             break;
         case '&':
             if (text.slice_start(index + 1).starts_with('&')) {
                 line->on.success = next;
-                line->on.failure = outer_failure;
+                line->on.failure = outer.failure;
+                line->on.start = outer.start;
+                outer.start = nullptr;
                 ++index;
             } else {
                 line->on.start = next;

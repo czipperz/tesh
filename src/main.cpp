@@ -282,7 +282,7 @@ static bool run_script(Shell_State* shell, Backlog_State* backlog, cz::Str text,
 #endif
 
     Parse_Script script = {};
-    Error error = parse_script(shell, arena.allocator(), &script, text);
+    Error error = parse_script(shell, arena.allocator(), &script, {}, text);
     if (error != Error_Success)
         goto fail;
 

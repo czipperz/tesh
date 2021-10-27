@@ -5,7 +5,7 @@
 TEST_CASE("parse_script empty line") {
     Shell_State shell = {};
     Parse_Script script = {};
-    Error error = parse_script(&shell, cz::heap_allocator(), &script, "");
+    Error error = parse_script(&shell, cz::heap_allocator(), &script, {}, "");
     REQUIRE(error == Error_Success);
     Parse_Pipeline pipeline = script.first.pipeline;
     CHECK(pipeline.pipeline.len == 0);
@@ -14,7 +14,7 @@ TEST_CASE("parse_script empty line") {
 TEST_CASE("parse_script one word") {
     Shell_State shell = {};
     Parse_Script script = {};
-    Error error = parse_script(&shell, cz::heap_allocator(), &script, "abc");
+    Error error = parse_script(&shell, cz::heap_allocator(), &script, {}, "abc");
     REQUIRE(error == Error_Success);
     Parse_Pipeline pipeline = script.first.pipeline;
     REQUIRE(pipeline.pipeline.len == 1);
@@ -25,7 +25,7 @@ TEST_CASE("parse_script one word") {
 TEST_CASE("parse_script two words") {
     Shell_State shell = {};
     Parse_Script script = {};
-    Error error = parse_script(&shell, cz::heap_allocator(), &script, "abc def");
+    Error error = parse_script(&shell, cz::heap_allocator(), &script, {}, "abc def");
     REQUIRE(error == Error_Success);
     Parse_Pipeline pipeline = script.first.pipeline;
     REQUIRE(pipeline.pipeline.len == 1);
@@ -37,7 +37,7 @@ TEST_CASE("parse_script two words") {
 TEST_CASE("parse_script two words whitespace") {
     Shell_State shell = {};
     Parse_Script script = {};
-    Error error = parse_script(&shell, cz::heap_allocator(), &script, "   abc   def   ");
+    Error error = parse_script(&shell, cz::heap_allocator(), &script, {}, "   abc   def   ");
     REQUIRE(error == Error_Success);
     Parse_Pipeline pipeline = script.first.pipeline;
     REQUIRE(pipeline.pipeline.len == 1);
@@ -49,7 +49,7 @@ TEST_CASE("parse_script two words whitespace") {
 TEST_CASE("parse_script pipe simple 1") {
     Shell_State shell = {};
     Parse_Script script = {};
-    Error error = parse_script(&shell, cz::heap_allocator(), &script, "a | b");
+    Error error = parse_script(&shell, cz::heap_allocator(), &script, {}, "a | b");
     REQUIRE(error == Error_Success);
     Parse_Pipeline pipeline = script.first.pipeline;
     REQUIRE(pipeline.pipeline.len == 2);
@@ -62,7 +62,7 @@ TEST_CASE("parse_script pipe simple 1") {
 TEST_CASE("parse_script pipe simple 2") {
     Shell_State shell = {};
     Parse_Script script = {};
-    Error error = parse_script(&shell, cz::heap_allocator(), &script, "a b|c d");
+    Error error = parse_script(&shell, cz::heap_allocator(), &script, {}, "a b|c d");
     REQUIRE(error == Error_Success);
     Parse_Pipeline pipeline = script.first.pipeline;
     REQUIRE(pipeline.pipeline.len == 2);
@@ -77,7 +77,7 @@ TEST_CASE("parse_script pipe simple 2") {
 TEST_CASE("parse_script single quotes basic cases") {
     Shell_State shell = {};
     Parse_Script script = {};
-    Error error = parse_script(&shell, cz::heap_allocator(), &script, "a '' 'b' 'abcabc'");
+    Error error = parse_script(&shell, cz::heap_allocator(), &script, {}, "a '' 'b' 'abcabc'");
     REQUIRE(error == Error_Success);
     Parse_Pipeline pipeline = script.first.pipeline;
     REQUIRE(pipeline.pipeline.len == 1);
@@ -91,7 +91,7 @@ TEST_CASE("parse_script single quotes basic cases") {
 TEST_CASE("parse_script single quote unterminated 1") {
     Shell_State shell = {};
     Parse_Script script = {};
-    Error error = parse_script(&shell, cz::heap_allocator(), &script, "'");
+    Error error = parse_script(&shell, cz::heap_allocator(), &script, {}, "'");
     REQUIRE(error == Error_Parse);
     Parse_Pipeline pipeline = script.first.pipeline;
     CHECK(pipeline.pipeline.len == 0);
@@ -100,7 +100,7 @@ TEST_CASE("parse_script single quote unterminated 1") {
 TEST_CASE("parse_script single quote unterminated 2") {
     Shell_State shell = {};
     Parse_Script script = {};
-    Error error = parse_script(&shell, cz::heap_allocator(), &script, "c  'b  \n  a");
+    Error error = parse_script(&shell, cz::heap_allocator(), &script, {}, "c  'b  \n  a");
     REQUIRE(error == Error_Parse);
     Parse_Pipeline pipeline = script.first.pipeline;
     CHECK(pipeline.pipeline.len == 0);
@@ -109,7 +109,7 @@ TEST_CASE("parse_script single quote unterminated 2") {
 TEST_CASE("parse_script single quotes weird cases") {
     Shell_State shell = {};
     Parse_Script script = {};
-    Error error = parse_script(&shell, cz::heap_allocator(), &script, "' \n\n ' 'c'a'b'");
+    Error error = parse_script(&shell, cz::heap_allocator(), &script, {}, "' \n\n ' 'c'a'b'");
     REQUIRE(error == Error_Success);
     Parse_Pipeline pipeline = script.first.pipeline;
     REQUIRE(pipeline.pipeline.len == 1);
@@ -121,7 +121,7 @@ TEST_CASE("parse_script single quotes weird cases") {
 TEST_CASE("parse_script double quote basic") {
     Shell_State shell = {};
     Parse_Script script = {};
-    Error error = parse_script(&shell, cz::heap_allocator(), &script, "\"a\" \"\" \"abc\"");
+    Error error = parse_script(&shell, cz::heap_allocator(), &script, {}, "\"a\" \"\" \"abc\"");
     REQUIRE(error == Error_Success);
     Parse_Pipeline pipeline = script.first.pipeline;
     REQUIRE(pipeline.pipeline.len == 1);
@@ -135,7 +135,7 @@ TEST_CASE("parse_script double quote escape") {
     Shell_State shell = {};
     Parse_Script script = {};
     Error error =
-        parse_script(&shell, cz::heap_allocator(), &script, "\"\\\\ \\n \\a \\$ \\` \\\"\"");
+        parse_script(&shell, cz::heap_allocator(), &script, {}, "\"\\\\ \\n \\a \\$ \\` \\\"\"");
     REQUIRE(error == Error_Success);
     Parse_Pipeline pipeline = script.first.pipeline;
     REQUIRE(pipeline.pipeline.len == 1);
@@ -146,7 +146,7 @@ TEST_CASE("parse_script double quote escape") {
 TEST_CASE("parse_script variable") {
     Shell_State shell = {};
     Parse_Script script = {};
-    Error error = parse_script(&shell, cz::heap_allocator(), &script, "a=b c=d");
+    Error error = parse_script(&shell, cz::heap_allocator(), &script, {}, "a=b c=d");
     REQUIRE(error == Error_Success);
     Parse_Pipeline pipeline = script.first.pipeline;
     REQUIRE(pipeline.pipeline.len == 1);
@@ -162,7 +162,7 @@ TEST_CASE("parse_script variable") {
 TEST_CASE("parse_script variable after arg is arg") {
     Shell_State shell = {};
     Parse_Script script = {};
-    Error error = parse_script(&shell, cz::heap_allocator(), &script, "a=b arg c=d");
+    Error error = parse_script(&shell, cz::heap_allocator(), &script, {}, "a=b arg c=d");
     REQUIRE(error == Error_Success);
     Parse_Pipeline pipeline = script.first.pipeline;
     REQUIRE(pipeline.pipeline.len == 1);
@@ -179,7 +179,7 @@ TEST_CASE("parse_script variable expand simple") {
     Shell_State shell = {};
     set_var(&shell, "var", "$value");
     Parse_Script script = {};
-    Error error = parse_script(&shell, cz::heap_allocator(), &script, "$var$var");
+    Error error = parse_script(&shell, cz::heap_allocator(), &script, {}, "$var$var");
     REQUIRE(error == Error_Success);
     Parse_Pipeline pipeline = script.first.pipeline;
     REQUIRE(pipeline.pipeline.len == 1);
@@ -191,7 +191,7 @@ TEST_CASE("parse_script variable expand inside quotes") {
     Shell_State shell = {};
     set_var(&shell, "var", "$value");
     Parse_Script script = {};
-    Error error = parse_script(&shell, cz::heap_allocator(), &script, "\"$var$var\"");
+    Error error = parse_script(&shell, cz::heap_allocator(), &script, {}, "\"$var$var\"");
     REQUIRE(error == Error_Success);
     Parse_Pipeline pipeline = script.first.pipeline;
     REQUIRE(pipeline.pipeline.len == 1);
@@ -202,7 +202,7 @@ TEST_CASE("parse_script variable expand inside quotes") {
 TEST_CASE("parse_script 'echo $hi' hi is undefined") {
     Shell_State shell = {};
     Parse_Script script = {};
-    Error error = parse_script(&shell, cz::heap_allocator(), &script, "echo $hi");
+    Error error = parse_script(&shell, cz::heap_allocator(), &script, {}, "echo $hi");
     REQUIRE(error == Error_Success);
     Parse_Pipeline pipeline = script.first.pipeline;
     REQUIRE(pipeline.pipeline.len == 1);
@@ -214,7 +214,7 @@ TEST_CASE("parse_script multi word variable expanded") {
     Shell_State shell = {};
     set_var(&shell, "var", "a b");
     Parse_Script script = {};
-    Error error = parse_script(&shell, cz::heap_allocator(), &script, "\"$var\" echo $var");
+    Error error = parse_script(&shell, cz::heap_allocator(), &script, {}, "\"$var\" echo $var");
     REQUIRE(error == Error_Success);
     Parse_Pipeline pipeline = script.first.pipeline;
     REQUIRE(pipeline.pipeline.len == 1);
@@ -229,7 +229,7 @@ TEST_CASE("parse_script multi word variable a=$var keeps one word") {
     Shell_State shell = {};
     set_var(&shell, "var", "multi word");
     Parse_Script script = {};
-    Error error = parse_script(&shell, cz::heap_allocator(), &script, "a=$var");
+    Error error = parse_script(&shell, cz::heap_allocator(), &script, {}, "a=$var");
     REQUIRE(error == Error_Success);
     Parse_Pipeline pipeline = script.first.pipeline;
     REQUIRE(pipeline.pipeline.len == 1);
@@ -244,7 +244,7 @@ TEST_CASE("parse_script file indirection") {
     Shell_State shell = {};
     Parse_Script script = {};
     Error error = parse_script(&shell, cz::heap_allocator(), &script,
-                               "echo < in arg1 > out arg2 2> err arg3");
+                               {}, "echo < in arg1 > out arg2 2> err arg3");
     REQUIRE(error == Error_Success);
     Parse_Pipeline pipeline = script.first.pipeline;
     REQUIRE(pipeline.pipeline.len == 1);
@@ -262,7 +262,7 @@ TEST_CASE("parse_script file indirection") {
 TEST_CASE("parse_script file indirection stderr must be 2> no space") {
     Shell_State shell = {};
     Parse_Script script = {};
-    Error error = parse_script(&shell, cz::heap_allocator(), &script, "echo 2 > out");
+    Error error = parse_script(&shell, cz::heap_allocator(), &script, {}, "echo 2 > out");
     REQUIRE(error == Error_Success);
     Parse_Pipeline pipeline = script.first.pipeline;
     REQUIRE(pipeline.pipeline.len == 1);
@@ -276,7 +276,7 @@ TEST_CASE("parse_script file indirection stderr must be 2> no space") {
 TEST_CASE("parse_script semicolon combiner") {
     Shell_State shell = {};
     Parse_Script script = {};
-    Error error = parse_script(&shell, cz::heap_allocator(), &script, "echo hi; echo bye");
+    Error error = parse_script(&shell, cz::heap_allocator(), &script, {}, "echo hi; echo bye");
     REQUIRE(error == Error_Success);
     Parse_Pipeline pipeline = script.first.pipeline;
     REQUIRE(pipeline.pipeline.len == 1);
@@ -298,7 +298,7 @@ TEST_CASE("parse_script semicolon combiner") {
 TEST_CASE("parse_script newline combiner") {
     Shell_State shell = {};
     Parse_Script script = {};
-    Error error = parse_script(&shell, cz::heap_allocator(), &script, "echo hi \n echo bye");
+    Error error = parse_script(&shell, cz::heap_allocator(), &script, {}, "echo hi \n echo bye");
     REQUIRE(error == Error_Success);
     Parse_Pipeline pipeline = script.first.pipeline;
     REQUIRE(pipeline.pipeline.len == 1);
@@ -320,7 +320,7 @@ TEST_CASE("parse_script newline combiner") {
 TEST_CASE("parse_script && combiner") {
     Shell_State shell = {};
     Parse_Script script = {};
-    Error error = parse_script(&shell, cz::heap_allocator(), &script, "echo hi && echo bye");
+    Error error = parse_script(&shell, cz::heap_allocator(), &script, {}, "echo hi && echo bye");
     REQUIRE(error == Error_Success);
     Parse_Pipeline pipeline = script.first.pipeline;
     REQUIRE(pipeline.pipeline.len == 1);
@@ -342,7 +342,7 @@ TEST_CASE("parse_script && combiner") {
 TEST_CASE("parse_script || combiner") {
     Shell_State shell = {};
     Parse_Script script = {};
-    Error error = parse_script(&shell, cz::heap_allocator(), &script, "echo hi || echo bye");
+    Error error = parse_script(&shell, cz::heap_allocator(), &script, {}, "echo hi || echo bye");
     REQUIRE(error == Error_Success);
     Parse_Pipeline pipeline = script.first.pipeline;
     REQUIRE(pipeline.pipeline.len == 1);
@@ -364,7 +364,7 @@ TEST_CASE("parse_script || combiner") {
 TEST_CASE("parse_script & combiner") {
     Shell_State shell = {};
     Parse_Script script = {};
-    Error error = parse_script(&shell, cz::heap_allocator(), &script, "echo hi & echo bye");
+    Error error = parse_script(&shell, cz::heap_allocator(), &script, {}, "echo hi & echo bye");
     REQUIRE(error == Error_Success);
     Parse_Pipeline pipeline = script.first.pipeline;
     REQUIRE(pipeline.pipeline.len == 1);
@@ -387,7 +387,7 @@ TEST_CASE("parse_script & combiner") {
 TEST_CASE("parse_script backslash escapes newline") {
     Shell_State shell = {};
     Parse_Script script = {};
-    Error error = parse_script(&shell, cz::heap_allocator(), &script, "abc d\\\nef");
+    Error error = parse_script(&shell, cz::heap_allocator(), &script, {}, "abc d\\\nef");
     REQUIRE(error == Error_Success);
     Parse_Pipeline pipeline = script.first.pipeline;
     REQUIRE(pipeline.pipeline.len == 1);
@@ -399,7 +399,7 @@ TEST_CASE("parse_script backslash escapes newline") {
 TEST_CASE("parse_script backslash escapes newline inside string") {
     Shell_State shell = {};
     Parse_Script script = {};
-    Error error = parse_script(&shell, cz::heap_allocator(), &script, "abc \"d\\\nef\"");
+    Error error = parse_script(&shell, cz::heap_allocator(), &script, {}, "abc \"d\\\nef\"");
     REQUIRE(error == Error_Success);
     Parse_Pipeline pipeline = script.first.pipeline;
     REQUIRE(pipeline.pipeline.len == 1);
@@ -411,7 +411,7 @@ TEST_CASE("parse_script backslash escapes newline inside string") {
 TEST_CASE("parse_script tilde not expanded") {
     Shell_State shell = {};
     Parse_Script script = {};
-    Error error = parse_script(&shell, cz::heap_allocator(), &script, "\\~ \"~\" \"~/\"");
+    Error error = parse_script(&shell, cz::heap_allocator(), &script, {}, "\\~ \"~\" \"~/\"");
     REQUIRE(error == Error_Success);
     Parse_Pipeline pipeline = script.first.pipeline;
     REQUIRE(pipeline.pipeline.len == 1);
@@ -424,7 +424,7 @@ TEST_CASE("parse_script tilde not expanded") {
 TEST_CASE("parse_script tilde not expanded after start of word") {
     Shell_State shell = {};
     Parse_Script script = {};
-    Error error = parse_script(&shell, cz::heap_allocator(), &script, "a~/ $abc~/");
+    Error error = parse_script(&shell, cz::heap_allocator(), &script, {}, "a~/ $abc~/");
     REQUIRE(error == Error_Success);
     Parse_Pipeline pipeline = script.first.pipeline;
     REQUIRE(pipeline.pipeline.len == 1);
@@ -437,7 +437,7 @@ TEST_CASE("parse_script tilde expanded simple") {
     Shell_State shell = {};
     set_var(&shell, "HOME", "/path/to/my/home");
     Parse_Script script = {};
-    Error error = parse_script(&shell, cz::heap_allocator(), &script, "~ ~/ ~/abc/123");
+    Error error = parse_script(&shell, cz::heap_allocator(), &script, {}, "~ ~/ ~/abc/123");
     REQUIRE(error == Error_Success);
     Parse_Pipeline pipeline = script.first.pipeline;
     REQUIRE(pipeline.pipeline.len == 1);
@@ -445,4 +445,44 @@ TEST_CASE("parse_script tilde expanded simple") {
     CHECK(pipeline.pipeline[0].args[0] == "/path/to/my/home");
     CHECK(pipeline.pipeline[0].args[1] == "/path/to/my/home/");
     CHECK(pipeline.pipeline[0].args[2] == "/path/to/my/home/abc/123");
+}
+
+TEST_CASE("parse_script outer continuation 1") {
+    Shell_State shell = {};
+    Parse_Continuation outer = {};
+    outer.success = cz::heap_allocator().alloc<Parse_Line>();
+    outer.failure = cz::heap_allocator().alloc<Parse_Line>();
+    outer.start = cz::heap_allocator().alloc<Parse_Line>();
+    Parse_Script script = {};
+    Error error = parse_script(&shell, cz::heap_allocator(), &script, outer, "a; b");
+    REQUIRE(error == Error_Success);
+
+    const Parse_Line* first = &script.first;
+    CHECK(first->on.success == first->on.failure);
+    CHECK(first->on.start == outer.start);
+    REQUIRE(first->on.success);
+    const Parse_Line* second = first->on.success;
+    CHECK(second->on.success == outer.success);
+    CHECK(second->on.failure == outer.failure);
+    CHECK_FALSE(second->on.start);
+}
+
+TEST_CASE("parse_script outer continuation 2") {
+    Shell_State shell = {};
+    Parse_Continuation outer = {};
+    outer.success = cz::heap_allocator().alloc<Parse_Line>();
+    outer.failure = cz::heap_allocator().alloc<Parse_Line>();
+    outer.start = cz::heap_allocator().alloc<Parse_Line>();
+    Parse_Script script = {};
+    Error error = parse_script(&shell, cz::heap_allocator(), &script, outer, "a && b");
+    REQUIRE(error == Error_Success);
+
+    const Parse_Line* first = &script.first;
+    CHECK(first->on.failure == outer.failure);
+    CHECK(first->on.start == outer.start);
+    REQUIRE(first->on.success);
+    const Parse_Line* second = first->on.success;
+    CHECK(second->on.success == outer.success);
+    CHECK(second->on.failure == outer.failure);
+    CHECK_FALSE(second->on.start);
 }

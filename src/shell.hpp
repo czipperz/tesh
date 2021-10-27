@@ -181,6 +181,7 @@ struct Parse_Script {
 Error parse_script(const Shell_State* shell,
                    cz::Allocator allocator,
                    Parse_Script* out,
+                   Parse_Continuation outer,
                    cz::Str text);
 
 ///////////////////////////////////////////////////////////////////////////////
