@@ -40,9 +40,12 @@ struct Prompt_State {
     uint64_t process_id;
     uint64_t history_counter;
     cz::Vector<cz::Str> history;
+    cz::Vector<cz::Str> stdin_history;
     cz::Buffer_Array history_arena;
     bool history_searching;
 };
+
+static cz::Vector<cz::Str>* prompt_history(Prompt_State* prompt, bool script);
 
 ///////////////////////////////////////////////////////////////////////////////
 // Renderer methods
@@ -185,8 +188,9 @@ static void render_prompt(SDL_Surface* window_surface,
             render_char(window_surface, rend, &point, rend->backlog_cache, background,
                         rend->backlog_fg_color, c);
         }
-        if (prompt->history_counter < prompt->history.len) {
-            cz::Str hist = prompt->history[prompt->history_counter];
+        cz::Vector<cz::Str>* history = prompt_history(prompt, shell->active_process != -1);
+        if (prompt->history_counter < history->len) {
+            cz::Str hist = history->get(prompt->history_counter);
             for (size_t i = 0; i < hist.len; ++i) {
                 char c = hist[i];
                 render_char(window_surface, rend, &point, rend->backlog_cache, background,
@@ -594,17 +598,21 @@ static void transform_shift_numbers(SDL_Keysym* keysym) {
     keysym->mod &= ~KMOD_SHIFT;
 }
 
-static void resolve_history_searching(Prompt_State* prompt) {
+static void resolve_history_searching(Prompt_State* prompt, cz::Vector<cz::Str>* history) {
     if (prompt->history_searching) {
         prompt->history_searching = false;
         prompt->text.len = 0;
-        if (prompt->history_counter < prompt->history.len) {
-            cz::Str hist = prompt->history[prompt->history_counter];
+        if (prompt->history_counter < history->len) {
+            cz::Str hist = history->get(prompt->history_counter);
             prompt->text.reserve(cz::heap_allocator(), hist.len);
             prompt->text.append(hist);
             prompt->cursor = prompt->text.len;
         }
     }
+}
+
+static cz::Vector<cz::Str>* prompt_history(Prompt_State* prompt, bool script) {
+    return script ? &prompt->stdin_history : &prompt->history;
 }
 
 static void backward_word(cz::Str text, size_t* cursor) {
@@ -639,6 +647,7 @@ static bool handle_prompt_manipulation_commands(Shell_State* shell,
                                                 Render_State* rend,
                                                 uint16_t mod,
                                                 SDL_Keycode key) {
+    cz::Vector<cz::Str>* history = prompt_history(prompt, shell->active_process != -1);
     if ((mod & ~KMOD_SHIFT) == 0 && key == SDLK_BACKSPACE) {
         if (prompt->cursor > 0) {
             --prompt->cursor;
@@ -678,17 +687,17 @@ static bool handle_prompt_manipulation_commands(Shell_State* shell,
         if (prompt->history_counter > 0) {
             --prompt->history_counter;
             prompt->text.len = 0;
-            cz::Str hist = prompt->history[prompt->history_counter];
+            cz::Str hist = (*history)[prompt->history_counter];
             prompt->text.reserve(cz::heap_allocator(), hist.len);
             prompt->text.append(hist);
             prompt->cursor = prompt->text.len;
         }
     } else if ((mod == 0 && key == SDLK_DOWN) || (mod == KMOD_CTRL && key == SDLK_n)) {
-        if (prompt->history_counter < prompt->history.len) {
+        if (prompt->history_counter < history->len) {
             ++prompt->history_counter;
             prompt->text.len = 0;
-            if (prompt->history_counter < prompt->history.len) {
-                cz::Str hist = prompt->history[prompt->history_counter];
+            if (prompt->history_counter < history->len) {
+                cz::Str hist = (*history)[prompt->history_counter];
                 prompt->text.reserve(cz::heap_allocator(), hist.len);
                 prompt->text.append(hist);
             }
@@ -697,15 +706,15 @@ static bool handle_prompt_manipulation_commands(Shell_State* shell,
     } else if (mod == KMOD_CTRL && key == SDLK_r) {
         if (!prompt->history_searching) {
             prompt->history_searching = true;
-            prompt->history_counter = prompt->history.len;
+            prompt->history_counter = history->len;
         }
         while (1) {
             if (prompt->history_counter == 0) {
-                prompt->history_counter = prompt->history.len;
+                prompt->history_counter = history->len;
                 break;
             }
             --prompt->history_counter;
-            cz::Str hist = prompt->history[prompt->history_counter];
+            cz::Str hist = (*history)[prompt->history_counter];
             if (hist.contains_case_insensitive(prompt->text))
                 break;
         }
@@ -713,18 +722,18 @@ static bool handle_prompt_manipulation_commands(Shell_State* shell,
         if (prompt->history_searching) {
             while (1) {
                 ++prompt->history_counter;
-                if (prompt->history_counter >= prompt->history.len) {
-                    prompt->history_counter = prompt->history.len;
+                if (prompt->history_counter >= history->len) {
+                    prompt->history_counter = history->len;
                     prompt->history_searching = false;
                     break;
                 }
-                cz::Str hist = prompt->history[prompt->history_counter];
+                cz::Str hist = (*history)[prompt->history_counter];
                 if (hist.contains_case_insensitive(prompt->text))
                     break;
             }
         }
     } else if (mod == KMOD_CTRL && key == SDLK_g) {
-        resolve_history_searching(prompt);
+        resolve_history_searching(prompt, history);
     } else if ((mod == 0 && key == SDLK_HOME) || (mod == KMOD_CTRL && key == SDLK_a)) {
         prompt->cursor = 0;
     } else if ((mod == 0 && key == SDLK_END) || (mod == KMOD_CTRL && key == SDLK_e)) {
@@ -878,7 +887,11 @@ static int process_events(Backlog_State* backlog,
                 rend->auto_page = false;
                 rend->auto_scroll = true;
 
-                resolve_history_searching(prompt);
+                {
+                    cz::Vector<cz::Str>* history =
+                        prompt_history(prompt, shell->active_process != -1);
+                    resolve_history_searching(prompt, history);
+                }
 
                 Running_Script* script = active_process(shell);
                 uint64_t process_id = (script ? script->id : prompt->process_id);
@@ -903,7 +916,6 @@ static int process_events(Backlog_State* backlog,
                     if (script) {
                         (void)script->in.write(prompt->text);
                         (void)script->in.write("\n");
-                        --prompt->process_id;
                     } else {
                         rend->auto_page = cfg.on_spawn_auto_page;
                         rend->auto_scroll = cfg.on_spawn_auto_scroll;
@@ -924,16 +936,22 @@ static int process_events(Backlog_State* backlog,
                 }
 
                 if (prompt->text.len > 0) {
-                    if (prompt->history.len == 0 || prompt->history.last() != prompt->text) {
-                        prompt->history.reserve(cz::heap_allocator(), 1);
-                        prompt->history.push(prompt->text.clone(prompt->history_arena.allocator()));
+                    cz::Vector<cz::Str>* history = prompt_history(prompt, script);
+                    if (history->len == 0 || history->last() != prompt->text) {
+                        history->reserve(cz::heap_allocator(), 1);
+                        history->push(prompt->text.clone(prompt->history_arena.allocator()));
                     }
                 }
 
                 prompt->text.len = 0;
                 prompt->cursor = 0;
-                ++prompt->process_id;
-                prompt->history_counter = prompt->history.len;
+                if (!script)
+                    ++prompt->process_id;
+                {
+                    cz::Vector<cz::Str>* history =
+                        prompt_history(prompt, shell->active_process != -1);
+                    prompt->history_counter = history->len;
+                }
 
                 ensure_prompt_on_screen(rend, backlog);
                 ++num_events;
@@ -947,11 +965,13 @@ static int process_events(Backlog_State* backlog,
                         Running_Script* script = &shell->scripts[i];
                         if (script->in.is_open()) {
                             shell->active_process = script->id;
+                            prompt->history_counter = prompt->stdin_history.len;
                             break;
                         }
                     }
                 } else {
                     shell->active_process = -1;
+                    prompt->history_counter = prompt->history.len;
                 }
                 ++num_events;
             }
@@ -1061,10 +1081,6 @@ static int process_events(Backlog_State* backlog,
 ///////////////////////////////////////////////////////////////////////////////
 // History control
 ///////////////////////////////////////////////////////////////////////////////
-
-uint64_t history_counter;
-cz::Vector<cz::Str> history;
-cz::Buffer_Array history_arena;
 
 static void load_history(Prompt_State* prompt, Shell_State* shell) {
     cz::Str home = {};
