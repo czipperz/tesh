@@ -59,10 +59,7 @@ struct Process_Output {
     } type;
     union {
         cz::Output_File file;
-        struct {
-            Backlog_State* state;
-            uint64_t process_id;
-        } backlog;
+        Backlog_State* backlog;
     } v;
 
     int64_t write(cz::Str str) { return write(str.buffer, str.len); }

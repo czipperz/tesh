@@ -179,8 +179,7 @@ static Error start_execute_pipeline(Shell_State* shell,
             my_line_out.v.file = script.script_out;
         } else {
             my_line_out.type = Process_Output::BACKLOG;
-            my_line_out.v.backlog.state = backlog;
-            my_line_out.v.backlog.process_id = script.id;
+            my_line_out.v.backlog = backlog;
         }
 
         bool in_pipe = false, out_pipe = false, err_pipe = false;

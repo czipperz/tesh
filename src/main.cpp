@@ -29,6 +29,8 @@
 #include "shell.hpp"
 
 void resize_font(int font_size, Render_State* rend);
+static void push_backlog(cz::Vector<Backlog_State>* backlogs);
+
 ///////////////////////////////////////////////////////////////////////////////
 // Type definitions
 ///////////////////////////////////////////////////////////////////////////////
@@ -62,7 +64,7 @@ static void render_backlog(SDL_Surface* window_surface,
     if (point->y >= rend->window_rows_ru)
         return;
 
-    uint64_t process_id = 0;
+    uint64_t process_id = backlog->id;
     SDL_Color bg_color = cfg.process_colors[process_id % cfg.process_colors.len];
     uint32_t background = SDL_MapRGB(window_surface->format, bg_color.r, bg_color.g, bg_color.b);
 
@@ -72,6 +74,7 @@ static void render_backlog(SDL_Surface* window_surface,
     size_t event_index = 0;
 
     for (; i < backlog->length; ++i) {
+#if 0
         while (event_index < backlog->events.len && backlog->events[event_index].index <= i) {
             Backlog_Event* event = &backlog->events[event_index];
             if (event->type == BACKLOG_EVENT_START_PROCESS) {
@@ -93,6 +96,7 @@ static void render_backlog(SDL_Surface* window_surface,
             }
             ++event_index;
         }
+#endif
 
         char c = backlog->get(i);
         if (!render_char(window_surface, rend, point, cache, background, fg_color, c))
@@ -100,6 +104,14 @@ static void render_backlog(SDL_Surface* window_surface,
     }
 
     rend->backlog_end.index = i;
+}
+
+static void render_backlogs(SDL_Surface* window_surface,
+                            Render_State* rend,
+                            cz::Slice<Backlog_State> backlogs) {
+    for (size_t i = 0; i < backlogs.len; ++i) {
+        render_backlog(window_surface, rend, &backlogs[i]);
+    }
 }
 
 static void render_prompt(SDL_Surface* window_surface,
@@ -203,8 +215,9 @@ static void render_prompt(SDL_Surface* window_surface,
     }
 }
 
-static void ensure_prompt_on_screen(Render_State* rend, Backlog_State* backlog);
-static void auto_scroll_start_paging(Render_State* rend, Backlog_State* backlog) {
+static void ensure_prompt_on_screen(Render_State* rend, cz::Slice<Backlog_State> backlogs);
+static void auto_scroll_start_paging(Render_State* rend, cz::Slice<Backlog_State> backlogs) {
+#if 0
     uint64_t prompt_position = 0;
     for (size_t e = backlog->events.len; e-- > 0;) {
         Backlog_Event* event = &backlog->events[e];
@@ -229,13 +242,14 @@ static void auto_scroll_start_paging(Render_State* rend, Backlog_State* backlog)
         // Reach maximum scroll so stop.
         rend->auto_page = false;
     } else {
-        ensure_prompt_on_screen(rend, backlog);
+        ensure_prompt_on_screen(rend, backlogs);
     }
+#endif
 }
 
 static void render_frame(SDL_Window* window,
                          Render_State* rend,
-                         Backlog_State* backlog,
+                         cz::Slice<Backlog_State> backlogs,
                          Prompt_State* prompt,
                          Shell_State* shell) {
     ZoneScoped;
@@ -246,12 +260,15 @@ static void render_frame(SDL_Window* window,
     rend->window_cols = window_surface->w / rend->font_width;
 
     if (rend->auto_page)
-        auto_scroll_start_paging(rend, backlog);
+        auto_scroll_start_paging(rend, backlogs);
     if (rend->auto_scroll)
-        ensure_prompt_on_screen(rend, backlog);
+        ensure_prompt_on_screen(rend, backlogs);
 
     if (shell->active_process != -1)
-        ensure_prompt_on_screen(rend, backlog);
+        ensure_prompt_on_screen(rend, backlogs);
+
+    // TODO remove this
+    rend->complete_redraw = true;
 
     if (rend->complete_redraw) {
         ZoneScopedN("draw_background");
@@ -259,7 +276,7 @@ static void render_frame(SDL_Window* window,
         rend->backlog_end = rend->backlog_start;
     }
 
-    render_backlog(window_surface, rend, backlog);
+    render_backlogs(window_surface, rend, backlogs);
     render_prompt(window_surface, rend, prompt, shell);
 
     {
@@ -385,7 +402,7 @@ static bool finish_line(Shell_State* shell,
 
     Error error = start_execute_line(shell, backlog, script, *next, background);
     if (error != Error_Success && error != Error_Empty) {
-        append_text(backlog, script->id, "Error: failed to execute continuation\n");
+        append_text(backlog, "Error: failed to execute continuation\n");
     }
 
     return true;
@@ -401,7 +418,7 @@ static void finish_script(Shell_State* shell,
     if (shell->active_process == script->id)
         rend->auto_scroll = true;
 
-    ensure_trailing_newline(backlog, script->id);
+    ensure_trailing_newline(backlog);
 
     recycle_process(shell, script);
 }
@@ -436,7 +453,7 @@ static bool read_process_data(Shell_State* shell,
                 result = script->out.read_text(buffer, sizeof(buffer), &script->out_carry);
                 if (result <= 0)
                     break;
-                append_text(backlog, script->id, {buffer, (size_t)result});
+                append_text(backlog, {buffer, (size_t)result});
             }
 
             if (result == 0) {
@@ -470,7 +487,8 @@ static bool read_process_data(Shell_State* shell,
 // User events
 ///////////////////////////////////////////////////////////////////////////////
 
-static void scroll_down(Render_State* rend, Backlog_State* backlog, int lines) {
+static void scroll_down(Render_State* rend, cz::Slice<Backlog_State> backlogs, int lines) {
+#if 0
     Visual_Point* start = &rend->backlog_start;
     int desired_y = start->y + lines;
     while (start->y < desired_y && start->index < backlog->length) {
@@ -478,9 +496,11 @@ static void scroll_down(Render_State* rend, Backlog_State* backlog, int lines) {
         coord_trans(start, rend->window_cols, c);
     }
     start->y = 0;
+#endif
 }
 
-static void scroll_up(Render_State* rend, Backlog_State* backlog, int lines) {
+static void scroll_up(Render_State* rend, cz::Slice<Backlog_State> backlogs, int lines) {
+#if 0
     ++lines;
     Visual_Point* line_start = &rend->backlog_start;
     uint64_t cursor = line_start->index;
@@ -521,19 +541,22 @@ static void scroll_up(Render_State* rend, Backlog_State* backlog, int lines) {
     }
     line_start->y = 0;
     line_start->x = 0;
+#endif
 }
 
-static void ensure_prompt_on_screen(Render_State* rend, Backlog_State* backlog) {
+static void ensure_prompt_on_screen(Render_State* rend, cz::Slice<Backlog_State> backlogs) {
+#if 0
     if (rend->window_rows > 3) {
         Visual_Point backup = rend->backlog_start;
         rend->backlog_start = {};
         rend->backlog_start.index = backlog->length;
-        scroll_up(rend, backlog, rend->window_rows - 3);
+        scroll_up(rend, backlogs, rend->window_rows - 3);
         if (rend->backlog_start.index > backup.index)
             rend->complete_redraw = true;
         else
             rend->backlog_start = backup;
     }
+#endif
 }
 
 static void transform_shift_numbers(SDL_Keysym* keysym) {
@@ -643,7 +666,7 @@ static void forward_word(cz::Str text, size_t* cursor) {
 
 static bool handle_prompt_manipulation_commands(Shell_State* shell,
                                                 Prompt_State* prompt,
-                                                Backlog_State* backlog,
+                                                cz::Vector<Backlog_State>* backlogs,
                                                 Render_State* rend,
                                                 uint16_t mod,
                                                 SDL_Keycode key) {
@@ -759,7 +782,7 @@ static bool handle_prompt_manipulation_commands(Shell_State* shell,
         return false;
     }
 
-    ensure_prompt_on_screen(rend, backlog);
+    ensure_prompt_on_screen(rend, *backlogs);
     rend->auto_page = false;
     rend->auto_scroll = true;
     return true;
@@ -767,17 +790,18 @@ static bool handle_prompt_manipulation_commands(Shell_State* shell,
 
 static bool handle_scroll_commands(Shell_State* shell,
                                    Prompt_State* prompt,
-                                   Backlog_State* backlog,
+                                   cz::Slice<Backlog_State> backlogs,
                                    Render_State* rend,
                                    uint16_t mod,
                                    SDL_Keycode key) {
     if ((mod == 0 && key == SDLK_PAGEDOWN) || (mod == KMOD_CTRL && key == SDLK_v)) {
         int lines = cz::max(rend->window_rows, 6) - 3;
-        scroll_down(rend, backlog, lines);
+        scroll_down(rend, backlogs, lines);
     } else if ((mod == 0 && key == SDLK_PAGEUP) || (mod == KMOD_ALT && key == SDLK_v)) {
         int lines = cz::max(rend->window_rows, 6) - 3;
-        scroll_up(rend, backlog, lines);
+        scroll_up(rend, backlogs, lines);
     } else if (mod == KMOD_ALT && key == SDLK_LESS) {
+#if 0
         size_t event_index = backlog->events.len;
         while (event_index-- > 0) {
             Backlog_Event* event = &backlog->events[event_index];
@@ -787,7 +811,9 @@ static bool handle_scroll_commands(Shell_State* shell,
                 break;
             }
         }
+#endif
     } else if (mod == (KMOD_CTRL | KMOD_ALT) && key == SDLK_b) {
+#if 0
         size_t event_index = 0;
         while (event_index < backlog->events.len &&
                backlog->events[event_index].index < rend->backlog_start.index) {
@@ -801,7 +827,9 @@ static bool handle_scroll_commands(Shell_State* shell,
                 break;
             }
         }
+#endif
     } else if (mod == (KMOD_CTRL | KMOD_ALT) && key == SDLK_f) {
+#if 0
         size_t event_index = 0;
         while (event_index < backlog->events.len &&
                backlog->events[event_index].index <= rend->backlog_start.index) {
@@ -819,6 +847,7 @@ static bool handle_scroll_commands(Shell_State* shell,
             rend->backlog_start = {};
             rend->backlog_start.index = backlog->length;
         }
+#endif
     } else {
         return false;
     }
@@ -830,7 +859,7 @@ static bool handle_scroll_commands(Shell_State* shell,
     return true;
 }
 
-static int process_events(Backlog_State* backlog,
+static int process_events(cz::Vector<Backlog_State>* backlogs,
                           Prompt_State* prompt,
                           Render_State* rend,
                           Shell_State* shell) {
@@ -872,12 +901,12 @@ static int process_events(Backlog_State* backlog,
             if (key == SDLK_ESCAPE)
                 return -1;
 
-            if (handle_prompt_manipulation_commands(shell, prompt, backlog, rend, mod, key)) {
+            if (handle_prompt_manipulation_commands(shell, prompt, backlogs, rend, mod, key)) {
                 ++num_events;
                 continue;
             }
 
-            if (handle_scroll_commands(shell, prompt, backlog, rend, mod, key)) {
+            if (handle_scroll_commands(shell, prompt, *backlogs, rend, mod, key)) {
                 ++num_events;
                 continue;
             }
@@ -953,7 +982,7 @@ static int process_events(Backlog_State* backlog,
                     prompt->history_counter = history->len;
                 }
 
-                ensure_prompt_on_screen(rend, backlog);
+                ensure_prompt_on_screen(rend, *backlogs);
                 ++num_events;
             }
 
@@ -1031,7 +1060,7 @@ static int process_events(Backlog_State* backlog,
             prompt->text.reserve(cz::heap_allocator(), text.len);
             prompt->text.insert(prompt->cursor, text);
             prompt->cursor += text.len;
-            ensure_prompt_on_screen(rend, backlog);
+            ensure_prompt_on_screen(rend, *backlogs);
             ++num_events;
         } break;
 
@@ -1244,7 +1273,7 @@ static void load_environment_variables(Shell_State* shell) {
 
 int actual_main(int argc, char** argv) {
     Render_State rend = {};
-    Backlog_State backlog = {};
+    cz::Vector<Backlog_State> backlogs = {};
     Prompt_State prompt = {};
     Shell_State shell = {};
 
@@ -1279,13 +1308,6 @@ int actual_main(int argc, char** argv) {
 
     load_history(&prompt, &shell);
     CZ_DEFER(save_history(&prompt, &shell));
-
-    {
-        backlog.buffers.reserve(cz::heap_allocator(), 1);
-        char* buffer = (char*)cz::heap_allocator().alloc({4096, 1});
-        CZ_ASSERT(buffer);
-        backlog.buffers.push(buffer);
-    }
 
 #ifdef _WIN32
     SetProcessDpiAwareness(PROCESS_SYSTEM_DPI_AWARE);
@@ -1346,7 +1368,7 @@ int actual_main(int argc, char** argv) {
 
     cz::env::set("PAGER", "cat");
 
-    run_rc(&shell, &backlog);
+    run_rc(&shell, &backlogs);
 
     while (1) {
         uint32_t start_frame = SDL_GetTicks();
@@ -1354,19 +1376,19 @@ int actual_main(int argc, char** argv) {
         temp_arena.clear();
 
         try {
-            int status = process_events(&backlog, &prompt, &rend, &shell);
+            int status = process_events(&backlogs, &prompt, &rend, &shell);
             if (status < 0)
                 break;
 
             bool force_quit = false;
-            if (read_process_data(&shell, &backlog, &rend, &force_quit))
+            if (read_process_data(&shell, &backlogs, &rend, &force_quit))
                 status = 1;
 
             if (force_quit)
                 break;
 
             if (rend.complete_redraw || status > 0)
-                render_frame(window, &rend, &backlog, &prompt, &shell);
+                render_frame(window, &rend, backlogs, &prompt, &shell);
         } catch (cz::PanicReachedException& ex) {
             fprintf(stderr, "Fatal error: %s\n", ex.what());
             return 1;
@@ -1398,4 +1420,16 @@ void resize_font(int font_size, Render_State* rend) {
 
         rend->complete_redraw = true;
     }
+}
+
+static void push_backlog(cz::Vector<Backlog_State>* backlogs) {
+    char* buffer = (char*)cz::heap_allocator().alloc({4096, 1});
+    CZ_ASSERT(buffer);
+
+    Backlog_State backlog = {};
+    backlog.buffers.reserve(cz::heap_allocator(), 1);
+    backlog.buffers.push(buffer);
+
+    backlogs->reserve(cz::heap_allocator(), 1);
+    backlogs->push(backlog);
 }
