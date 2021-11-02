@@ -99,7 +99,8 @@ static void render_backlog(SDL_Surface* window_surface,
     rend->backlog_end.outer = backlog->id;
     rend->backlog_end.inner = i;
 
-    if (backlog->length > 0 && backlog->get(backlog->length - 1) != '\n' &&
+    if (rend->backlog_end.inner == backlog->length && backlog->length > 0 &&
+        backlog->get(backlog->length - 1) != '\n' &&
         !render_char(window_surface, rend, point, rend->backlog_cache, background,
                      rend->prompt_fg_color, '\n'))
         return;
