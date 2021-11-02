@@ -89,7 +89,6 @@ int coord_trans(Visual_Point* point, int num_cols, char ch) {
     if (ch == '\n') {
         ++point->y;
         point->x = 0;
-        ++point->line;
         point->column = 0;
         return 0;
     }

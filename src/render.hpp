@@ -8,7 +8,6 @@ struct Visual_Point {
     int y;            // visual y
     int x;            // visual x
     uint64_t index;   // absolute position
-    uint64_t line;    // line number
     uint64_t column;  // column number
 };
 
