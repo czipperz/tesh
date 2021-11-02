@@ -58,7 +58,8 @@ static void render_backlog(SDL_Surface* window_surface,
                            Backlog_State* backlog) {
     ZoneScoped;
     Visual_Point* point = &rend->backlog_end;
-    uint64_t i = rend->backlog_end.index;
+    uint64_t i = 0;
+    // uint64_t i = rend->backlog_end.index;
 
     CZ_ASSERT(point->y >= 0);
     if (point->y >= rend->window_rows_ru)
@@ -104,6 +105,12 @@ static void render_backlog(SDL_Surface* window_surface,
     }
 
     rend->backlog_end.index = i;
+
+    bg_color = {};
+    background = SDL_MapRGB(window_surface->format, bg_color.r, bg_color.g, bg_color.b);
+    if (!render_char(window_surface, rend, point, rend->backlog_cache, background,
+                     rend->prompt_fg_color, '\n'))
+        return;
 }
 
 static void render_backlogs(SDL_Surface* window_surface,
@@ -121,13 +128,6 @@ static void render_prompt(SDL_Surface* window_surface,
     ZoneScoped;
 
     Visual_Point point = rend->backlog_end;
-    if (point.x != 0 || point.y != 0) {
-        SDL_Rect rect = {point.x * rend->font_width, point.y * rend->font_height,
-                         window_surface->w - point.x, rend->font_height};
-        SDL_FillRect(window_surface, &rect, SDL_MapRGB(window_surface->format, 0, 0, 0));
-        point.x = 0;
-        ++point.y;
-    }
 
     uint64_t process_id =
         (shell->active_process == -1 ? prompt->process_id : shell->active_process);
