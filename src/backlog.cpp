@@ -30,12 +30,3 @@ void append_text(Backlog_State* backlog, cz::Str text) {
     }
     backlog->length += text.len;
 }
-
-void ensure_trailing_newline(Backlog_State* backlog) {
-    if (backlog->length == 0)
-        return;
-
-    if (backlog->get(backlog->length - 1) != '\n') {
-        append_text(backlog, "\n");
-    }
-}

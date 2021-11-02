@@ -106,6 +106,10 @@ static void render_backlog(SDL_Surface* window_surface,
 
     rend->backlog_end.index = i;
 
+    if (backlog->length > 0 && backlog->get(backlog->length - 1) != '\n' &&
+        !render_char(window_surface, rend, point, rend->backlog_cache, background,
+                     rend->prompt_fg_color, '\n'))
+        return;
     bg_color = {};
     background = SDL_MapRGB(window_surface->format, bg_color.r, bg_color.g, bg_color.b);
     if (!render_char(window_surface, rend, point, rend->backlog_cache, background,
@@ -416,8 +420,6 @@ static void finish_script(Shell_State* shell,
     // think it would be better if this just called `ensure_prompt_on_screen`.
     if (shell->active_process == script->id)
         rend->auto_scroll = true;
-
-    ensure_trailing_newline(backlog);
 
     recycle_process(shell, script);
 }

@@ -17,4 +17,3 @@ struct Backlog_State {
 };
 
 void append_text(Backlog_State* backlog, cz::Str text);
-void ensure_trailing_newline(Backlog_State* backlog);
