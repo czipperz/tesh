@@ -1040,25 +1040,22 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
             }
 
             if (mod == KMOD_CTRL && key == SDLK_l) {
-#if 0
                 rend->backlog_start = {};
-                rend->backlog_start.index = backlog->length;
+                rend->backlog_start.outer = backlogs->len;
                 rend->complete_redraw = true;
                 ++num_events;
-#endif
             }
 
             if (mod == KMOD_ALT && key == SDLK_GREATER) {
-#if 0
-                rend->auto_page = false;
                 rend->backlog_start = {};
-                rend->auto_scroll = true;
-                rend->backlog_start.index = backlog->length;
-                int lines = cz::max(rend->window_rows, 3) - 3;
-                scroll_up(rend, backlog, lines);
+                rend->backlog_start.outer = backlogs->len;
                 rend->complete_redraw = true;
                 ++num_events;
-#endif
+
+                rend->auto_page = false;
+                rend->auto_scroll = true;
+                int lines = cz::max(rend->window_rows, 3) - 3;
+                scroll_up(rend, *backlogs, lines);
             }
 
             // Note: C-= used to zoom in so you don't have to hold shift.
@@ -1090,7 +1087,6 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
         } break;
 
         case SDL_MOUSEWHEEL: {
-#if 0
             rend->auto_page = false;
             rend->auto_scroll = false;
             shell->active_process = -1;
@@ -1119,15 +1115,14 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
                 resize_font(new_font_size, rend);
             } else {
                 if (event.wheel.y < 0) {
-                    scroll_down(rend, backlog, -event.wheel.y);
+                    scroll_down(rend, *backlogs, -event.wheel.y);
                 } else if (event.wheel.y > 0) {
-                    scroll_up(rend, backlog, event.wheel.y);
+                    scroll_up(rend, *backlogs, event.wheel.y);
                 }
             }
 
             rend->complete_redraw = true;
             ++num_events;
-#endif
         } break;
         }
     }
