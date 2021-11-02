@@ -75,29 +75,19 @@ static void render_backlog(SDL_Surface* window_surface,
     size_t event_index = 0;
 
     for (; i < backlog->length; ++i) {
-#if 0
         while (event_index < backlog->events.len && backlog->events[event_index].index <= i) {
             Backlog_Event* event = &backlog->events[event_index];
             if (event->type == BACKLOG_EVENT_START_PROCESS) {
-                process_id = event->v.process_id;
-                if (process_id == -1)
-                    bg_color = {};
-                else
-                    bg_color = cfg.process_colors[process_id % cfg.process_colors.len];
-                background = SDL_MapRGB(window_surface->format, bg_color.r, bg_color.g, bg_color.b);
                 cache = rend->backlog_cache;
                 fg_color = rend->backlog_fg_color;
             } else if (event->type == BACKLOG_EVENT_START_INPUT) {
                 cache = rend->prompt_cache;
                 fg_color = rend->prompt_fg_color;
-            } else if (event->type == BACKLOG_EVENT_START_PROMPT) {
-                // Ignore
             } else {
                 CZ_PANIC("unreachable");
             }
             ++event_index;
         }
-#endif
 
         char c = backlog->get(i);
         if (!render_char(window_surface, rend, point, cache, background, fg_color, c))
@@ -938,7 +928,21 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
                     append_text(backlog, " ");
                     append_text(backlog, prompt->prefix);
                 }
+                {
+                    Backlog_Event event = {};
+                    event.index = backlog->length;
+                    event.type = BACKLOG_EVENT_START_INPUT;
+                    backlog->events.reserve(cz::heap_allocator(), 1);
+                    backlog->events.push(event);
+                }
                 append_text(backlog, prompt->text);
+                {
+                    Backlog_Event event = {};
+                    event.index = backlog->length;
+                    event.type = BACKLOG_EVENT_START_PROCESS;
+                    backlog->events.reserve(cz::heap_allocator(), 1);
+                    backlog->events.push(event);
+                }
                 append_text(backlog, "\n");
 
                 if (event.key.keysym.sym == SDLK_RETURN) {
