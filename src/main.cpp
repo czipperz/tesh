@@ -820,13 +820,19 @@ static bool handle_scroll_commands(Shell_State* shell,
             rend->backlog_start.outer = backlogs.len - 1;
     } else if (mod == (KMOD_CTRL | KMOD_ALT) && key == SDLK_b) {
         size_t outer = rend->backlog_start.outer;
+        size_t inner = rend->backlog_start.inner;
         rend->backlog_start = {};
-        if (outer > 0)
+        if (inner > 0)
+            rend->backlog_start.outer = outer;
+        else if (outer > 0)
             rend->backlog_start.outer = outer - 1;
     } else if (mod == (KMOD_CTRL | KMOD_ALT) && key == SDLK_f) {
         size_t outer = rend->backlog_start.outer;
+        size_t inner = rend->backlog_start.inner;
         rend->backlog_start = {};
-        if (outer + 1 <= backlogs.len)
+        if (outer < backlogs.len && inner < backlogs[outer]->length)
+            rend->backlog_start.outer = outer;
+        else if (outer + 1 <= backlogs.len)
             rend->backlog_start.outer = outer + 1;
     } else {
         return false;
