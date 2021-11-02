@@ -30,7 +30,7 @@
 
 void resize_font(int font_size, Render_State* rend);
 static Backlog_State* push_backlog(cz::Vector<Backlog_State*>* backlogs, uint64_t id);
-static void scroll_down(Render_State* rend, cz::Slice<Backlog_State*> backlogs, int lines);
+static void scroll_down1(Render_State* rend, cz::Slice<Backlog_State*> backlogs, int lines);
 
 ///////////////////////////////////////////////////////////////////////////////
 // Type definitions
@@ -225,14 +225,15 @@ static void auto_scroll_start_paging(Render_State* rend, cz::Slice<Backlog_State
     top_prompt.outer = (backlogs.len > 0 ? backlogs.len - 1 : 0);
 
     rend->backlog_start = top_prompt;
-    scroll_down(rend, backlogs, rend->window_rows - 3);
+    scroll_down1(rend, backlogs, rend->window_rows - 3);
 
     if (rend->backlog_start.y + 3 >= rend->window_rows) {
+        // More than one page of content so stop auto paging.
         rend->backlog_start = top_prompt;
         rend->complete_redraw = true;
-        // Reach maximum scroll so stop.
         rend->auto_page = false;
     } else {
+        rend->backlog_start = backup;
         ensure_prompt_on_screen(rend, backlogs);
     }
 }
@@ -478,7 +479,7 @@ static bool read_process_data(Shell_State* shell,
 // User events
 ///////////////////////////////////////////////////////////////////////////////
 
-static void scroll_down(Render_State* rend, cz::Slice<Backlog_State*> backlogs, int lines) {
+static void scroll_down1(Render_State* rend, cz::Slice<Backlog_State*> backlogs, int lines) {
     Visual_Point* start = &rend->backlog_start;
     if (start->outer < backlogs.len) {
         int desired_y = start->y + lines;
@@ -518,7 +519,10 @@ static void scroll_down(Render_State* rend, cz::Slice<Backlog_State*> backlogs, 
             }
         }
     }
-    start->y = 0;
+}
+static void scroll_down(Render_State* rend, cz::Slice<Backlog_State*> backlogs, int lines) {
+    scroll_down1(rend, backlogs, lines);
+    rend->backlog_start.y = 0;
 }
 
 static void scroll_up(Render_State* rend, cz::Slice<Backlog_State*> backlogs, int lines) {
