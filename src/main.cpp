@@ -491,6 +491,8 @@ static void scroll_down(Render_State* rend, cz::Slice<Backlog_State*> backlogs, 
         Backlog_State* backlog = backlogs[start->outer];
         while (start->y < desired_y) {
             if (start->inner == backlog->length) {
+                if (backlog->length > 0 && backlog->get(backlog->length - 1) != '\n')
+                    coord_trans(start, rend->window_cols, '\n');
                 coord_trans(start, rend->window_cols, '\n');
                 // TODO: do we want to check start->y here?
                 start->outer++;
