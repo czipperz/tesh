@@ -528,14 +528,12 @@ static void scroll_down(Render_State* rend, cz::Slice<Backlog_State*> backlogs, 
 }
 
 static void scroll_up(Render_State* rend, cz::Slice<Backlog_State*> backlogs, int lines) {
-    // TODO(chris.gregory): it seems like fat lines aren't decrementing lines
-    ++lines;
-
     Visual_Point* line_start = &rend->backlog_start;
     Backlog_State* backlog = backlogs[line_start->outer];
     uint64_t cursor = line_start->inner;
     uint64_t line_chars = 0;
     uint64_t backwards_tab = 0;
+    bool first = true;
     while (lines > 0) {
         if (cursor == 0) {
             if (line_start->outer == 0)
@@ -550,6 +548,12 @@ static void scroll_up(Render_State* rend, cz::Slice<Backlog_State*> backlogs, in
         }
 
         cursor--;
+
+        if (first) {
+            first = false;
+            continue;
+        }
+
         char c = (cursor >= backlog->length ? '\n' : backlog->get(cursor));
         if (backwards_tab == 0) {
             line_chars++;
