@@ -84,7 +84,7 @@ static SDL_Surface* rasterize_character_cached(Render_State* rend,
 }
 
 int coord_trans(Visual_Point* point, int num_cols, char ch) {
-    ++point->index;
+    ++point->inner;
 
     if (ch == '\n') {
         ++point->y;

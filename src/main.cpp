@@ -59,7 +59,8 @@ static void render_backlog(SDL_Surface* window_surface,
     ZoneScoped;
     Visual_Point* point = &rend->backlog_end;
     uint64_t i = 0;
-    // uint64_t i = rend->backlog_end.index;
+    if (point->outer == backlog->id)
+        i = point->inner;
 
     CZ_ASSERT(point->y >= 0);
     if (point->y >= rend->window_rows_ru)
@@ -94,7 +95,8 @@ static void render_backlog(SDL_Surface* window_surface,
             break;
     }
 
-    rend->backlog_end.index = i;
+    rend->backlog_end.outer = backlog->id;
+    rend->backlog_end.inner = i;
 
     if (backlog->length > 0 && backlog->get(backlog->length - 1) != '\n' &&
         !render_char(window_surface, rend, point, rend->backlog_cache, background,
@@ -110,7 +112,7 @@ static void render_backlog(SDL_Surface* window_surface,
 static void render_backlogs(SDL_Surface* window_surface,
                             Render_State* rend,
                             cz::Slice<Backlog_State*> backlogs) {
-    for (size_t i = 0; i < backlogs.len; ++i) {
+    for (size_t i = rend->backlog_start.outer; i < backlogs.len; ++i) {
         render_backlog(window_surface, rend, backlogs[i]);
     }
 }
@@ -808,41 +810,19 @@ static bool handle_scroll_commands(Shell_State* shell,
         }
 #endif
     } else if (mod == (KMOD_CTRL | KMOD_ALT) && key == SDLK_b) {
-#if 0
-        size_t event_index = 0;
-        while (event_index < backlog->events.len &&
-               backlog->events[event_index].index < rend->backlog_start.index) {
-            ++event_index;
-        }
-        while (event_index-- > 0) {
-            Backlog_Event* event = &backlog->events[event_index];
-            if (event->type == BACKLOG_EVENT_START_PROMPT) {
-                rend->backlog_start = {};
-                rend->backlog_start.index = backlog->events[event_index].index;
-                break;
-            }
-        }
-#endif
+        rend->backlog_start.y = 0;
+        rend->backlog_start.x = 0;
+        rend->backlog_start.column = 0;
+        if (rend->backlog_start.outer > 0)
+            rend->backlog_start.outer--;
+        rend->backlog_start.inner = 0;
     } else if (mod == (KMOD_CTRL | KMOD_ALT) && key == SDLK_f) {
-#if 0
-        size_t event_index = 0;
-        while (event_index < backlog->events.len &&
-               backlog->events[event_index].index <= rend->backlog_start.index) {
-            ++event_index;
-        }
-        for (; event_index < backlog->events.len; ++event_index) {
-            Backlog_Event* event = &backlog->events[event_index];
-            if (event->type == BACKLOG_EVENT_START_PROMPT) {
-                rend->backlog_start = {};
-                rend->backlog_start.index = backlog->events[event_index].index;
-                break;
-            }
-        }
-        if (event_index >= backlog->events.len) {
-            rend->backlog_start = {};
-            rend->backlog_start.index = backlog->length;
-        }
-#endif
+        rend->backlog_start.y = 0;
+        rend->backlog_start.x = 0;
+        rend->backlog_start.column = 0;
+        if (rend->backlog_start.outer + 1 <= backlogs.len)
+            rend->backlog_start.outer++;
+        rend->backlog_start.inner = 0;
     } else {
         return false;
     }

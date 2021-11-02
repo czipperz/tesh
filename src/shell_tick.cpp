@@ -319,9 +319,11 @@ bool tick_program(Shell_State* shell,
     } break;
 
     case Running_Program::CLEAR: {
+#if 0
         rend->backlog_start = {};
         rend->backlog_start.index = backlog->length;
         rend->complete_redraw = true;
+#endif
         goto finish_builtin;
     } break;
 

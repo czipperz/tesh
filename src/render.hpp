@@ -7,8 +7,9 @@
 struct Visual_Point {
     int y;            // visual y
     int x;            // visual x
-    uint64_t index;   // absolute position
     uint64_t column;  // column number
+    uint64_t outer;   // backlog id
+    uint64_t inner;   // backlog-relative index
 };
 
 struct Render_State {
