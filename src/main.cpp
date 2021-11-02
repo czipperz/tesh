@@ -810,19 +810,15 @@ static bool handle_scroll_commands(Shell_State* shell,
         }
 #endif
     } else if (mod == (KMOD_CTRL | KMOD_ALT) && key == SDLK_b) {
-        rend->backlog_start.y = 0;
-        rend->backlog_start.x = 0;
-        rend->backlog_start.column = 0;
-        if (rend->backlog_start.outer > 0)
-            rend->backlog_start.outer--;
-        rend->backlog_start.inner = 0;
+        size_t outer = rend->backlog_start.outer;
+        rend->backlog_start = {};
+        if (outer > 0)
+            rend->backlog_start.outer = outer - 1;
     } else if (mod == (KMOD_CTRL | KMOD_ALT) && key == SDLK_f) {
-        rend->backlog_start.y = 0;
-        rend->backlog_start.x = 0;
-        rend->backlog_start.column = 0;
-        if (rend->backlog_start.outer + 1 <= backlogs.len)
-            rend->backlog_start.outer++;
-        rend->backlog_start.inner = 0;
+        size_t outer = rend->backlog_start.outer;
+        rend->backlog_start = {};
+        if (outer + 1 <= backlogs.len)
+            rend->backlog_start.outer = outer + 1;
     } else {
         return false;
     }
