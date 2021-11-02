@@ -30,6 +30,7 @@
 
 void resize_font(int font_size, Render_State* rend);
 static Backlog_State* push_backlog(cz::Vector<Backlog_State*>* backlogs, uint64_t id);
+static void scroll_down(Render_State* rend, cz::Slice<Backlog_State*> backlogs, int lines);
 
 ///////////////////////////////////////////////////////////////////////////////
 // Type definitions
@@ -213,34 +214,27 @@ static void render_prompt(SDL_Surface* window_surface,
 
 static void ensure_prompt_on_screen(Render_State* rend, cz::Slice<Backlog_State*> backlogs);
 static void auto_scroll_start_paging(Render_State* rend, cz::Slice<Backlog_State*> backlogs) {
-#if 0
-    uint64_t prompt_position = 0;
-    for (size_t e = backlog->events.len; e-- > 0;) {
-        Backlog_Event* event = &backlog->events[e];
-        if (event->type == BACKLOG_EVENT_START_PROMPT) {
-            prompt_position = event->index;
-            break;
-        }
-    }
+    if (rend->window_rows <= 3)
+        return;
+
+    Visual_Point backup = rend->backlog_start;
 
     // If we put the previous prompt at the top what happens.
-    Visual_Point point = {};
-    point.index = prompt_position;
-    while (point.index < backlog->length && point.y + 3 < rend->window_rows) {
-        char c = backlog->get(point.index);
-        coord_trans(&point, rend->window_cols, c);
-    }
+    Visual_Point top_prompt = {};
+    top_prompt = {};
+    top_prompt.outer = (backlogs.len > 0 ? backlogs.len - 1 : 0);
 
-    if (point.y + 3 >= rend->window_rows) {
-        rend->backlog_start = {};
-        rend->backlog_start.index = prompt_position;
+    rend->backlog_start = top_prompt;
+    scroll_down(rend, backlogs, rend->window_rows - 3);
+
+    if (rend->backlog_start.y + 3 >= rend->window_rows) {
+        rend->backlog_start = top_prompt;
         rend->complete_redraw = true;
         // Reach maximum scroll so stop.
         rend->auto_page = false;
     } else {
         ensure_prompt_on_screen(rend, backlogs);
     }
-#endif
 }
 
 static void render_frame(SDL_Window* window,
@@ -586,18 +580,19 @@ static void scroll_up(Render_State* rend, cz::Slice<Backlog_State*> backlogs, in
 }
 
 static void ensure_prompt_on_screen(Render_State* rend, cz::Slice<Backlog_State*> backlogs) {
-#if 0
     if (rend->window_rows > 3) {
         Visual_Point backup = rend->backlog_start;
         rend->backlog_start = {};
-        rend->backlog_start.index = backlog->length;
+        rend->backlog_start.outer = backlogs.len;
         scroll_up(rend, backlogs, rend->window_rows - 3);
-        if (rend->backlog_start.index > backup.index)
+        if (rend->backlog_start.outer > backup.outer)
+            rend->complete_redraw = true;
+        else if (rend->backlog_start.outer == backup.outer &&
+                 rend->backlog_start.inner > backup.inner)
             rend->complete_redraw = true;
         else
             rend->backlog_start = backup;
     }
-#endif
 }
 
 static void transform_shift_numbers(SDL_Keysym* keysym) {
