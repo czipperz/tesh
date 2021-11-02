@@ -861,10 +861,7 @@ static bool handle_scroll_commands(Shell_State* shell,
         size_t outer = rend->backlog_start.outer;
         size_t inner = rend->backlog_start.inner;
         rend->backlog_start = {};
-        if (outer < backlogs.len && inner < backlogs[outer]->length)
-            rend->backlog_start.outer = outer;
-        else if (outer + 1 <= backlogs.len)
-            rend->backlog_start.outer = outer + 1;
+        rend->backlog_start.outer = outer + 1;
     } else {
         return false;
     }
