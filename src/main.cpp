@@ -798,17 +798,9 @@ static bool handle_scroll_commands(Shell_State* shell,
         int lines = cz::max(rend->window_rows, 6) - 3;
         scroll_up(rend, backlogs, lines);
     } else if (mod == KMOD_ALT && key == SDLK_LESS) {
-#if 0
-        size_t event_index = backlog->events.len;
-        while (event_index-- > 0) {
-            Backlog_Event* event = &backlog->events[event_index];
-            if (event->type == BACKLOG_EVENT_START_PROMPT) {
-                rend->backlog_start = {};
-                rend->backlog_start.index = backlog->events[event_index].index;
-                break;
-            }
-        }
-#endif
+        rend->backlog_start = {};
+        if (backlogs.len > 0)
+            rend->backlog_start.outer = backlogs.len - 1;
     } else if (mod == (KMOD_CTRL | KMOD_ALT) && key == SDLK_b) {
         size_t outer = rend->backlog_start.outer;
         rend->backlog_start = {};
