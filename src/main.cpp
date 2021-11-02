@@ -485,15 +485,26 @@ static bool read_process_data(Shell_State* shell,
 ///////////////////////////////////////////////////////////////////////////////
 
 static void scroll_down(Render_State* rend, cz::Slice<Backlog_State*> backlogs, int lines) {
-#if 0
     Visual_Point* start = &rend->backlog_start;
-    int desired_y = start->y + lines;
-    while (start->y < desired_y && start->index < backlog->length) {
-        char c = backlog->get(start->index);
-        coord_trans(start, rend->window_cols, c);
+    if (start->outer < backlogs.len) {
+        int desired_y = start->y + lines;
+        Backlog_State* backlog = backlogs[start->outer];
+        while (start->y < desired_y) {
+            if (start->inner == backlog->length) {
+                coord_trans(start, rend->window_cols, '\n');
+                // TODO: do we want to check start->y here?
+                start->outer++;
+                start->inner = 0;
+                if (start->outer == backlogs.len)
+                    break;
+                backlog = backlogs[start->outer];
+            }
+
+            char c = backlog->get(start->inner);
+            coord_trans(start, rend->window_cols, c);
+        }
     }
     start->y = 0;
-#endif
 }
 
 static void scroll_up(Render_State* rend, cz::Slice<Backlog_State*> backlogs, int lines) {
