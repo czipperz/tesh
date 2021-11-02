@@ -39,12 +39,11 @@ Error start_execute_script(Shell_State* shell,
                            Backlog_State* backlog,
                            cz::Buffer_Array arena,
                            const Parse_Script& parse,
-                           cz::Str command_line,
-                           uint64_t id) {
+                           cz::Str command_line) {
     Error error = Error_Success;
 
     Running_Script running = {};
-    running.id = id;
+    running.id = backlog->id;
 
     if (!cz::create_process_input_pipe(&running.script_in, &running.in))
         return Error_IO;

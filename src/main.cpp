@@ -29,7 +29,7 @@
 #include "shell.hpp"
 
 void resize_font(int font_size, Render_State* rend);
-static void push_backlog(cz::Vector<Backlog_State>* backlogs);
+static Backlog_State* push_backlog(cz::Vector<Backlog_State*>* backlogs, uint64_t id);
 
 ///////////////////////////////////////////////////////////////////////////////
 // Type definitions
@@ -108,9 +108,9 @@ static void render_backlog(SDL_Surface* window_surface,
 
 static void render_backlogs(SDL_Surface* window_surface,
                             Render_State* rend,
-                            cz::Slice<Backlog_State> backlogs) {
+                            cz::Slice<Backlog_State*> backlogs) {
     for (size_t i = 0; i < backlogs.len; ++i) {
-        render_backlog(window_surface, rend, &backlogs[i]);
+        render_backlog(window_surface, rend, backlogs[i]);
     }
 }
 
@@ -215,8 +215,8 @@ static void render_prompt(SDL_Surface* window_surface,
     }
 }
 
-static void ensure_prompt_on_screen(Render_State* rend, cz::Slice<Backlog_State> backlogs);
-static void auto_scroll_start_paging(Render_State* rend, cz::Slice<Backlog_State> backlogs) {
+static void ensure_prompt_on_screen(Render_State* rend, cz::Slice<Backlog_State*> backlogs);
+static void auto_scroll_start_paging(Render_State* rend, cz::Slice<Backlog_State*> backlogs) {
 #if 0
     uint64_t prompt_position = 0;
     for (size_t e = backlog->events.len; e-- > 0;) {
@@ -249,7 +249,7 @@ static void auto_scroll_start_paging(Render_State* rend, cz::Slice<Backlog_State
 
 static void render_frame(SDL_Window* window,
                          Render_State* rend,
-                         cz::Slice<Backlog_State> backlogs,
+                         cz::Slice<Backlog_State*> backlogs,
                          Prompt_State* prompt,
                          Shell_State* shell) {
     ZoneScoped;
@@ -292,7 +292,7 @@ static void render_frame(SDL_Window* window,
 // Process control
 ///////////////////////////////////////////////////////////////////////////////
 
-static bool run_script(Shell_State* shell, Backlog_State* backlog, cz::Str text, uint64_t id) {
+static bool run_script(Shell_State* shell, Backlog_State* backlog, cz::Str text) {
     cz::Buffer_Array arena = alloc_arena(shell);
 
 #ifdef TRACY_ENABLE
@@ -307,7 +307,7 @@ static bool run_script(Shell_State* shell, Backlog_State* backlog, cz::Str text,
     if (error != Error_Success)
         goto fail;
 
-    error = start_execute_script(shell, backlog, arena, script, text, id);
+    error = start_execute_script(shell, backlog, arena, script, text);
     if (error == Error_Empty) {
         recycle_arena(shell, arena);
         return true;
@@ -342,8 +342,7 @@ static void run_rc(Shell_State* shell, Backlog_State* backlog) {
     cz::String contents = {};
     read_to_string(file, temp_allocator, &contents);
 
-    uint64_t id = -1;
-    run_script(shell, backlog, contents, id);
+    run_script(shell, backlog, contents);
 }
 
 static void tick_pipeline(Shell_State* shell,
@@ -424,14 +423,15 @@ static void finish_script(Shell_State* shell,
 }
 
 static bool read_process_data(Shell_State* shell,
-                              Backlog_State* backlog,
+                              cz::Slice<Backlog_State*> backlogs,
                               Render_State* rend,
                               bool* force_quit) {
     static char buffer[4096];
-    size_t starting_length = backlog->length;
     bool changes = false;
     for (size_t i = 0; i < shell->scripts.len; ++i) {
         Running_Script* script = &shell->scripts[i];
+        Backlog_State* backlog = backlogs[script->id];
+        size_t starting_length = backlog->length;
 
         for (size_t b = 0; b < script->bg.len; ++b) {
             Running_Line* line = &script->bg[b];
@@ -479,15 +479,18 @@ static bool read_process_data(Shell_State* shell,
             changes = true;
             --i;
         }
+
+        if (backlog->length != starting_length)
+            changes = true;
     }
-    return backlog->length != starting_length || changes;
+    return changes;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
 // User events
 ///////////////////////////////////////////////////////////////////////////////
 
-static void scroll_down(Render_State* rend, cz::Slice<Backlog_State> backlogs, int lines) {
+static void scroll_down(Render_State* rend, cz::Slice<Backlog_State*> backlogs, int lines) {
 #if 0
     Visual_Point* start = &rend->backlog_start;
     int desired_y = start->y + lines;
@@ -499,7 +502,7 @@ static void scroll_down(Render_State* rend, cz::Slice<Backlog_State> backlogs, i
 #endif
 }
 
-static void scroll_up(Render_State* rend, cz::Slice<Backlog_State> backlogs, int lines) {
+static void scroll_up(Render_State* rend, cz::Slice<Backlog_State*> backlogs, int lines) {
 #if 0
     ++lines;
     Visual_Point* line_start = &rend->backlog_start;
@@ -544,7 +547,7 @@ static void scroll_up(Render_State* rend, cz::Slice<Backlog_State> backlogs, int
 #endif
 }
 
-static void ensure_prompt_on_screen(Render_State* rend, cz::Slice<Backlog_State> backlogs) {
+static void ensure_prompt_on_screen(Render_State* rend, cz::Slice<Backlog_State*> backlogs) {
 #if 0
     if (rend->window_rows > 3) {
         Visual_Point backup = rend->backlog_start;
@@ -666,7 +669,7 @@ static void forward_word(cz::Str text, size_t* cursor) {
 
 static bool handle_prompt_manipulation_commands(Shell_State* shell,
                                                 Prompt_State* prompt,
-                                                cz::Vector<Backlog_State>* backlogs,
+                                                cz::Vector<Backlog_State*>* backlogs,
                                                 Render_State* rend,
                                                 uint16_t mod,
                                                 SDL_Keycode key) {
@@ -790,7 +793,7 @@ static bool handle_prompt_manipulation_commands(Shell_State* shell,
 
 static bool handle_scroll_commands(Shell_State* shell,
                                    Prompt_State* prompt,
-                                   cz::Slice<Backlog_State> backlogs,
+                                   cz::Slice<Backlog_State*> backlogs,
                                    Render_State* rend,
                                    uint16_t mod,
                                    SDL_Keycode key) {
@@ -859,7 +862,7 @@ static bool handle_scroll_commands(Shell_State* shell,
     return true;
 }
 
-static int process_events(cz::Vector<Backlog_State>* backlogs,
+static int process_events(cz::Vector<Backlog_State*>* backlogs,
                           Prompt_State* prompt,
                           Render_State* rend,
                           Shell_State* shell) {
@@ -924,32 +927,26 @@ static int process_events(cz::Vector<Backlog_State>* backlogs,
 
                 Running_Script* script = active_process(shell);
                 uint64_t process_id = (script ? script->id : prompt->process_id);
+                Backlog_State* backlog;
                 if (script) {
-                    set_backlog_process(backlog, script->id);
+                    backlog = (*backlogs)[process_id];
                 } else {
-                    append_text(backlog, -1, "\n");
-                    if (rend->backlog_start.index + 1 == backlog->length) {
-                        ++rend->backlog_start.index;
-                        rend->backlog_end = rend->backlog_start;
-                    }
-
-                    set_backlog_process(backlog, -3);
-                    append_text(backlog, prompt->process_id, shell->working_directory);
-                    append_text(backlog, prompt->process_id, " ");
-                    append_text(backlog, prompt->process_id, prompt->prefix);
+                    backlog = push_backlog(backlogs, process_id);
+                    append_text(backlog, shell->working_directory);
+                    append_text(backlog, " ");
+                    append_text(backlog, prompt->prefix);
                 }
-                append_text(backlog, -2, prompt->text);
-                append_text(backlog, process_id, "\n");
+                append_text(backlog, prompt->text);
+                append_text(backlog, "\n");
 
                 if (event.key.keysym.sym == SDLK_RETURN) {
                     if (script) {
-                        (void)script->in.write(prompt->text);
-                        (void)script->in.write("\n");
+                        (void)script->in.write(cz::format(temp_allocator, prompt->text, '\n'));
                     } else {
                         rend->auto_page = cfg.on_spawn_auto_page;
                         rend->auto_scroll = cfg.on_spawn_auto_scroll;
-                        if (!run_script(shell, backlog, prompt->text, prompt->process_id)) {
-                            append_text(backlog, prompt->process_id, "Error: failed to execute\n");
+                        if (!run_script(shell, backlog, prompt->text)) {
+                            append_text(backlog, "Error: failed to execute\n");
                         }
                     }
                 } else {
@@ -1019,21 +1016,25 @@ static int process_events(cz::Vector<Backlog_State>* backlogs,
             }
 
             if (mod == KMOD_CTRL && key == SDLK_l) {
+#if 0
                 rend->backlog_start = {};
                 rend->backlog_start.index = backlog->length;
                 rend->complete_redraw = true;
                 ++num_events;
+#endif
             }
 
             if (mod == KMOD_ALT && key == SDLK_GREATER) {
+#if 0
                 rend->auto_page = false;
-                rend->auto_scroll = true;
                 rend->backlog_start = {};
+                rend->auto_scroll = true;
                 rend->backlog_start.index = backlog->length;
                 int lines = cz::max(rend->window_rows, 3) - 3;
                 scroll_up(rend, backlog, lines);
                 rend->complete_redraw = true;
                 ++num_events;
+#endif
             }
 
             // Note: C-= used to zoom in so you don't have to hold shift.
@@ -1065,6 +1066,7 @@ static int process_events(cz::Vector<Backlog_State>* backlogs,
         } break;
 
         case SDL_MOUSEWHEEL: {
+#if 0
             rend->auto_page = false;
             rend->auto_scroll = false;
             shell->active_process = -1;
@@ -1101,6 +1103,7 @@ static int process_events(cz::Vector<Backlog_State>* backlogs,
 
             rend->complete_redraw = true;
             ++num_events;
+#endif
         } break;
         }
     }
@@ -1273,13 +1276,14 @@ static void load_environment_variables(Shell_State* shell) {
 
 int actual_main(int argc, char** argv) {
     Render_State rend = {};
-    cz::Vector<Backlog_State> backlogs = {};
+    cz::Vector<Backlog_State*> backlogs = {};
     Prompt_State prompt = {};
     Shell_State shell = {};
 
     load_default_configuration();
 
     prompt.history_arena.init();
+    prompt.process_id = 1;  // rc = 0
 
     cz::Buffer_Array permanent_arena;
     permanent_arena.init();
@@ -1368,7 +1372,7 @@ int actual_main(int argc, char** argv) {
 
     cz::env::set("PAGER", "cat");
 
-    run_rc(&shell, &backlogs);
+    run_rc(&shell, push_backlog(&backlogs, 0));
 
     while (1) {
         uint32_t start_frame = SDL_GetTicks();
@@ -1381,7 +1385,7 @@ int actual_main(int argc, char** argv) {
                 break;
 
             bool force_quit = false;
-            if (read_process_data(&shell, &backlogs, &rend, &force_quit))
+            if (read_process_data(&shell, backlogs, &rend, &force_quit))
                 status = 1;
 
             if (force_quit)
@@ -1422,14 +1426,20 @@ void resize_font(int font_size, Render_State* rend) {
     }
 }
 
-static void push_backlog(cz::Vector<Backlog_State>* backlogs) {
+static Backlog_State* push_backlog(cz::Vector<Backlog_State*>* backlogs, uint64_t id) {
     char* buffer = (char*)cz::heap_allocator().alloc({4096, 1});
     CZ_ASSERT(buffer);
 
-    Backlog_State backlog = {};
-    backlog.buffers.reserve(cz::heap_allocator(), 1);
-    backlog.buffers.push(buffer);
+    Backlog_State* backlog = permanent_allocator.alloc<Backlog_State>();
+    CZ_ASSERT(backlog);
+    *backlog = {};
+
+    backlog->id = id;
+    backlog->buffers.reserve(cz::heap_allocator(), 1);
+    backlog->buffers.push(buffer);
 
     backlogs->reserve(cz::heap_allocator(), 1);
     backlogs->push(backlog);
+
+    return backlog;
 }

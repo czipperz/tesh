@@ -188,8 +188,7 @@ Error start_execute_script(Shell_State* shell,
                            Backlog_State* backlog,
                            cz::Buffer_Array arena,
                            const Parse_Script& script,
-                           cz::Str command_line,
-                           uint64_t id);
+                           cz::Str command_line);
 
 Error start_execute_line(Shell_State* shell,
                          Backlog_State* backlog,
