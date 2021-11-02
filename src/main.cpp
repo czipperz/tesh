@@ -528,15 +528,29 @@ static void scroll_down(Render_State* rend, cz::Slice<Backlog_State*> backlogs, 
 }
 
 static void scroll_up(Render_State* rend, cz::Slice<Backlog_State*> backlogs, int lines) {
-#if 0
+    // TODO(chris.gregory): it seems like fat lines aren't decrementing lines
     ++lines;
+
     Visual_Point* line_start = &rend->backlog_start;
-    uint64_t cursor = line_start->index;
+    Backlog_State* backlog = backlogs[line_start->outer];
+    uint64_t cursor = line_start->inner;
     uint64_t line_chars = 0;
     uint64_t backwards_tab = 0;
-    while (lines > 0 && cursor > 0) {
-        --cursor;
-        char c = backlog->get(cursor);
+    while (lines > 0) {
+        if (cursor == 0) {
+            if (line_start->outer == 0)
+                break;
+            line_start->outer--;
+            backlog = backlogs[line_start->outer];
+            cursor = backlog->length;
+            if (backlog->length > 0 && backlog->get(backlog->length - 1) != '\n') {
+                cursor++;
+            }
+            cursor++;
+        }
+
+        cursor--;
+        char c = (cursor >= backlog->length ? '\n' : backlog->get(cursor));
         if (backwards_tab == 0) {
             line_chars++;
         } else {
@@ -544,7 +558,7 @@ static void scroll_up(Render_State* rend, cz::Slice<Backlog_State*> backlogs, in
         }
 
         if (c == '\n') {
-            line_start->index = cursor + 1;
+            line_start->inner = cursor + 1;
             --lines;
             line_chars = 0;
             backwards_tab = 0;
@@ -561,7 +575,7 @@ static void scroll_up(Render_State* rend, cz::Slice<Backlog_State*> backlogs, in
             line_chars += backwards_tab;
         }
         if (line_chars == rend->window_cols) {
-            line_start->index = cursor + 1;
+            line_start->inner = cursor + 1;
             --lines;
             line_chars = 0;
             backwards_tab = 0;
@@ -569,7 +583,6 @@ static void scroll_up(Render_State* rend, cz::Slice<Backlog_State*> backlogs, in
     }
     line_start->y = 0;
     line_start->x = 0;
-#endif
 }
 
 static void ensure_prompt_on_screen(Render_State* rend, cz::Slice<Backlog_State*> backlogs) {
