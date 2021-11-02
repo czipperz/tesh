@@ -338,6 +338,7 @@ static void run_rc(Shell_State* shell, Backlog_State* backlog) {
 
 static void tick_pipeline(Shell_State* shell,
                           Render_State* rend,
+                          cz::Slice<Backlog_State*> backlogs,
                           Backlog_State* backlog,
                           Running_Script* script,
                           Running_Line* line,
@@ -346,7 +347,8 @@ static void tick_pipeline(Shell_State* shell,
     for (size_t p = 0; p < pipeline->pipeline.len; ++p) {
         Running_Program* program = &pipeline->pipeline[p];
         int exit_code = 1;
-        if (tick_program(shell, rend, backlog, script, line, program, &exit_code, force_quit)) {
+        if (tick_program(shell, rend, backlogs, backlog, script, line, program, &exit_code,
+                         force_quit)) {
             if (p + 1 == pipeline->length)
                 pipeline->last_exit_code = exit_code;
             pipeline->pipeline.remove(p);
@@ -424,14 +426,14 @@ static bool read_process_data(Shell_State* shell,
 
         for (size_t b = 0; b < script->bg.len; ++b) {
             Running_Line* line = &script->bg[b];
-            tick_pipeline(shell, rend, backlog, script, line, force_quit);
+            tick_pipeline(shell, rend, backlogs, backlog, script, line, force_quit);
             if (line->pipeline.pipeline.len == 0) {
                 finish_line(shell, backlog, script, line, /*background=*/true);
                 --b;
             }
         }
 
-        tick_pipeline(shell, rend, backlog, script, &script->fg, force_quit);
+        tick_pipeline(shell, rend, backlogs, backlog, script, &script->fg, force_quit);
 
         if (*force_quit)
             return true;

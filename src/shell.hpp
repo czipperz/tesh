@@ -200,6 +200,7 @@ Error start_execute_line(Shell_State* shell,
 
 bool tick_program(Shell_State* shell,
                   Render_State* rend,
+                  cz::Slice<Backlog_State*> backlogs,
                   Backlog_State* backlog,
                   Running_Script* script,
                   Running_Line* line,
