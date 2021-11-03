@@ -111,7 +111,7 @@ static void render_backlog(SDL_Surface* window_surface,
     bool original_test = false;
     uint32_t original_background = background;
     if (info.len + 4 < rend->window_cols) {
-        rend->window_cols -= info.len + 4;
+        rend->window_cols -= (int)(info.len + 4);
         original_test = true;
     }
 
