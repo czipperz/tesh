@@ -607,6 +607,15 @@ static void scroll_up(Render_State* rend, cz::Slice<Backlog_State*> backlogs, in
     bool first = true;
     while (lines > 0) {
         if (cursor == 0) {
+            if (!first) {
+                line_start->inner = cursor;
+                --lines;
+                line_chars = 0;
+                backwards_tab = 0;
+                if (lines == 0)
+                    break;
+            }
+
             if (line_start->outer == 0)
                 break;
             line_start->outer--;
