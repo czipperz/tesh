@@ -167,11 +167,7 @@ static void render_backlog(SDL_Surface* window_surface,
                      rend->prompt_fg_color, '\n'))
         return;
 
-    if (original_test && point->y != original_y) {
-        original_test = false;
-        rend->window_cols = original_window_cols;
-        render_info(window_surface, rend, *point, original_background, info);
-    }
+    rend->window_cols = original_window_cols;
 }
 
 static void render_backlogs(SDL_Surface* window_surface,
