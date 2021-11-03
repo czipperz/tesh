@@ -1050,8 +1050,13 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
 
             if (mod == KMOD_CTRL && key == SDLK_l) {
                 rend->backlog_start = {};
-                if (backlogs->len > 0)
+                if (backlogs->len > 0) {
                     rend->backlog_start.outer = backlogs->len - 1;
+                    Backlog_State* backlog = backlogs->last();
+                    rend->backlog_start.inner = backlog->length;
+                    if (backlog->length > 0 && backlog->get(backlog->length - 1) != '\n')
+                        ++rend->backlog_start.inner;
+                }
                 rend->complete_redraw = true;
                 ++num_events;
             }
