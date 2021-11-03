@@ -56,6 +56,7 @@ static cz::Vector<cz::Str>* prompt_history(Prompt_State* prompt, bool script);
 
 static void render_backlog(SDL_Surface* window_surface,
                            Render_State* rend,
+                           Shell_State* shell,
                            Backlog_State* backlog) {
     ZoneScoped;
     Visual_Point* point = &rend->backlog_end;
@@ -69,6 +70,11 @@ static void render_backlog(SDL_Surface* window_surface,
 
     uint64_t process_id = backlog->id;
     SDL_Color bg_color = cfg.process_colors[process_id % cfg.process_colors.len];
+    if (shell->active_process == process_id) {
+        bg_color.r *= 2;
+        bg_color.g *= 2;
+        bg_color.b *= 2;
+    }
     uint32_t background = SDL_MapRGB(window_surface->format, bg_color.r, bg_color.g, bg_color.b);
 
     SDL_Surface** cache = rend->backlog_cache;
@@ -113,9 +119,10 @@ static void render_backlog(SDL_Surface* window_surface,
 
 static void render_backlogs(SDL_Surface* window_surface,
                             Render_State* rend,
+                            Shell_State* shell,
                             cz::Slice<Backlog_State*> backlogs) {
     for (size_t i = rend->backlog_start.outer; i < backlogs.len; ++i) {
-        render_backlog(window_surface, rend, backlogs[i]);
+        render_backlog(window_surface, rend, shell, backlogs[i]);
     }
 }
 
@@ -130,6 +137,9 @@ static void render_prompt(SDL_Surface* window_surface,
     uint64_t process_id =
         (shell->active_process == -1 ? prompt->process_id : shell->active_process);
     SDL_Color bg_color = cfg.process_colors[process_id % cfg.process_colors.len];
+    bg_color.r *= 2;
+    bg_color.g *= 2;
+    bg_color.b *= 2;
     uint32_t background = SDL_MapRGB(window_surface->format, bg_color.r, bg_color.g, bg_color.b);
 
     if (shell->active_process == -1) {
@@ -268,7 +278,7 @@ static void render_frame(SDL_Window* window,
         rend->backlog_end = rend->backlog_start;
     }
 
-    render_backlogs(window_surface, rend, backlogs);
+    render_backlogs(window_surface, rend, shell, backlogs);
     render_prompt(window_surface, rend, prompt, shell);
 
     {
