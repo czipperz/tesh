@@ -1,6 +1,7 @@
 #include <SDL.h>
 #include <SDL_image.h>
 #include <SDL_ttf.h>
+#include <inttypes.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <Tracy.hpp>
@@ -91,9 +92,10 @@ static void render_backlog(SDL_Surface* window_surface,
         }
         end = now;
     }
-    unsigned millis =
+    uint64_t millis =
         std::chrono::duration_cast<std::chrono::milliseconds>(end - backlog->start).count();
-    cz::Str info = cz::asprintf(temp_allocator, "%u.%.3us", millis / 1000, millis % 1000);
+    cz::Str info =
+        cz::asprintf(temp_allocator, "%" PRIu64 ".%.3us", millis / 1000, (unsigned)(millis % 1000));
 
     uint64_t process_id = backlog->id;
     SDL_Color bg_color = cfg.process_colors[process_id % cfg.process_colors.len];
