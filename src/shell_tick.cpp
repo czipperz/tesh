@@ -321,7 +321,8 @@ bool tick_program(Shell_State* shell,
 
     case Running_Program::CLEAR: {
         rend->backlog_start = {};
-        rend->backlog_start.outer = backlogs.len;
+        if (backlogs->len > 0)
+            rend->backlog_start.outer = backlogs.len - 1;
         rend->complete_redraw = true;
         goto finish_builtin;
     } break;
