@@ -437,5 +437,9 @@ static void recognize_builtins(Running_Program* program,
         program->type = Running_Program::CLEAR;
     } else if (parse.args[0] == "." || parse.args[0] == "source") {
         program->type = Running_Program::SOURCE;
+    } else if (parse.args[0] == "sleep") {
+        program->type = Running_Program::SLEEP;
+        program->v.builtin.st.sleep = {};
+        program->v.builtin.st.sleep.start = std::chrono::high_resolution_clock::now();
     }
 }

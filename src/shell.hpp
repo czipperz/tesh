@@ -1,6 +1,7 @@
 #pragma once
 
 #include <stdint.h>
+#include <chrono>
 #include <cz/buffer_array.hpp>
 #include <cz/process.hpp>
 #include <cz/str.hpp>
@@ -86,6 +87,7 @@ struct Running_Program {
         EXPORT,
         CLEAR,
         SOURCE,
+        SLEEP,
     } type;
     union {
         cz::Process process;
@@ -110,6 +112,9 @@ struct Running_Program {
                     cz::Slice<const cz::Str> names;
                     cz::Slice<const cz::Str> values;
                 } variables;
+                struct {
+                    std::chrono::high_resolution_clock::time_point start;
+                } sleep;
             } st;
         } builtin;
     } v;

@@ -365,6 +365,30 @@ bool tick_program(Shell_State* shell,
         goto finish_builtin;
     } break;
 
+    case Running_Program::SLEEP: {
+        auto& builtin = program->v.builtin;
+        auto& st = program->v.builtin.st.sleep;
+
+        if (builtin.args.len <= 1) {
+            builtin.exit_code = 1;
+            (void)builtin.err.write("sleep: No time specified\n");
+            goto finish_builtin;
+        }
+
+        uint32_t max = 0;
+        if (!cz::parse(builtin.args[1], &max)) {
+            builtin.exit_code = 1;
+            (void)builtin.err.write(cz::format(
+                temp_allocator, "sleep: Invalid time specified: ", builtin.args[1], "\n"));
+            goto finish_builtin;
+        }
+
+        auto now = std::chrono::high_resolution_clock::now();
+        uint32_t actual = std::chrono::duration_cast<std::chrono::seconds>(now - st.start).count();
+        if (actual >= max)
+            goto finish_builtin;
+    } break;
+
     default:
         CZ_PANIC("unreachable");
     }
