@@ -60,6 +60,8 @@ static void render_info(SDL_Surface* window_surface,
                         Visual_Point point,
                         uint32_t background,
                         cz::Str info) {
+    if (info.len >= rend->window_cols)
+        return;
     point.y--;
     point.x = (int)(rend->window_cols - info.len);
     for (size_t i = 0; i < info.len; ++i) {
@@ -106,14 +108,9 @@ static void render_backlog(SDL_Surface* window_surface,
     }
     uint32_t background = SDL_MapRGB(window_surface->format, bg_color.r, bg_color.g, bg_color.b);
 
-    int original_window_cols = rend->window_cols;
     int original_y = point->y;
-    bool original_test = false;
+    bool original_test = true;
     uint32_t original_background = background;
-    if (info.len + 4 < rend->window_cols) {
-        rend->window_cols -= (int)(info.len + 4);
-        original_test = true;
-    }
 
     SDL_Surface** cache = rend->backlog_cache;
     SDL_Color fg_color = rend->backlog_fg_color;
@@ -141,7 +138,6 @@ static void render_backlog(SDL_Surface* window_surface,
 
         if (original_test && point->y != original_y) {
             original_test = false;
-            rend->window_cols = original_window_cols;
             render_info(window_surface, rend, *point, original_background, info);
         }
     }
@@ -157,7 +153,6 @@ static void render_backlog(SDL_Surface* window_surface,
 
     if (original_test && point->y != original_y) {
         original_test = false;
-        rend->window_cols = original_window_cols;
         render_info(window_surface, rend, *point, original_background, info);
     }
 
@@ -166,8 +161,6 @@ static void render_backlog(SDL_Surface* window_surface,
     if (!render_char(window_surface, rend, point, rend->backlog_cache, background,
                      rend->prompt_fg_color, '\n'))
         return;
-
-    rend->window_cols = original_window_cols;
 }
 
 static void render_backlogs(SDL_Surface* window_surface,
