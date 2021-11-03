@@ -22,6 +22,8 @@ static int run_ls(Process_Output out,
                   cz::Str working_directory,
                   cz::Str directory);
 
+void clear_screen(Render_State* rend, Shell_State* shell, cz::Slice<Backlog_State*> backlogs);
+
 ///////////////////////////////////////////////////////////////////////////////
 
 bool tick_program(Shell_State* shell,
@@ -320,15 +322,7 @@ bool tick_program(Shell_State* shell,
     } break;
 
     case Running_Program::CLEAR: {
-        rend->backlog_start = {};
-        if (backlogs.len > 0) {
-            rend->backlog_start.outer = backlogs.len - 1;
-            Backlog_State* backlog = backlogs.last();
-            rend->backlog_start.inner = backlog->length;
-            if (backlog->length > 0 && backlog->get(backlog->length - 1) != '\n')
-                ++rend->backlog_start.inner;
-        }
-        rend->complete_redraw = true;
+        clear_screen(rend, shell, backlogs);
         goto finish_builtin;
     } break;
 

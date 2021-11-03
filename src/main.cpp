@@ -669,6 +669,14 @@ static void scroll_up(Render_State* rend, cz::Slice<Backlog_State*> backlogs, in
     line_start->x = 0;
 }
 
+void clear_screen(Render_State* rend, Shell_State* shell, cz::Slice<Backlog_State*> backlogs) {
+    rend->backlog_start = {};
+    rend->backlog_start.outer = backlogs.len;
+    if (shell->scripts.len > 0)
+        scroll_up(rend, backlogs, 2);
+    rend->complete_redraw = true;
+}
+
 static void ensure_prompt_on_screen(Render_State* rend, cz::Slice<Backlog_State*> backlogs) {
     if (rend->window_rows > 3) {
         Visual_Point backup = rend->backlog_start;
@@ -1128,15 +1136,7 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
             }
 
             if (mod == KMOD_CTRL && key == SDLK_l) {
-                rend->backlog_start = {};
-                if (backlogs->len > 0) {
-                    rend->backlog_start.outer = backlogs->len - 1;
-                    Backlog_State* backlog = backlogs->last();
-                    rend->backlog_start.inner = backlog->length;
-                    if (backlog->length > 0 && backlog->get(backlog->length - 1) != '\n')
-                        ++rend->backlog_start.inner;
-                }
-                rend->complete_redraw = true;
+                clear_screen(rend, shell, *backlogs);
                 ++num_events;
             }
 
