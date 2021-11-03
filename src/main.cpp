@@ -70,10 +70,17 @@ static void render_info(SDL_Surface* window_surface,
         }
         end = now;
     }
+
     uint64_t millis =
         std::chrono::duration_cast<std::chrono::milliseconds>(end - backlog->start).count();
-    cz::Str info =
-        cz::asprintf(temp_allocator, "%" PRIu64 ".%.3us", millis / 1000, (unsigned)(millis % 1000));
+
+    cz::String info = {};
+    if (backlog->done) {
+        cz::append(temp_allocator, &info, '(', backlog->exit_code, ") ");
+    }
+
+    cz::append_sprintf(temp_allocator, &info, "%" PRIu64 ".%.3us", millis / 1000,
+                       (unsigned)(millis % 1000));
 
     if (info.len >= rend->window_cols)
         return;
@@ -442,8 +449,11 @@ static bool finish_line(Shell_State* shell,
     else
         next = line->on.failure;
 
-    if (!next)
+    if (!next) {
+        if (!background)
+            backlog->exit_code = line->pipeline.last_exit_code;
         return false;
+    }
 
     // TODO: we shouldn't throw away the arena and then immediately realloc it.
     // It's essentially free we're not even calling `free` but still.  Bad design.
@@ -1069,6 +1079,7 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
                         TracyMessage(message.buffer, message.len);
 #endif
 
+                        backlog->exit_code = -1;
                         recycle_process(shell, script);
                     }
                 }

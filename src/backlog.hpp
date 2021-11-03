@@ -16,6 +16,7 @@ struct Backlog_State {
     cz::Vector<Backlog_Event> events;
     std::chrono::high_resolution_clock::time_point start, end;
     bool done;
+    int exit_code;
 
     char get(size_t index);
 };
