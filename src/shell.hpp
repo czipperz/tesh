@@ -45,6 +45,8 @@ void recycle_arena(Shell_State* shell, cz::Buffer_Array arena);
 
 /// Get the active process, or `nullptr` if there is none.
 Running_Script* active_process(Shell_State* shell);
+/// Find a process by id, or `nullptr` if no matches.
+Running_Script* lookup_process(Shell_State* shell, uint64_t id);
 
 bool find_in_path(Shell_State* shell,
                   cz::Str abbreviation,

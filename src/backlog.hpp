@@ -1,6 +1,7 @@
 #pragma once
 
 #include <stdint.h>
+#include <chrono>
 #include <cz/str.hpp>
 #include <cz/vector.hpp>
 
@@ -13,6 +14,8 @@ struct Backlog_State {
     cz::Vector<char*> buffers;
     uint64_t length;
     cz::Vector<Backlog_Event> events;
+    std::chrono::high_resolution_clock::time_point start, end;
+    bool done;
 
     char get(size_t index);
 };

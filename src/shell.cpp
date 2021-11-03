@@ -113,11 +113,14 @@ Running_Script* active_process(Shell_State* shell) {
     if (shell->active_process == -1)
         return nullptr;
 
+    return lookup_process(shell, shell->active_process);
+}
+
+Running_Script* lookup_process(Shell_State* shell, uint64_t id) {
     for (size_t i = 0; i < shell->scripts.len; ++i) {
         Running_Script* script = &shell->scripts[i];
-        if (script->id == shell->active_process)
+        if (script->id == id)
             return script;
     }
-
-    CZ_PANIC("Invalid active_process");
+    return nullptr;
 }
