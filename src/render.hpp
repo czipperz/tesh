@@ -22,6 +22,7 @@ enum Selection_State {
     SELECT_DISABLED,
     SELECT_EMPTY,
     SELECT_REGION,
+    SELECT_FINISHED,
 };
 
 struct Render_State {

@@ -129,7 +129,7 @@ bool render_char(SDL_Surface* window_surface,
         }
     }
 
-    if (rend->selection.state == SELECT_REGION) {
+    if (rend->selection.state == SELECT_REGION || rend->selection.state == SELECT_FINISHED) {
         bool inside_start = ((point->outer > rend->selection.start.outer - 1) ||
                              (point->outer == rend->selection.start.outer - 1 &&
                               point->inner >= rend->selection.start.inner));

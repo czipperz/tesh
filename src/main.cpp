@@ -1260,7 +1260,11 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
 
         case SDL_MOUSEBUTTONUP: {
             if (event.button.button == SDL_BUTTON_LEFT) {
-                rend->selection.state = SELECT_DISABLED;
+                if (rend->selection.state == SELECT_REGION) {
+                    rend->selection.state = SELECT_FINISHED;
+                } else {
+                    rend->selection.state = SELECT_DISABLED;
+                }
                 rend->complete_redraw = true;
                 ++num_events;
             }
@@ -1270,7 +1274,8 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
             if (!rend->grid_is_valid)
                 break;
 
-            if (rend->selection.state == SELECT_DISABLED)
+            if (rend->selection.state == SELECT_DISABLED ||
+                rend->selection.state == SELECT_FINISHED)
                 break;
 
             int row = event.motion.y / rend->font_height;
@@ -1561,7 +1566,7 @@ int actual_main(int argc, char** argv) {
     rend.backlog_fg_color = {0xdd, 0xdd, 0xdd, 0xff};
     rend.prompt_fg_color = {0x77, 0xf9, 0xff, 0xff};
     rend.directory_fg_color = {0xff, 0x44, 0xff, 0xff};
-    rend.selection_fg_color = {0xff, 0xff, 0xff, 0xff};
+    rend.selection_fg_color = {0x00, 0x00, 0x00, 0xff};
     rend.selection_bg_color = {0xff, 0x44, 0xff, 0xff};
 
     cz::env::set("PAGER", "cat");
