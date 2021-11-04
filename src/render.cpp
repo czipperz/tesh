@@ -118,7 +118,31 @@ bool render_char(SDL_Surface* window_surface,
                  SDL_Surface** cache,
                  uint32_t background,
                  SDL_Color foreground,
-                 char c) {
+                 char c,
+                 bool set_tile) {
+    if (set_tile) {
+        size_t index = point->y * rend->window_cols + point->x;
+        if (index < rend->grid.len) {
+            Visual_Tile* tile = &rend->grid[index];
+            tile->outer = point->outer + 1;
+            tile->inner = point->inner;
+        }
+    }
+
+    if (rend->selection.state == SELECT_REGION) {
+        bool inside_start = ((point->outer > rend->selection.start.outer - 1) ||
+                             (point->outer == rend->selection.start.outer - 1 &&
+                              point->inner >= rend->selection.start.inner));
+        bool inside_end = ((point->outer < rend->selection.end.outer - 1) ||
+                           (point->outer == rend->selection.end.outer - 1 &&
+                            point->inner <= rend->selection.end.inner));
+        if (inside_start && inside_end) {
+            cache = rend->selection_cache;
+            foreground = rend->selection_fg_color;
+            background = rend->selection.bg_color;
+        }
+    }
+
     SDL_Rect rect = {point->x * rend->font_width, point->y * rend->font_height};
     uint64_t old_y = point->y;
     int width = coord_trans(point, rend->window_cols, c);

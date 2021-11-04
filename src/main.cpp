@@ -89,7 +89,7 @@ static void render_info(SDL_Surface* window_surface,
     point.x = (int)(rend->window_cols - info.len);
     for (size_t i = 0; i < info.len; ++i) {
         if (!render_char(window_surface, rend, &point, rend->directory_cache, background,
-                         rend->directory_fg_color, info[i]))
+                         rend->directory_fg_color, info[i], false))
             break;
     }
 }
@@ -146,7 +146,7 @@ static void render_backlog(SDL_Surface* window_surface,
         }
 
         char c = backlog->get(i);
-        if (!render_char(window_surface, rend, point, cache, background, fg_color, c))
+        if (!render_char(window_surface, rend, point, cache, background, fg_color, c, true))
             break;
 
         if (original_test && point->y != original_y) {
@@ -161,8 +161,9 @@ static void render_backlog(SDL_Surface* window_surface,
     if (rend->backlog_end.inner == backlog->length && backlog->length > 0 &&
         backlog->get(backlog->length - 1) != '\n' &&
         !render_char(window_surface, rend, point, rend->backlog_cache, background,
-                     rend->prompt_fg_color, '\n'))
+                     rend->prompt_fg_color, '\n', true)) {
         return;
+    }
 
     if (original_test && point->y != original_y) {
         original_test = false;
@@ -172,8 +173,9 @@ static void render_backlog(SDL_Surface* window_surface,
     bg_color = {};
     background = SDL_MapRGB(window_surface->format, bg_color.r, bg_color.g, bg_color.b);
     if (!render_char(window_surface, rend, point, rend->backlog_cache, background,
-                     rend->prompt_fg_color, '\n'))
+                     rend->prompt_fg_color, '\n', true)) {
         return;
+    }
 }
 
 static void render_backlogs(SDL_Surface* window_surface,
@@ -206,23 +208,23 @@ static void render_prompt(SDL_Surface* window_surface,
         for (size_t i = 0; i < shell->working_directory.len; ++i) {
             char c = shell->working_directory[i];
             render_char(window_surface, rend, &point, rend->directory_cache, background,
-                        rend->directory_fg_color, c);
+                        rend->directory_fg_color, c, true);
         }
 
         render_char(window_surface, rend, &point, rend->backlog_cache, background,
-                    rend->backlog_fg_color, ' ');
+                    rend->backlog_fg_color, ' ', true);
 
         for (size_t i = 0; i < prompt->prefix.len; ++i) {
             char c = prompt->prefix[i];
             render_char(window_surface, rend, &point, rend->backlog_cache, background,
-                        rend->backlog_fg_color, c);
+                        rend->backlog_fg_color, c, true);
         }
     } else {
         cz::Str input_prefix = "> ";
         for (size_t i = 0; i < input_prefix.len; ++i) {
             char c = input_prefix[i];
             render_char(window_surface, rend, &point, rend->backlog_cache, background,
-                        rend->backlog_fg_color, c);
+                        rend->backlog_fg_color, c, true);
         }
     }
 
@@ -237,21 +239,21 @@ static void render_prompt(SDL_Surface* window_surface,
             SDL_FillRect(window_surface, &fill_rect, foreground);
 
             render_char(window_surface, rend, &point, rend->prompt_cache, background,
-                        rend->prompt_fg_color, c);
+                        rend->prompt_fg_color, c, true);
 
             if (point.x != 0) {
                 SDL_FillRect(window_surface, &fill_rect, foreground);
             }
         } else {
             render_char(window_surface, rend, &point, rend->prompt_cache, background,
-                        rend->prompt_fg_color, c);
+                        rend->prompt_fg_color, c, true);
         }
     }
 
     // Fill rest of line.
     Visual_Point eol = point;
     render_char(window_surface, rend, &point, rend->backlog_cache, background,
-                rend->backlog_fg_color, '\n');
+                rend->backlog_fg_color, '\n', true);
 
     if (prompt->cursor == prompt->text.len) {
         SDL_Rect fill_rect = {eol.x * rend->font_width - 1, eol.y * rend->font_height, 2,
@@ -266,7 +268,7 @@ static void render_prompt(SDL_Surface* window_surface,
         for (size_t i = 0; i < prefix.len; ++i) {
             char c = prefix[i];
             render_char(window_surface, rend, &point, rend->backlog_cache, background,
-                        rend->backlog_fg_color, c);
+                        rend->backlog_fg_color, c, true);
         }
         cz::Vector<cz::Str>* history = prompt_history(prompt, shell->active_process != -1);
         if (prompt->history_counter < history->len) {
@@ -274,12 +276,12 @@ static void render_prompt(SDL_Surface* window_surface,
             for (size_t i = 0; i < hist.len; ++i) {
                 char c = hist[i];
                 render_char(window_surface, rend, &point, rend->backlog_cache, background,
-                            rend->backlog_fg_color, c);
+                            rend->backlog_fg_color, c, true);
             }
         }
 
         render_char(window_surface, rend, &point, rend->backlog_cache, background,
-                    rend->backlog_fg_color, '\n');
+                    rend->backlog_fg_color, '\n', true);
     }
 }
 
@@ -339,6 +341,17 @@ static void render_frame(SDL_Window* window,
         SDL_FillRect(window_surface, NULL, SDL_MapRGB(window_surface->format, 0x00, 0x00, 0x00));
         rend->backlog_end = rend->backlog_start;
     }
+
+    if (!rend->grid_is_valid) {
+        rend->grid.len = 0;
+        size_t new_len = rend->window_rows_ru * rend->window_cols;
+        rend->grid.reserve_exact(cz::heap_allocator(), new_len);
+        rend->grid.len = new_len;
+        rend->grid_is_valid = true;
+    }
+    memset(rend->grid.elems, 0, sizeof(Visual_Tile) * rend->grid.len);
+    rend->selection.bg_color = SDL_MapRGB(window_surface->format, rend->selection_bg_color.r,
+                                          rend->selection_bg_color.g, rend->selection_bg_color.b);
 
     render_backlogs(window_surface, rend, shell, now, backlogs);
     render_prompt(window_surface, rend, prompt, shell);
@@ -1001,6 +1014,7 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
                 continue;
             }
 
+            rend->grid_is_valid = false;
             rend->complete_redraw = true;
             ++num_events;
             break;
@@ -1217,6 +1231,66 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
                 } else if (event.wheel.y > 0) {
                     scroll_up(rend, *backlogs, event.wheel.y);
                 }
+            }
+
+            rend->complete_redraw = true;
+            ++num_events;
+        } break;
+
+        case SDL_MOUSEBUTTONDOWN: {
+            if (event.button.button == SDL_BUTTON_LEFT) {
+                if (!rend->grid_is_valid)
+                    break;
+
+                int row = event.button.y / rend->font_height;
+                int column = event.button.x / rend->font_width;
+                Visual_Tile tile = rend->grid[row * rend->window_cols + column];
+
+                if (tile.outer == 0) {
+                    rend->selection.state = SELECT_DISABLED;
+                    break;
+                }
+
+                rend->selection.state = SELECT_EMPTY;
+                rend->selection.down = tile;
+                rend->complete_redraw = true;
+                ++num_events;
+            }
+        } break;
+
+        case SDL_MOUSEBUTTONUP: {
+            if (event.button.button == SDL_BUTTON_LEFT) {
+                rend->selection.state = SELECT_DISABLED;
+                rend->complete_redraw = true;
+                ++num_events;
+            }
+        } break;
+
+        case SDL_MOUSEMOTION: {
+            if (!rend->grid_is_valid)
+                break;
+
+            if (rend->selection.state == SELECT_DISABLED)
+                break;
+
+            int row = event.motion.y / rend->font_height;
+            int column = event.motion.x / rend->font_width;
+            Visual_Tile tile = rend->grid[row * rend->window_cols + column];
+
+            if (tile.outer == 0)
+                break;
+
+            rend->selection.state = SELECT_REGION;
+            rend->selection.current = tile;
+
+            if ((rend->selection.current.outer < rend->selection.down.outer) ||
+                (rend->selection.current.outer == rend->selection.down.outer &&
+                 rend->selection.current.inner < rend->selection.down.inner)) {
+                rend->selection.start = rend->selection.current;
+                rend->selection.end = rend->selection.down;
+            } else {
+                rend->selection.start = rend->selection.down;
+                rend->selection.end = rend->selection.current;
             }
 
             rend->complete_redraw = true;
@@ -1487,6 +1561,8 @@ int actual_main(int argc, char** argv) {
     rend.backlog_fg_color = {0xdd, 0xdd, 0xdd, 0xff};
     rend.prompt_fg_color = {0x77, 0xf9, 0xff, 0xff};
     rend.directory_fg_color = {0xff, 0x44, 0xff, 0xff};
+    rend.selection_fg_color = {0xff, 0xff, 0xff, 0xff};
+    rend.selection_bg_color = {0xff, 0x44, 0xff, 0xff};
 
     cz::env::set("PAGER", "cat");
 
@@ -1509,7 +1585,7 @@ int actual_main(int argc, char** argv) {
             if (force_quit)
                 break;
 
-            if (rend.complete_redraw || status > 0 || shell.scripts.len > 0)
+            if (rend.complete_redraw || status > 0 || shell.scripts.len > 0 || !rend.grid_is_valid)
                 render_frame(window, &rend, backlogs, &prompt, &shell);
         } catch (cz::PanicReachedException& ex) {
             fprintf(stderr, "Fatal error: %s\n", ex.what());

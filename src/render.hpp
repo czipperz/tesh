@@ -3,6 +3,7 @@
 #include <SDL.h>
 #include <SDL_ttf.h>
 #include <stdint.h>
+#include <cz/vector.hpp>
 
 struct Visual_Point {
     int y;            // visual y
@@ -10,6 +11,17 @@ struct Visual_Point {
     uint64_t column;  // column number
     uint64_t outer;   // backlog id
     uint64_t inner;   // backlog-relative index
+};
+
+struct Visual_Tile {
+    uint64_t outer;  // backlog id + 1, 0 = null
+    uint64_t inner;  // backlog-relative index
+};
+
+enum Selection_State {
+    SELECT_DISABLED,
+    SELECT_EMPTY,
+    SELECT_REGION,
 };
 
 struct Render_State {
@@ -24,6 +36,10 @@ struct Render_State {
     SDL_Surface* backlog_cache[256];
     SDL_Surface* prompt_cache[256];
     SDL_Surface* directory_cache[256];
+    SDL_Surface* selection_cache[256];
+
+    bool grid_is_valid;
+    cz::Vector<Visual_Tile> grid;
 
     bool complete_redraw;
 
@@ -36,8 +52,17 @@ struct Render_State {
 
     SDL_Color prompt_fg_color;
     SDL_Color directory_fg_color;
-};
 
+    SDL_Color selection_fg_color;
+    SDL_Color selection_bg_color;
+
+    struct {
+        Selection_State state;
+        Visual_Tile down, current;
+        Visual_Tile start, end;
+        uint32_t bg_color;
+    } selection;
+};
 
 void set_icon(SDL_Window* sdl_window);
 
@@ -52,4 +77,5 @@ bool render_char(SDL_Surface* window_surface,
                  SDL_Surface** cache,
                  uint32_t background,
                  SDL_Color foreground,
-                 char c);
+                 char c,
+                 bool set_tile);
