@@ -997,6 +997,22 @@ static void push_backlog_event(Backlog_State* backlog, Backlog_Event_Type event_
     backlog->events.push(event);
 }
 
+static void append_piece(cz::String* clip,
+                         size_t* off,
+                         size_t inner_start,
+                         size_t inner_end,
+                         cz::Str part) {
+    cz::Str piece = part;
+    if (inner_end >= *off && inner_start < piece.len + *off) {
+        if (inner_end + 1 < piece.len + *off)
+            piece = piece.slice_end(inner_end - *off + 1);
+        if (inner_start >= *off)
+            piece = piece.slice_start(inner_start - *off);
+        clip->append(piece);
+    }
+    *off += part.len;
+}
+
 static int process_events(cz::Vector<Backlog_State*>* backlogs,
                           Prompt_State* prompt,
                           Render_State* rend,
@@ -1184,20 +1200,44 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
                     CZ_DEFER(clip.drop(temp_allocator));
                     for (size_t outer = rend->selection.start.outer;
                          outer <= rend->selection.end.outer; ++outer) {
-                        Backlog_State* backlog = backlogs->get(outer - 1);
+                        if (outer - 1 < backlogs->len) {
+                            Backlog_State* backlog = backlogs->get(outer - 1);
 
-                        size_t inner_start = 0;
-                        size_t inner_end = backlog->length;
-                        if (outer == rend->selection.start.outer)
-                            inner_start = rend->selection.start.inner;
-                        if (outer == rend->selection.end.outer)
-                            inner_end = rend->selection.end.inner;
+                            size_t inner_start = 0;
+                            size_t inner_end = backlog->length;
+                            if (outer == rend->selection.start.outer)
+                                inner_start = rend->selection.start.inner;
+                            if (outer == rend->selection.end.outer)
+                                inner_end = rend->selection.end.inner;
 
-                        clip.reserve(temp_allocator, inner_end - inner_start + 2);
+                            clip.reserve(temp_allocator, inner_end - inner_start + 2);
 
-                        // TODO: make this append a bucket at a time
-                        for (size_t inner = inner_start; inner <= inner_end; ++inner) {
-                            clip.push(backlog->get(inner));
+                            // TODO: make this append a bucket at a time
+                            for (size_t inner = inner_start; inner < inner_end; ++inner) {
+                                clip.push(backlog->get(inner));
+                            }
+
+                            if (inner_end >= backlog->length) {
+                                clip.reserve(temp_allocator, inner_end + 1 - backlog->length + 1);
+                                for (size_t i = backlog->length; i <= inner_end; ++i)
+                                    clip.push('\n');
+                            } else
+                                clip.push(backlog->get(inner_end));
+                        } else {
+                            size_t inner_start = 0;
+                            size_t inner_end = shell->working_directory.len + prompt->prefix.len +
+                                               prompt->text.len;
+                            if (outer == rend->selection.start.outer)
+                                inner_start = rend->selection.start.inner;
+                            if (outer == rend->selection.end.outer)
+                                inner_end = rend->selection.end.inner;
+
+                            clip.reserve(temp_allocator, inner_end - inner_start + 2);
+                            size_t off = 0;
+                            append_piece(&clip, &off, inner_start, inner_end,
+                                         shell->working_directory);
+                            append_piece(&clip, &off, inner_start, inner_end, prompt->prefix);
+                            append_piece(&clip, &off, inner_start, inner_end, prompt->text);
                         }
                     }
                     clip.null_terminate();
