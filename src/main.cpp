@@ -1175,6 +1175,8 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
                 if (rend->selection.state == SELECT_REGION ||
                     rend->selection.state == SELECT_FINISHED) {
                     rend->selection.state = SELECT_DISABLED;
+                    rend->complete_redraw = true;
+                    ++num_events;
 
                     cz::String clip = {};
                     CZ_DEFER(clip.drop(temp_allocator));
