@@ -90,11 +90,23 @@ static void make_info(cz::String* info,
 
 static void render_info(SDL_Surface* window_surface,
                         Render_State* rend,
-                        Visual_Point point,
+                        Visual_Point info_start,
+                        Visual_Point info_end,
                         uint32_t background,
                         cz::Str info) {
+    if (rend->selection.state == SELECT_REGION || rend->selection.state == SELECT_FINISHED) {
+        bool inside_start = ((info_end.outer > rend->selection.start.outer - 1) ||
+                             (info_end.outer == rend->selection.start.outer - 1 &&
+                              info_end.inner >= rend->selection.start.inner));
+        bool inside_end = ((info_start.outer < rend->selection.end.outer - 1) ||
+                           (info_start.outer == rend->selection.end.outer - 1 &&
+                            info_start.inner <= rend->selection.end.inner));
+        if (inside_start && inside_end)
+            return;
+    }
+
     for (size_t i = 0; i < info.len; ++i) {
-        if (!render_char(window_surface, rend, &point, rend->directory_cache, background,
+        if (!render_char(window_surface, rend, &info_start, rend->directory_cache, background,
                          rend->directory_fg_color, info[i], false))
             break;
     }
@@ -128,12 +140,11 @@ static bool render_backlog(SDL_Surface* window_surface,
     }
     uint32_t background = SDL_MapRGB(window_surface->format, bg_color.r, bg_color.g, bg_color.b);
 
-    int original_y = point->y;
-    bool original_test = true;
-    uint32_t original_background = background;
     cz::String info = {};
     make_info(&info, rend, shell, backlog, now);
-    Visual_Point info_point = {};
+    bool info_has_start = false, info_has_end = false;
+    Visual_Point info_start = {}, info_end = {};
+    int info_y = point->y;
     int info_x_start = (int)(rend->window_cols - info.len);
 
     SDL_Surface** cache = rend->backlog_cache;
@@ -165,9 +176,13 @@ static bool render_backlog(SDL_Surface* window_surface,
         if (!render_char(window_surface, rend, point, cache, background, fg_color, c, true))
             break;
 
-        if (original_test && (point->y != original_y || point->x > info_x_start - 1)) {
-            original_test = false;
-            info_point = old_point;
+        if (!info_has_end && point->y != info_y) {
+            info_has_end = true;
+            info_end = old_point;
+        }
+        if (!info_has_start && (point->y != info_y || point->x > info_x_start - 1)) {
+            info_has_start = true;
+            info_start = old_point;
         }
     }
 
@@ -183,15 +198,21 @@ static bool render_backlog(SDL_Surface* window_surface,
             return false;
         }
 
-        if (original_test && (point->y != original_y || point->x > info_x_start - 1)) {
-            original_test = false;
-            info_point = old_point;
+        if (!info_has_end && point->y != info_y) {
+            info_has_end = true;
+            info_end = old_point;
+        }
+        if (!info_has_start && (point->y != info_y || point->x > info_x_start - 1)) {
+            info_has_start = true;
+            info_start = old_point;
         }
     }
 
-    if (info.len < rend->window_cols) {
-        info_point.x = info_x_start;
-        render_info(window_surface, rend, info_point, original_background, info);
+    if (info_has_start && info.len < rend->window_cols) {
+        if (!info_has_end)
+            info_end = info_start;
+        info_start.x = info_x_start;
+        render_info(window_surface, rend, info_start, info_end, background, info);
     }
 
     bg_color = {};
