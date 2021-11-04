@@ -1239,6 +1239,10 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
 
         case SDL_MOUSEBUTTONDOWN: {
             if (event.button.button == SDL_BUTTON_LEFT) {
+                shell->active_process = -1;
+                rend->auto_page = false;
+                rend->auto_scroll = false;
+
                 if (!rend->grid_is_valid)
                     break;
 
@@ -1253,6 +1257,7 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
 
                 rend->selection.state = SELECT_EMPTY;
                 rend->selection.down = tile;
+
                 rend->complete_redraw = true;
                 ++num_events;
             }
