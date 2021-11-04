@@ -102,8 +102,12 @@ static void render_backlog(SDL_Surface* window_surface,
     ZoneScoped;
     Visual_Point* point = &rend->backlog_end;
     uint64_t i = 0;
-    if (point->outer == backlog->id)
+    if (point->outer == backlog->id) {
         i = point->inner;
+    } else {
+        point->outer++;
+        point->inner = 0;
+    }
 
     CZ_ASSERT(point->y >= 0);
     if (point->y >= rend->window_rows_ru)
