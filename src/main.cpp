@@ -1170,6 +1170,37 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
                 scroll_up(rend, *backlogs, lines);
             }
 
+            if (mod == KMOD_CTRL && key == SDLK_INSERT) {
+                // Copy selected region.
+                if (rend->selection.state == SELECT_REGION ||
+                    rend->selection.state == SELECT_FINISHED) {
+                    rend->selection.state = SELECT_DISABLED;
+
+                    cz::String clip = {};
+                    CZ_DEFER(clip.drop(temp_allocator));
+                    for (size_t outer = rend->selection.start.outer;
+                         outer <= rend->selection.end.outer; ++outer) {
+                        Backlog_State* backlog = backlogs->get(outer - 1);
+
+                        size_t inner_start = 0;
+                        size_t inner_end = backlog->length;
+                        if (outer == rend->selection.start.outer)
+                            inner_start = rend->selection.start.inner;
+                        if (outer == rend->selection.end.outer)
+                            inner_end = rend->selection.end.inner;
+
+                        clip.reserve(temp_allocator, inner_end - inner_start + 2);
+
+                        // TODO: make this append a bucket at a time
+                        for (size_t inner = inner_start; inner <= inner_end; ++inner) {
+                            clip.push(backlog->get(inner));
+                        }
+                    }
+                    clip.null_terminate();
+                    (void)SDL_SetClipboardText(clip.buffer);
+                }
+            }
+
             // Note: C-= used to zoom in so you don't have to hold shift.
             if (mod == KMOD_CTRL && (key == SDLK_EQUALS || key == SDLK_MINUS)) {
                 int new_font_size = rend->font_size;
