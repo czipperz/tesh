@@ -195,6 +195,8 @@ static void render_prompt(SDL_Surface* window_surface,
     ZoneScoped;
 
     Visual_Point point = rend->backlog_end;
+    point.outer++;
+    point.inner = 0;
 
     uint64_t process_id =
         (shell->active_process == -1 ? prompt->process_id : shell->active_process);
