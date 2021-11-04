@@ -126,6 +126,15 @@ bool render_char(SDL_Surface* window_surface,
             Visual_Tile* tile = &rend->grid[index];
             tile->outer = point->outer + 1;
             tile->inner = point->inner;
+
+            if (c == '\n') {
+                for (int x = point->x; x < rend->window_cols; ++x) {
+                    ++index;
+                    ++tile;
+                    tile->outer = point->outer + 1;
+                    tile->inner = point->inner;
+                }
+            }
         }
     }
 
