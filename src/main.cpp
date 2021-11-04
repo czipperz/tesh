@@ -77,6 +77,14 @@ static void render_info(SDL_Surface* window_surface,
     cz::String info = {};
     if (backlog->done) {
         cz::append(temp_allocator, &info, '(', backlog->exit_code, ") ");
+    } else {
+        uint64_t abs_millis = millis % 2000;
+        if (abs_millis <= 666)
+            cz::append(temp_allocator, &info, ".   ");
+        else if (abs_millis <= 1333)
+            cz::append(temp_allocator, &info, "..  ");
+        else
+            cz::append(temp_allocator, &info, "... ");
     }
 
     cz::append_sprintf(temp_allocator, &info, "%" PRIu64 ".%.3us", millis / 1000,
