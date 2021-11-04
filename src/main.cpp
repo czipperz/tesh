@@ -55,13 +55,11 @@ static cz::Vector<cz::Str>* prompt_history(Prompt_State* prompt, bool script);
 // Renderer methods
 ///////////////////////////////////////////////////////////////////////////////
 
-static void render_info(SDL_Surface* window_surface,
-                        Render_State* rend,
-                        Shell_State* shell,
-                        Backlog_State* backlog,
-                        std::chrono::high_resolution_clock::time_point now,
-                        Visual_Point point,
-                        uint32_t background) {
+static void make_info(cz::String* info,
+                      Render_State* rend,
+                      Shell_State* shell,
+                      Backlog_State* backlog,
+                      std::chrono::high_resolution_clock::time_point now) {
     std::chrono::high_resolution_clock::time_point end = backlog->end;
     if (!backlog->done) {
         if (!lookup_process(shell, backlog->id)) {
@@ -74,26 +72,27 @@ static void render_info(SDL_Surface* window_surface,
     uint64_t millis =
         std::chrono::duration_cast<std::chrono::milliseconds>(end - backlog->start).count();
 
-    cz::String info = {};
     if (backlog->done) {
-        cz::append(temp_allocator, &info, '(', backlog->exit_code, ") ");
+        cz::append(temp_allocator, info, '(', backlog->exit_code, ") ");
     } else {
         uint64_t abs_millis = millis % 2000;
         if (abs_millis <= 666)
-            cz::append(temp_allocator, &info, ".   ");
+            cz::append(temp_allocator, info, ".   ");
         else if (abs_millis <= 1333)
-            cz::append(temp_allocator, &info, "..  ");
+            cz::append(temp_allocator, info, "..  ");
         else
-            cz::append(temp_allocator, &info, "... ");
+            cz::append(temp_allocator, info, "... ");
     }
 
-    cz::append_sprintf(temp_allocator, &info, "%" PRIu64 ".%.3us", millis / 1000,
+    cz::append_sprintf(temp_allocator, info, "%" PRIu64 ".%.3us", millis / 1000,
                        (unsigned)(millis % 1000));
+}
 
-    if (info.len >= rend->window_cols)
-        return;
-
-    point.x = (int)(rend->window_cols - info.len);
+static void render_info(SDL_Surface* window_surface,
+                        Render_State* rend,
+                        Visual_Point point,
+                        uint32_t background,
+                        cz::Str info) {
     for (size_t i = 0; i < info.len; ++i) {
         if (!render_char(window_surface, rend, &point, rend->directory_cache, background,
                          rend->directory_fg_color, info[i], false))
@@ -132,6 +131,10 @@ static bool render_backlog(SDL_Surface* window_surface,
     int original_y = point->y;
     bool original_test = true;
     uint32_t original_background = background;
+    cz::String info = {};
+    make_info(&info, rend, shell, backlog, now);
+    Visual_Point info_point = {};
+    int info_x_start = (int)(rend->window_cols - info.len);
 
     SDL_Surface** cache = rend->backlog_cache;
     SDL_Color fg_color = rend->backlog_fg_color;
@@ -162,9 +165,9 @@ static bool render_backlog(SDL_Surface* window_surface,
         if (!render_char(window_surface, rend, point, cache, background, fg_color, c, true))
             break;
 
-        if (original_test && point->y != original_y) {
+        if (original_test && (point->y != original_y || point->x > info_x_start)) {
             original_test = false;
-            render_info(window_surface, rend, shell, backlog, now, old_point, original_background);
+            info_point = old_point;
         }
     }
 
@@ -180,10 +183,15 @@ static bool render_backlog(SDL_Surface* window_surface,
             return false;
         }
 
-        if (original_test && point->y != original_y) {
+        if (original_test && (point->y != original_y || point->x > info_x_start)) {
             original_test = false;
-            render_info(window_surface, rend, shell, backlog, now, old_point, original_background);
+            info_point = old_point;
         }
+    }
+
+    if (info.len < rend->window_cols) {
+        info_point.x = info_x_start;
+        render_info(window_surface, rend, info_point, original_background, info);
     }
 
     bg_color = {};
