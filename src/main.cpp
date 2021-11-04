@@ -1273,6 +1273,7 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
                 shell->active_process = -1;
                 rend->auto_page = false;
                 rend->auto_scroll = false;
+                rend->selection.state = SELECT_DISABLED;
 
                 if (!rend->grid_is_valid)
                     break;
@@ -1281,10 +1282,8 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
                 int column = event.button.x / rend->font_width;
                 Visual_Tile tile = rend->grid[row * rend->window_cols + column];
 
-                if (tile.outer == 0) {
-                    rend->selection.state = SELECT_DISABLED;
+                if (tile.outer == 0)
                     break;
-                }
 
                 rend->selection.state = SELECT_EMPTY;
                 rend->selection.down = tile;
