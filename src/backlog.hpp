@@ -28,6 +28,7 @@ void append_text(Backlog_State* backlog, cz::Str text);
 enum Backlog_Event_Type {
     BACKLOG_EVENT_START_INPUT,
     BACKLOG_EVENT_START_PROCESS,
+    BACKLOG_EVENT_START_DIRECTORY,
 };
 
 struct Backlog_Event {

@@ -23,6 +23,7 @@ struct Render_State {
     int window_rows_ru;
     SDL_Surface* backlog_cache[256];
     SDL_Surface* prompt_cache[256];
+    SDL_Surface* directory_cache[256];
 
     bool complete_redraw;
 
@@ -34,6 +35,7 @@ struct Render_State {
     bool auto_scroll;
 
     SDL_Color prompt_fg_color;
+    SDL_Color directory_fg_color;
 };
 
 

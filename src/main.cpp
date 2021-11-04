@@ -136,6 +136,9 @@ static void render_backlog(SDL_Surface* window_surface,
             } else if (event->type == BACKLOG_EVENT_START_INPUT) {
                 cache = rend->prompt_cache;
                 fg_color = rend->prompt_fg_color;
+            } else if (event->type == BACKLOG_EVENT_START_DIRECTORY) {
+                cache = rend->directory_cache;
+                fg_color = rend->directory_fg_color;
             } else {
                 CZ_PANIC("unreachable");
             }
@@ -202,8 +205,8 @@ static void render_prompt(SDL_Surface* window_surface,
     if (shell->active_process == -1) {
         for (size_t i = 0; i < shell->working_directory.len; ++i) {
             char c = shell->working_directory[i];
-            render_char(window_surface, rend, &point, rend->backlog_cache, background,
-                        rend->backlog_fg_color, c);
+            render_char(window_surface, rend, &point, rend->directory_cache, background,
+                        rend->directory_fg_color, c);
         }
 
         render_char(window_surface, rend, &point, rend->backlog_cache, background,
@@ -970,6 +973,14 @@ static bool handle_scroll_commands(Shell_State* shell,
     return true;
 }
 
+static void push_backlog_event(Backlog_State* backlog, Backlog_Event_Type event_type) {
+    Backlog_Event event = {};
+    event.index = backlog->length;
+    event.type = event_type;
+    backlog->events.reserve(cz::heap_allocator(), 1);
+    backlog->events.push(event);
+}
+
 static int process_events(cz::Vector<Backlog_State*>* backlogs,
                           Prompt_State* prompt,
                           Render_State* rend,
@@ -1040,25 +1051,15 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
                     backlog = (*backlogs)[process_id];
                 } else {
                     backlog = push_backlog(backlogs, process_id);
+                    push_backlog_event(backlog, BACKLOG_EVENT_START_DIRECTORY);
                     append_text(backlog, shell->working_directory);
+                    push_backlog_event(backlog, BACKLOG_EVENT_START_PROCESS);
                     append_text(backlog, " ");
                     append_text(backlog, prompt->prefix);
                 }
-                {
-                    Backlog_Event event = {};
-                    event.index = backlog->length;
-                    event.type = BACKLOG_EVENT_START_INPUT;
-                    backlog->events.reserve(cz::heap_allocator(), 1);
-                    backlog->events.push(event);
-                }
+                push_backlog_event(backlog, BACKLOG_EVENT_START_INPUT);
                 append_text(backlog, prompt->text);
-                {
-                    Backlog_Event event = {};
-                    event.index = backlog->length;
-                    event.type = BACKLOG_EVENT_START_PROCESS;
-                    backlog->events.reserve(cz::heap_allocator(), 1);
-                    backlog->events.push(event);
-                }
+                push_backlog_event(backlog, BACKLOG_EVENT_START_PROCESS);
                 append_text(backlog, "\n");
 
                 if (event.key.keysym.sym == SDLK_RETURN) {
@@ -1485,6 +1486,7 @@ int actual_main(int argc, char** argv) {
 
     rend.backlog_fg_color = {0xdd, 0xdd, 0xdd, 0xff};
     rend.prompt_fg_color = {0x77, 0xf9, 0xff, 0xff};
+    rend.directory_fg_color = {0xff, 0x44, 0xff, 0xff};
 
     cz::env::set("PAGER", "cat");
 
