@@ -7,6 +7,7 @@
 #define INNER_INDEX(index) ((index)&0xfff)
 
 char Backlog_State::get(size_t i) {
+    CZ_DEBUG_ASSERT(i < length);
     return buffers[OUTER_INDEX(i)][INNER_INDEX(i)];
 }
 
