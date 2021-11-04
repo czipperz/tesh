@@ -1319,8 +1319,10 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
             int column = event.motion.x / rend->font_width;
             Visual_Tile tile = rend->grid[row * rend->window_cols + column];
 
-            if (tile.outer == 0)
-                break;
+            if (tile.outer == 0) {
+                tile.outer = backlogs->len + 1;
+                tile.inner = prompt->text.len;
+            }
 
             rend->selection.state = SELECT_REGION;
             rend->selection.current = tile;
