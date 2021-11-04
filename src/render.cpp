@@ -149,6 +149,10 @@ bool render_char(SDL_Surface* window_surface,
             cache = rend->selection_cache;
             foreground = rend->selection_fg_color;
             background = rend->selection.bg_color;
+
+            if (!set_tile) {
+                return true;
+            }
         }
     }
 
