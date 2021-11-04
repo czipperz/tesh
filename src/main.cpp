@@ -93,7 +93,6 @@ static void render_info(SDL_Surface* window_surface,
     if (info.len >= rend->window_cols)
         return;
 
-    point.y--;
     point.x = (int)(rend->window_cols - info.len);
     for (size_t i = 0; i < info.len; ++i) {
         if (!render_char(window_surface, rend, &point, rend->directory_cache, background,
@@ -157,13 +156,15 @@ static bool render_backlog(SDL_Surface* window_surface,
             ++event_index;
         }
 
+        Visual_Point old_point = *point;
+
         char c = backlog->get(i);
         if (!render_char(window_surface, rend, point, cache, background, fg_color, c, true))
             break;
 
         if (original_test && point->y != original_y) {
             original_test = false;
-            render_info(window_surface, rend, shell, backlog, now, *point, original_background);
+            render_info(window_surface, rend, shell, backlog, now, old_point, original_background);
         }
     }
 
@@ -171,15 +172,18 @@ static bool render_backlog(SDL_Surface* window_surface,
     rend->backlog_end.inner = i;
 
     if (rend->backlog_end.inner == backlog->length && backlog->length > 0 &&
-        backlog->get(backlog->length - 1) != '\n' &&
-        !render_char(window_surface, rend, point, rend->backlog_cache, background,
-                     rend->prompt_fg_color, '\n', true)) {
-        return false;
-    }
+        backlog->get(backlog->length - 1) != '\n') {
+        Visual_Point old_point = *point;
 
-    if (original_test && point->y != original_y) {
-        original_test = false;
-        render_info(window_surface, rend, shell, backlog, now, *point, original_background);
+        if (!render_char(window_surface, rend, point, rend->backlog_cache, background,
+                         rend->prompt_fg_color, '\n', true)) {
+            return false;
+        }
+
+        if (original_test && point->y != original_y) {
+            original_test = false;
+            render_info(window_surface, rend, shell, backlog, now, old_point, original_background);
+        }
     }
 
     bg_color = {};
