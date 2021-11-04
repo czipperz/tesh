@@ -102,7 +102,7 @@ static void render_info(SDL_Surface* window_surface,
     }
 }
 
-static void render_backlog(SDL_Surface* window_surface,
+static bool render_backlog(SDL_Surface* window_surface,
                            Render_State* rend,
                            Shell_State* shell,
                            std::chrono::high_resolution_clock::time_point now,
@@ -119,7 +119,7 @@ static void render_backlog(SDL_Surface* window_surface,
 
     CZ_ASSERT(point->y >= 0);
     if (point->y >= rend->window_rows_ru)
-        return;
+        return false;
 
     uint64_t process_id = backlog->id;
     SDL_Color bg_color = cfg.process_colors[process_id % cfg.process_colors.len];
@@ -174,7 +174,7 @@ static void render_backlog(SDL_Surface* window_surface,
         backlog->get(backlog->length - 1) != '\n' &&
         !render_char(window_surface, rend, point, rend->backlog_cache, background,
                      rend->prompt_fg_color, '\n', true)) {
-        return;
+        return false;
     }
 
     if (original_test && point->y != original_y) {
@@ -186,8 +186,10 @@ static void render_backlog(SDL_Surface* window_surface,
     background = SDL_MapRGB(window_surface->format, bg_color.r, bg_color.g, bg_color.b);
     if (!render_char(window_surface, rend, point, rend->backlog_cache, background,
                      rend->prompt_fg_color, '\n', true)) {
-        return;
+        return false;
     }
+
+    return true;
 }
 
 static void render_backlogs(SDL_Surface* window_surface,
@@ -196,7 +198,8 @@ static void render_backlogs(SDL_Surface* window_surface,
                             std::chrono::high_resolution_clock::time_point now,
                             cz::Slice<Backlog_State*> backlogs) {
     for (size_t i = rend->backlog_start.outer; i < backlogs.len; ++i) {
-        render_backlog(window_surface, rend, shell, now, backlogs[i]);
+        if (!render_backlog(window_surface, rend, shell, now, backlogs[i]))
+            break;
     }
 }
 
