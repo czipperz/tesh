@@ -375,7 +375,7 @@ bool tick_program(Shell_State* shell,
             goto finish_builtin;
         }
 
-        uint32_t max = 0;
+        uint64_t max = 0;
         if (!cz::parse(builtin.args[1], &max)) {
             builtin.exit_code = 1;
             (void)builtin.err.write(cz::format(
@@ -384,7 +384,7 @@ bool tick_program(Shell_State* shell,
         }
 
         auto now = std::chrono::high_resolution_clock::now();
-        uint32_t actual = std::chrono::duration_cast<std::chrono::seconds>(now - st.start).count();
+        uint64_t actual = std::chrono::duration_cast<std::chrono::seconds>(now - st.start).count();
         if (actual >= max)
             goto finish_builtin;
     } break;
