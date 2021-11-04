@@ -88,8 +88,8 @@ static void render_info(SDL_Surface* window_surface,
     point.y--;
     point.x = (int)(rend->window_cols - info.len);
     for (size_t i = 0; i < info.len; ++i) {
-        if (!render_char(window_surface, rend, &point, rend->prompt_cache, background,
-                         rend->prompt_fg_color, info[i]))
+        if (!render_char(window_surface, rend, &point, rend->directory_cache, background,
+                         rend->directory_fg_color, info[i]))
             break;
     }
 }
