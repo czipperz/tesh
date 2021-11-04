@@ -165,7 +165,7 @@ static bool render_backlog(SDL_Surface* window_surface,
         if (!render_char(window_surface, rend, point, cache, background, fg_color, c, true))
             break;
 
-        if (original_test && (point->y != original_y || point->x > info_x_start)) {
+        if (original_test && (point->y != original_y || point->x > info_x_start - 1)) {
             original_test = false;
             info_point = old_point;
         }
@@ -183,7 +183,7 @@ static bool render_backlog(SDL_Surface* window_surface,
             return false;
         }
 
-        if (original_test && (point->y != original_y || point->x > info_x_start)) {
+        if (original_test && (point->y != original_y || point->x > info_x_start - 1)) {
             original_test = false;
             info_point = old_point;
         }
