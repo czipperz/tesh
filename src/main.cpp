@@ -213,9 +213,6 @@ static void render_prompt(SDL_Surface* window_surface,
                         rend->directory_fg_color, c, true);
         }
 
-        render_char(window_surface, rend, &point, rend->backlog_cache, background,
-                    rend->backlog_fg_color, ' ', true);
-
         for (size_t i = 0; i < prompt->prefix.len; ++i) {
             char c = prompt->prefix[i];
             render_char(window_surface, rend, &point, rend->backlog_cache, background,
@@ -1070,7 +1067,6 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
                     push_backlog_event(backlog, BACKLOG_EVENT_START_DIRECTORY);
                     append_text(backlog, shell->working_directory);
                     push_backlog_event(backlog, BACKLOG_EVENT_START_PROCESS);
-                    append_text(backlog, " ");
                     append_text(backlog, prompt->prefix);
                 }
                 push_backlog_event(backlog, BACKLOG_EVENT_START_INPUT);
@@ -1535,7 +1531,7 @@ int actual_main(int argc, char** argv) {
     set_program_name(/*fallback=*/argv[0]);
     set_program_directory();
 
-    prompt.prefix = "$ ";
+    prompt.prefix = " $ ";
     rend.complete_redraw = true;
 
     rend.font_size = cfg.default_font_size;
