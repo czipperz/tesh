@@ -1232,7 +1232,8 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
                 scroll_up(rend, *backlogs, lines);
             }
 
-            if (mod == KMOD_CTRL && key == SDLK_INSERT) {
+            if ((mod == KMOD_CTRL && key == SDLK_INSERT) ||
+                (mod == KMOD_CTRL | KMOD_SHIFT && key == SDLK_c)) {
                 // Copy selected region.
                 if (rend->selection.state == SELECT_REGION ||
                     rend->selection.state == SELECT_FINISHED) {
