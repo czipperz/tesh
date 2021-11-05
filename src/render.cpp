@@ -137,7 +137,7 @@ bool render_char(SDL_Surface* window_surface,
             tile->inner = point->inner;
 
             if (c == '\n') {
-                for (int x = point->x; x < rend->window_cols; ++x) {
+                for (int x = point->x + 1; x < rend->window_cols; ++x) {
                     ++index;
                     ++tile;
                     tile->outer = point->outer + 1;
