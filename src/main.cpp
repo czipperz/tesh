@@ -1003,6 +1003,13 @@ static bool handle_scroll_commands(Shell_State* shell,
     } else if ((mod == 0 && key == SDLK_PAGEUP) || (mod == KMOD_ALT && key == SDLK_v)) {
         int lines = cz::max(rend->window_rows, 6) - 3;
         scroll_up(rend, backlogs, lines);
+    } else if ((mod == KMOD_CTRL && key == SDLK_d) &&
+               (shell->active_process == -1 && prompt->text.len == 0)) {
+        int lines = rend->window_rows / 2;
+        scroll_down(rend, backlogs, lines);
+    } else if (mod == KMOD_CTRL && key == SDLK_u) {
+        int lines = rend->window_rows / 2;
+        scroll_up(rend, backlogs, lines);
     } else if (mod == KMOD_ALT && key == SDLK_n) {
         scroll_down(rend, backlogs, 1);
     } else if (mod == KMOD_ALT && key == SDLK_p) {
