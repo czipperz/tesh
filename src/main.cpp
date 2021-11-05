@@ -84,8 +84,22 @@ static void make_info(cz::String* info,
             cz::append(temp_allocator, info, "... ");
     }
 
-    cz::append_sprintf(temp_allocator, info, "%" PRIu64 ".%.3us", millis / 1000,
-                       (unsigned)(millis % 1000));
+    uint64_t seconds = millis / 1000;
+    uint64_t minutes = seconds / 60;
+
+    if (minutes > 0) {
+        uint64_t hours = minutes / 60;
+        if (hours > 0) {
+            cz::append_sprintf(temp_allocator, info, "%" PRIu64, hours);
+            cz::append_sprintf(temp_allocator, info, ":%.2u", (unsigned)(minutes % 60));
+        } else {
+            cz::append_sprintf(temp_allocator, info, "%u", (unsigned)(minutes % 60));
+        }
+        cz::append_sprintf(temp_allocator, info, ":%.2u", (unsigned)(seconds % 60));
+    } else {
+        cz::append_sprintf(temp_allocator, info, "%u", (unsigned)(seconds % 60));
+    }
+    cz::append_sprintf(temp_allocator, info, ".%.3us", (unsigned)(millis % 1000));
 }
 
 static void render_info(SDL_Surface* window_surface,
