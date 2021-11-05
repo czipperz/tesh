@@ -10,6 +10,7 @@ struct Config_State {
     const char* font_path;
     int default_font_size;
     int tab_width;
+    uint64_t max_length;
     cz::Slice<SDL_Color> process_colors;
 };
 

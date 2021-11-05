@@ -11,6 +11,7 @@ struct Backlog_Event;
 
 struct Backlog_State {
     uint64_t id;
+    uint64_t max_length;
     cz::Vector<char*> buffers;
     uint64_t length;
     cz::Vector<Backlog_Event> events;
@@ -21,7 +22,7 @@ struct Backlog_State {
     char get(size_t index);
 };
 
-void append_text(Backlog_State* backlog, cz::Str text);
+int64_t append_text(Backlog_State* backlog, cz::Str text);
 
 ///////////////////////////////////////////////////////////////////////////////
 

@@ -580,7 +580,11 @@ static bool read_process_data(Shell_State* shell,
                 result = script->out.read_text(buffer, sizeof(buffer), &script->out_carry);
                 if (result <= 0)
                     break;
-                append_text(backlog, {buffer, (size_t)result});
+
+                // TODO: allow expanding max dynamically (don't close script->out here)
+                result = append_text(backlog, {buffer, (size_t)result});
+                if (result <= 0)
+                    break;
             }
 
             if (result == 0) {
@@ -1536,6 +1540,8 @@ static void load_default_configuration() {
     cfg.default_font_size = 12;
     cfg.tab_width = 8;
 
+    cfg.max_length = (64 << 20);  // 64MB
+
     static SDL_Color process_colors[] = {
         {0x18, 0, 0, 0xff},    {0, 0x13, 0, 0xff},    {0, 0, 0x20, 0xff},
         {0x11, 0x11, 0, 0xff}, {0, 0x11, 0x11, 0xff}, {0x11, 0, 0x17, 0xff},
@@ -1760,6 +1766,7 @@ static Backlog_State* push_backlog(cz::Vector<Backlog_State*>* backlogs, uint64_
     *backlog = {};
 
     backlog->id = id;
+    backlog->max_length = cfg.max_length;
     backlog->buffers.reserve(cz::heap_allocator(), 1);
     backlog->buffers.push(buffer);
     backlog->start = std::chrono::high_resolution_clock::now();
