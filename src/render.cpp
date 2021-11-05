@@ -46,11 +46,18 @@ void close_font(Render_State* rend) {
     for (int i = 0; i < CZ_DIM(rend->backlog_cache); i++) {
         SDL_FreeSurface(rend->backlog_cache[i]);
         rend->backlog_cache[i]   = NULL;
-        rend->directory_cache[i] = NULL;
     }
     for (int i = 0; i < CZ_DIM(rend->prompt_cache); i++) {
         SDL_FreeSurface(rend->prompt_cache[i]);
         rend->prompt_cache[i] = NULL;
+    }
+    for (int i = 0; i < CZ_DIM(rend->selection_cache); i++) {
+        SDL_FreeSurface(rend->selection_cache[i]);
+        rend->selection_cache[i] = NULL;
+    }
+    for (int i = 0; i < CZ_DIM(rend->directory_cache); i++) {
+        SDL_FreeSurface(rend->directory_cache[i]);
+        rend->directory_cache[i] = NULL;
     }
     TTF_CloseFont(rend->font);
 }
