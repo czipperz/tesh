@@ -1419,7 +1419,7 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
 
             if (tile.outer == 0) {
                 tile.outer = backlogs->len + 1;
-                tile.inner = prompt->text.len;
+                tile.inner = shell->working_directory.len + prompt->prefix.len + prompt->text.len;
             }
 
             rend->selection.state = SELECT_REGION;
