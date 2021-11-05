@@ -1462,9 +1462,10 @@ static void load_history(Prompt_State* prompt, Shell_State* shell) {
     cz::String buffer = {};
     buffer.reserve_exact(temp_allocator, 4096);
 
+    cz::Carriage_Return_Carry carry = {};
     cz::String element = {};
     while (1) {
-        int64_t result = file.read(buffer.buffer, buffer.cap);
+        int64_t result = file.read_text(buffer.buffer, buffer.cap, &carry);
         if (result <= 0)
             break;
         buffer.len = result;

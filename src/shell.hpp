@@ -107,6 +107,7 @@ struct Running_Program {
                 struct {
                     size_t outer;
                     cz::Input_File file;
+                    cz::Carriage_Return_Carry carry;
                     char* buffer;
                     size_t len, offset;
                 } cat;

@@ -130,7 +130,7 @@ bool tick_program(Shell_State* shell,
             }
 
             // Read a new buffer.
-            result = st.file.read(st.buffer, 4096);
+            result = st.file.read_text(st.buffer, 4096, &st.carry);
             if (result <= 0) {
                 if (result < 0)
                     break;
