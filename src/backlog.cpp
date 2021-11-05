@@ -21,11 +21,11 @@ int64_t append_text(Backlog_State* backlog, cz::Str text) {
         uint64_t underhang = text.len - overhang;
         if (underhang > 0) {
             memcpy(backlog->buffers.last() + inner, text.buffer + 0, underhang);
-        }
 
-        if (backlog->length + underhang == backlog->max_length) {
-            backlog->length += underhang;
-            return underhang;
+            if (backlog->length + underhang == backlog->max_length) {
+                backlog->length += underhang;
+                return underhang;
+            }
         }
 
         backlog->buffers.reserve(cz::heap_allocator(), 1);
