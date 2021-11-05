@@ -83,7 +83,8 @@ static SDL_Surface* rasterize_character_cached(Render_State* rend,
     uint8_t index = (uint8_t)ch;
     if (cache[index])
         return cache[index];
-
+    if (ch == '\0')
+        ch = ' ';
     char text[2] = {ch, 0};
     SDL_Surface* surface = rasterize_character(text, rend->font, 0, color);
     CZ_ASSERT(surface);
