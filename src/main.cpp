@@ -843,12 +843,12 @@ static cz::Vector<cz::Str>* prompt_history(Prompt_State* prompt, bool script) {
 
 static void backward_word(cz::Str text, size_t* cursor) {
     while (*cursor > 0) {
-        if (cz::is_alpha(text[*cursor - 1]))
+        if (cz::is_alnum(text[*cursor - 1]))
             break;
         --*cursor;
     }
     while (*cursor > 0) {
-        if (!cz::is_alpha(text[*cursor - 1]))
+        if (!cz::is_alnum(text[*cursor - 1]))
             break;
         --*cursor;
     }
@@ -856,12 +856,12 @@ static void backward_word(cz::Str text, size_t* cursor) {
 
 static void forward_word(cz::Str text, size_t* cursor) {
     while (*cursor < text.len) {
-        if (cz::is_alpha(text[*cursor]))
+        if (cz::is_alnum(text[*cursor]))
             break;
         ++*cursor;
     }
     while (*cursor < text.len) {
-        if (!cz::is_alpha(text[*cursor]))
+        if (!cz::is_alnum(text[*cursor]))
             break;
         ++*cursor;
     }
