@@ -576,7 +576,7 @@ static bool read_process_data(Shell_State* shell,
 
         if (script->out.is_open()) {
             int64_t result = 0;
-            while (1) {
+            for (int rounds = 0; rounds < 1024; ++rounds) {
                 result = script->out.read_text(buffer, sizeof(buffer), &script->out_carry);
                 if (result <= 0)
                     break;
