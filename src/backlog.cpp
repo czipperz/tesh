@@ -43,6 +43,7 @@ static int64_t append_chunk(Backlog_State* backlog, cz::Str text) {
 }
 
 int64_t append_text(Backlog_State* backlog, cz::Str text) {
+    int64_t done = 0;
     while (1) {
         // Find the first special character.
         size_t chunk_len = text.len;
@@ -51,7 +52,8 @@ int64_t append_text(Backlog_State* backlog, cz::Str text) {
         // Append the normal text before it.
         int64_t result = append_chunk(backlog, text.slice_end(chunk_len));
         if (result != chunk_len)
-            return result;
+            return done + result;
+        done += result;
 
         if (chunk_len == text.len)
             break;
@@ -64,10 +66,12 @@ int64_t append_text(Backlog_State* backlog, cz::Str text) {
             if (backlog->length > 0 && backlog->get(backlog->length - 1) != '\n') {
                 result = append_chunk(backlog, "\n");
                 if (result != 1)
-                    return result;
+                    return done + result;
             }
             text = text.slice_start(chunk_len + 1);
+            done++;
             break;
         }
     }
+    return text.len;
 }
