@@ -1215,8 +1215,10 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
 
             if (mod == KMOD_CTRL && key == SDLK_d) {
                 if (shell->active_process == -1) {
-                    // Should we exit Tesh?  I don't like when you're using 'less' and close
-                    // your term accidentally.  But we're also not using 'less' so idk.
+                    if (prompt->cursor < prompt->text.len) {
+                        prompt->text.remove(prompt->cursor);
+                        ++num_events;
+                    }
                 } else {
                     Running_Script* script = active_process(shell);
                     script->in.close();
