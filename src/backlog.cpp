@@ -11,7 +11,7 @@ char Backlog_State::get(size_t i) {
     return buffers[OUTER_INDEX(i)][INNER_INDEX(i)];
 }
 
-int64_t append_text(Backlog_State* backlog, cz::Str text) {
+static int64_t append_chunk(Backlog_State* backlog, cz::Str text) {
     if (backlog->length == backlog->max_length)
         return 0;
 
@@ -40,4 +40,34 @@ int64_t append_text(Backlog_State* backlog, cz::Str text) {
 
     backlog->length += text.len;
     return text.len;
+}
+
+int64_t append_text(Backlog_State* backlog, cz::Str text) {
+    while (1) {
+        // Find the first special character.
+        size_t chunk_len = text.len;
+        chunk_len = text.slice_end(chunk_len).find_index('\r');
+
+        // Append the normal text before it.
+        int64_t result = append_chunk(backlog, text.slice_end(chunk_len));
+        if (result != chunk_len)
+            return result;
+
+        if (chunk_len == text.len)
+            break;
+
+        // Handle the special character.
+        switch (text[chunk_len]) {
+        case '\r':
+            // TODO: actually do carriage return?
+            // Note: ignore empty lines.
+            if (backlog->length > 0 && backlog->get(backlog->length - 1) != '\n') {
+                result = append_chunk(backlog, "\n");
+                if (result != 1)
+                    return result;
+            }
+            text = text.slice_start(chunk_len + 1);
+            break;
+        }
+    }
 }
