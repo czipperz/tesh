@@ -45,7 +45,8 @@ void close_font(Render_State* rend) {
     ZoneScoped;
     for (int i = 0; i < CZ_DIM(rend->backlog_cache); i++) {
         SDL_FreeSurface(rend->backlog_cache[i]);
-        rend->backlog_cache[i] = NULL;
+        rend->backlog_cache[i]   = NULL;
+        rend->directory_cache[i] = NULL;
     }
     for (int i = 0; i < CZ_DIM(rend->prompt_cache); i++) {
         SDL_FreeSurface(rend->prompt_cache[i]);
