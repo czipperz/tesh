@@ -38,6 +38,22 @@ void make_env_var(Shell_State* shell, cz::Str key) {
     shell->exported_vars.push(key.clone(cz::heap_allocator()));
 }
 
+void set_alias(Shell_State* shell, cz::Str key, cz::Str value) {
+    for (size_t i = 0; i < shell->alias_names.len; ++i) {
+        if (shell->alias_names[i] == key) {
+            cz::Str* slot = &shell->alias_values[i];
+            cz::heap_allocator().dealloc({(void*)slot->buffer, slot->len});
+            *slot = value.clone(cz::heap_allocator());
+        }
+    }
+
+    shell->alias_names.reserve(cz::heap_allocator(), 1);
+    shell->alias_values.reserve(cz::heap_allocator(), 1);
+    // TODO: garbage collect / ref count?
+    shell->alias_names.push(key.clone(cz::heap_allocator()));
+    shell->alias_values.push(value.clone(cz::heap_allocator()));
+}
+
 static void kill_program(Running_Program* program) {
     switch (program->type) {
     case Running_Program::PROCESS:

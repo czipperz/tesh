@@ -238,11 +238,7 @@ bool tick_program(Shell_State* shell,
 
             cz::Str key, value;
             if (arg.split_excluding('=', &key, &value)) {
-                shell->alias_names.reserve(cz::heap_allocator(), 1);
-                shell->alias_values.reserve(cz::heap_allocator(), 1);
-                // TODO: garbage collect / ref count?
-                shell->alias_names.push(key.clone(cz::heap_allocator()));
-                shell->alias_values.push(value.clone(cz::heap_allocator()));
+                set_alias(shell, key, value);
             } else {
                 size_t i = 0;
                 for (; i < shell->alias_names.len; ++i) {

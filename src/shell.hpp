@@ -35,6 +35,7 @@ struct Shell_State {
 bool get_var(const Shell_State* shell, cz::Str key, cz::Str* value);
 void set_var(Shell_State* shell, cz::Str key, cz::Str value);
 void make_env_var(Shell_State* shell, cz::Str key);
+void set_alias(Shell_State* shell, cz::Str key, cz::Str value);
 
 void cleanup_processes(Shell_State* shell);
 void recycle_process(Shell_State* shell, Running_Script* script);
