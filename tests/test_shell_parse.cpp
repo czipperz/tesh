@@ -521,6 +521,59 @@ TEST_CASE("parse_script outer continuation 2") {
     CHECK_FALSE(second->on.start);
 }
 
+TEST_CASE("parse_script comment basic") {
+    Shell_State shell = {};
+    Parse_Script script = {};
+    Error error = parse_script(&shell, cz::heap_allocator(), &script, {}, "# hi");
+    REQUIRE(error == Error_Success);
+    Parse_Pipeline pipeline = script.first.pipeline;
+    REQUIRE(pipeline.pipeline.len == 0);
+}
+
+TEST_CASE("parse_script # after word isn't comment") {
+    Shell_State shell = {};
+    Parse_Script script = {};
+    Error error = parse_script(&shell, cz::heap_allocator(), &script, {}, "a# hi");
+    REQUIRE(error == Error_Success);
+    Parse_Pipeline pipeline = script.first.pipeline;
+    REQUIRE(pipeline.pipeline.len == 1);
+    REQUIRE(pipeline.pipeline[0].args.len == 2);
+    CHECK(pipeline.pipeline[0].args[0] == "a#");
+    CHECK(pipeline.pipeline[0].args[1] == "hi");
+}
+
+TEST_CASE("parse_script # after empty string isn't comment") {
+    Shell_State shell = {};
+    Parse_Script script = {};
+    Error error = parse_script(&shell, cz::heap_allocator(), &script, {}, "''# \"\"#");
+    REQUIRE(error == Error_Success);
+    Parse_Pipeline pipeline = script.first.pipeline;
+    REQUIRE(pipeline.pipeline.len == 1);
+    REQUIRE(pipeline.pipeline[0].args.len == 2);
+    CHECK(pipeline.pipeline[0].args[0] == "#");
+    CHECK(pipeline.pipeline[0].args[1] == "#");
+}
+
+TEST_CASE("parse_script # doesn't honor '\\\\\\n'") {
+    Shell_State shell = {};
+    Parse_Script script = {};
+    Error error = parse_script(&shell, cz::heap_allocator(), &script, {}, "a #\\\nb");
+    REQUIRE(error == Error_Success);
+
+    Parse_Pipeline pipeline = script.first.pipeline;
+    REQUIRE(pipeline.pipeline.len == 1);
+    REQUIRE(pipeline.pipeline[0].args.len == 1);
+    CHECK(pipeline.pipeline[0].args[0] == "a");
+
+    CHECK(script.first.on.failure == script.first.on.success);
+    REQUIRE(script.first.on.success);
+
+    pipeline = script.first.on.success->pipeline;
+    REQUIRE(pipeline.pipeline.len == 1);
+    REQUIRE(pipeline.pipeline[0].args.len == 1);
+    CHECK(pipeline.pipeline[0].args[0] == "b");
+}
+
 TEST_CASE("parse_script alias simple") {
     Shell_State shell = {};
     set_alias(&shell, "aa", "bb");

@@ -374,6 +374,20 @@ static Error parse_pipeline(const Shell_State* shell,
                 goto def;
             }
 
+            case '#': {
+                if (any_special || word.len > 0)
+                    goto def;
+
+                // Eat until end of line / end of file.  Don't honor '\\\n'.
+                while (!it->at_eob()) {
+                    char c = it->get();
+                    if (c == '\n')
+                        break;
+                    it->advance();
+                }
+                goto endofword;
+            }
+
             default:
             def:
                 word.reserve(allocator, 1);
