@@ -714,7 +714,6 @@ static void scroll_up(Render_State* rend, cz::Slice<Backlog_State*> backlogs, in
             if (backlog->length > 0 && backlog->get(backlog->length - 1) != '\n') {
                 cursor++;
             }
-            cursor++;
         }
 
         cursor--;
