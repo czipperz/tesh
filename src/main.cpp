@@ -372,6 +372,13 @@ static void auto_scroll_start_paging(Render_State* rend, cz::Slice<Backlog_State
     }
 }
 
+static void stop_selecting(Render_State* rend) {
+    if (rend->selection.state != SELECT_DISABLED) {
+        rend->selection.state = SELECT_DISABLED;
+        rend->complete_redraw = true;
+    }
+}
+
 static void render_frame(SDL_Window* window,
                          Render_State* rend,
                          cz::Slice<Backlog_State*> backlogs,
@@ -1002,6 +1009,7 @@ static bool handle_prompt_manipulation_commands(Shell_State* shell,
     ensure_prompt_on_screen(rend, *backlogs);
     rend->auto_page = false;
     rend->auto_scroll = true;
+    stop_selecting(rend);
     return true;
 }
 
@@ -1342,6 +1350,7 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
             prompt->text.insert(prompt->cursor, text);
             prompt->cursor += text.len;
             ensure_prompt_on_screen(rend, *backlogs);
+            stop_selecting(rend);
             ++num_events;
         } break;
 
