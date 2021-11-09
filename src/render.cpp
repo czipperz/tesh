@@ -45,7 +45,7 @@ void close_font(Render_State* rend) {
     ZoneScoped;
     for (int i = 0; i < CZ_DIM(rend->backlog_cache); i++) {
         SDL_FreeSurface(rend->backlog_cache[i]);
-        rend->backlog_cache[i]   = NULL;
+        rend->backlog_cache[i] = NULL;
     }
     for (int i = 0; i < CZ_DIM(rend->prompt_cache); i++) {
         SDL_FreeSurface(rend->prompt_cache[i]);
@@ -145,19 +145,19 @@ bool render_char(SDL_Surface* window_surface,
                 }
             }
         }
-    }
 
-    if (rend->selection.state == SELECT_REGION || rend->selection.state == SELECT_FINISHED) {
-        bool inside_start = ((point->outer > rend->selection.start.outer - 1) ||
-                             (point->outer == rend->selection.start.outer - 1 &&
-                              point->inner >= rend->selection.start.inner));
-        bool inside_end = ((point->outer < rend->selection.end.outer - 1) ||
-                           (point->outer == rend->selection.end.outer - 1 &&
-                            point->inner <= rend->selection.end.inner));
-        if (inside_start && inside_end) {
-            cache = rend->selection_cache;
-            foreground = rend->selection_fg_color;
-            background = rend->selection.bg_color;
+        if (rend->selection.state == SELECT_REGION || rend->selection.state == SELECT_FINISHED) {
+            bool inside_start = ((point->outer > rend->selection.start.outer - 1) ||
+                                 (point->outer == rend->selection.start.outer - 1 &&
+                                  point->inner >= rend->selection.start.inner));
+            bool inside_end = ((point->outer < rend->selection.end.outer - 1) ||
+                               (point->outer == rend->selection.end.outer - 1 &&
+                                point->inner <= rend->selection.end.inner));
+            if (inside_start && inside_end) {
+                cache = rend->selection_cache;
+                foreground = rend->selection_fg_color;
+                background = rend->selection.bg_color;
+            }
         }
     }
 
