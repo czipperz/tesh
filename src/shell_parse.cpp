@@ -250,8 +250,6 @@ static Error parse_pipeline(const Shell_State* shell,
                                 word.append(value);
                             }
                             continue;
-                        } else {
-                            it->retreat();  // '$'
                         }
                     }
                     if (c == '\\') {

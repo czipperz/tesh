@@ -248,6 +248,17 @@ TEST_CASE("parse_script dollar sign space") {
     CHECK(pipeline.pipeline[0].args[1] == "a");
 }
 
+TEST_CASE("parse_script dollar sign space in quotes") {
+    Shell_State shell = {};
+    Parse_Script script = {};
+    Error error = parse_script(&shell, cz::heap_allocator(), &script, {}, "\"$ a\"");
+    REQUIRE(error == Error_Success);
+    Parse_Pipeline pipeline = script.first.pipeline;
+    REQUIRE(pipeline.pipeline.len == 1);
+    REQUIRE(pipeline.pipeline[0].args.len == 1);
+    CHECK(pipeline.pipeline[0].args[0] == "$ a");
+}
+
 TEST_CASE("parse_script multi word variable a=$var keeps one word") {
     Shell_State shell = {};
     set_var(&shell, "var", "multi word");
