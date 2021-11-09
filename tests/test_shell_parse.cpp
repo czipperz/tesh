@@ -225,6 +225,17 @@ TEST_CASE("parse_script multi word variable expanded") {
     CHECK(pipeline.pipeline[0].args[3] == "b");
 }
 
+TEST_CASE("parse_script backslash escapes dollar sign") {
+    Shell_State shell = {};
+    Parse_Script script = {};
+    Error error = parse_script(&shell, cz::heap_allocator(), &script, {}, "\\$var");
+    REQUIRE(error == Error_Success);
+    Parse_Pipeline pipeline = script.first.pipeline;
+    REQUIRE(pipeline.pipeline.len == 1);
+    REQUIRE(pipeline.pipeline[0].args.len == 1);
+    CHECK(pipeline.pipeline[0].args[0] == "$var");
+}
+
 TEST_CASE("parse_script multi word variable a=$var keeps one word") {
     Shell_State shell = {};
     set_var(&shell, "var", "multi word");
@@ -485,4 +496,17 @@ TEST_CASE("parse_script outer continuation 2") {
     CHECK(second->on.success == outer.success);
     CHECK(second->on.failure == outer.failure);
     CHECK_FALSE(second->on.start);
+}
+
+TEST_CASE("parse_script alias simple") {
+    Shell_State shell = {};
+    set_alias(&shell, "aa", "bb");
+    Parse_Script script = {};
+    Error error = parse_script(&shell, cz::heap_allocator(), &script, {}, "aa cc");
+    REQUIRE(error == Error_Success);
+    Parse_Pipeline pipeline = script.first.pipeline;
+    REQUIRE(pipeline.pipeline.len == 1);
+    REQUIRE(pipeline.pipeline[0].args.len == 2);
+    CHECK(pipeline.pipeline[0].args[0] == "bb");
+    CHECK(pipeline.pipeline[0].args[1] == "cc");
 }

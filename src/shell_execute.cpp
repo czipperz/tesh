@@ -159,18 +159,6 @@ static Error start_execute_pipeline(Shell_State* shell,
     for (size_t p = 0; p < parse.pipeline.len; ++p) {
         Parse_Program parse_program = parse.pipeline[p];
 
-        if (parse_program.args.len >= 1) {
-            // TODO: This is the wrong place to expand aliases.
-            for (size_t i = 0; i < shell->alias_names.len; ++i) {
-                if (parse_program.args[0] == shell->alias_names[i]) {
-                    cz::Vector<cz::Str> args2 = parse_program.args.clone(arena.allocator());
-                    args2[0] = shell->alias_values[i];
-                    parse_program.args = args2;
-                    break;
-                }
-            }
-        }
-
         Running_Program running_program = {};
         recognize_builtins(&running_program, parse_program, arena.allocator());
 

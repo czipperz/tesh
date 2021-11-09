@@ -38,6 +38,16 @@ void make_env_var(Shell_State* shell, cz::Str key) {
     shell->exported_vars.push(key.clone(cz::heap_allocator()));
 }
 
+bool get_alias(const Shell_State* shell, cz::Str key, cz::Str* value) {
+    for (size_t i = 0; i < shell->alias_names.len; ++i) {
+        if (shell->alias_names[i] == key) {
+            *value = shell->alias_values[i];
+            return true;
+        }
+    }
+    return false;
+}
+
 void set_alias(Shell_State* shell, cz::Str key, cz::Str value) {
     for (size_t i = 0; i < shell->alias_names.len; ++i) {
         if (shell->alias_names[i] == key) {
