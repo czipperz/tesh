@@ -1377,7 +1377,7 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
                 int new_font_size = rend->font_size;
                 if (event.wheel.y > 0) {
                     new_font_size += 2;
-                } else {
+                } else if (event.wheel.y < 0) {
                     new_font_size = cz::max(new_font_size - 2, 2);
                 }
                 resize_font(new_font_size, rend);
