@@ -294,8 +294,6 @@ static Error parse_pipeline(const Shell_State* shell,
                 it->advance();  // '$'
                 any_special = true;
 
-                // TODO: add test of '$ ' -> '$ ' (not changed)
-
                 cz::Str var;
                 if (!get_var_at_point(it, &var)) {
                     it->retreat();  // '$'
