@@ -694,6 +694,8 @@ static void scroll_up(Render_State* rend, cz::Slice<Backlog_State*> backlogs, in
     uint64_t cursor = line_start->inner;
     uint64_t line_chars = 0;
     uint64_t backwards_tab = 0;
+    // We need to retreat one character at the start.  This either just
+    // decrements the cursor or goes to the end of the previous backlog.
     bool first = true;
     while (lines > 0) {
         if (cursor == 0) {
@@ -713,6 +715,11 @@ static void scroll_up(Render_State* rend, cz::Slice<Backlog_State*> backlogs, in
             cursor = backlog->length;
             if (backlog->length > 0 && backlog->get(backlog->length - 1) != '\n') {
                 cursor++;
+            }
+
+            if (first) {
+                first = false;
+                continue;
             }
         }
 
