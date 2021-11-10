@@ -18,11 +18,20 @@ struct Visual_Tile {
     uint64_t inner;  // backlog-relative index
 };
 
-enum Selection_State {
+enum Selection_Type {
     SELECT_DISABLED,
     SELECT_EMPTY,
     SELECT_REGION,
     SELECT_FINISHED,
+};
+
+struct Selection {
+    Selection_Type type;
+    Visual_Tile down, current;
+    Visual_Tile start, end;
+    uint32_t bg_color;
+    bool expand_word : 1;
+    bool expand_line : 1;
 };
 
 struct Render_State {
@@ -57,12 +66,7 @@ struct Render_State {
     SDL_Color selection_fg_color;
     SDL_Color selection_bg_color;
 
-    struct {
-        Selection_State state;
-        Visual_Tile down, current;
-        Visual_Tile start, end;
-        uint32_t bg_color;
-    } selection;
+    Selection selection;
 };
 
 void set_icon(SDL_Window* sdl_window);

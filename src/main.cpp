@@ -108,7 +108,7 @@ static void render_info(SDL_Surface* window_surface,
                         Visual_Point info_end,
                         uint32_t background,
                         cz::Str info) {
-    if (rend->selection.state == SELECT_REGION || rend->selection.state == SELECT_FINISHED) {
+    if (rend->selection.type == SELECT_REGION || rend->selection.type == SELECT_FINISHED) {
         bool inside_start = ((info_end.outer > rend->selection.start.outer - 1) ||
                              (info_end.outer == rend->selection.start.outer - 1 &&
                               info_end.inner >= rend->selection.start.inner));
@@ -373,8 +373,8 @@ static void auto_scroll_start_paging(Render_State* rend, cz::Slice<Backlog_State
 }
 
 static void stop_selecting(Render_State* rend) {
-    if (rend->selection.state != SELECT_DISABLED) {
-        rend->selection.state = SELECT_DISABLED;
+    if (rend->selection.type != SELECT_DISABLED) {
+        rend->selection.type = SELECT_DISABLED;
         rend->complete_redraw = true;
     }
 }
@@ -1096,6 +1096,63 @@ static void append_piece(cz::String* clip,
     *off += part.len;
 }
 
+static void expand_selection(Selection* selection,
+                             Shell_State* shell,
+                             Prompt_State* prompt,
+                             cz::Slice<Backlog_State*> backlogs) {
+    cz::String prompt_buffer = {};
+    CZ_DEFER(prompt_buffer.drop(temp_allocator));
+
+    if (selection->start.outer - 1 == backlogs.len || selection->end.outer - 1 == backlogs.len) {
+        if (shell->active_process == -1) {
+            cz::append(temp_allocator, &prompt_buffer, shell->working_directory, prompt->prefix);
+        } else {
+            cz::append(temp_allocator, &prompt_buffer, "> ");
+        }
+        cz::append(temp_allocator, &prompt_buffer, prompt->text);
+    }
+
+    if (selection->expand_word) {
+        uint64_t* inner = &selection->start.inner;
+        if (selection->start.outer - 1 < backlogs.len) {
+            Backlog_State* backlog = backlogs[selection->start.outer - 1];
+            // Skip non-word characters.
+            while (*inner > 0) {
+                if (cz::is_alnum(backlog->get(*inner - 1)))
+                    break;
+                --*inner;
+            }
+            // Skip word characters.
+            while (*inner > 0) {
+                if (!cz::is_alnum(backlog->get(*inner - 1)))
+                    break;
+                --*inner;
+            }
+        } else {
+            backward_word(prompt_buffer, inner);
+        }
+
+        inner = &selection->end.inner;
+        if (selection->end.outer - 1 < backlogs.len) {
+            Backlog_State* backlog = backlogs[selection->end.outer - 1];
+            while (*inner < backlog->length) {
+                if (cz::is_alnum(backlog->get(*inner)))
+                    break;
+                ++*inner;
+            }
+            while (*inner < backlog->length) {
+                if (!cz::is_alnum(backlog->get(*inner)))
+                    break;
+                ++*inner;
+            }
+        } else {
+            forward_word(prompt_buffer, inner);
+        }
+        if (*inner > 0)
+            --*inner;
+    }
+}
+
 static int process_events(cz::Vector<Backlog_State*>* backlogs,
                           Prompt_State* prompt,
                           Render_State* rend,
@@ -1276,9 +1333,9 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
             if ((mod == KMOD_CTRL && key == SDLK_INSERT) ||
                 (mod == (KMOD_CTRL | KMOD_SHIFT) && key == SDLK_c)) {
                 // Copy selected region.
-                if (rend->selection.state == SELECT_REGION ||
-                    rend->selection.state == SELECT_FINISHED) {
-                    rend->selection.state = SELECT_DISABLED;
+                if (rend->selection.type == SELECT_REGION ||
+                    rend->selection.type == SELECT_FINISHED) {
+                    rend->selection.type = SELECT_DISABLED;
                     rend->complete_redraw = true;
                     ++num_events;
 
@@ -1404,7 +1461,7 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
                 shell->active_process = -1;
                 rend->auto_page = false;
                 rend->auto_scroll = false;
-                rend->selection.state = SELECT_DISABLED;
+                rend->selection.type = SELECT_DISABLED;
 
                 if (!rend->grid_is_valid)
                     break;
@@ -1416,8 +1473,26 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
                 if (tile.outer == 0)
                     break;
 
-                rend->selection.state = SELECT_EMPTY;
+                rend->selection.expand_word = 0;
+                rend->selection.expand_line = 0;
+
+                if (event.button.clicks >= 2) {
+                    rend->selection.type = SELECT_REGION;
+                    if ((event.button.clicks - 2) % 2 == 0) {
+                        rend->selection.expand_word = 1;
+                    } else {
+                        rend->selection.expand_line = 1;
+                    }
+                } else {
+                    rend->selection.type = SELECT_EMPTY;
+                }
+
                 rend->selection.down = tile;
+                rend->selection.current = tile;
+                rend->selection.start = tile;
+                rend->selection.end = tile;
+
+                expand_selection(&rend->selection, shell, prompt, *backlogs);
 
                 rend->complete_redraw = true;
                 ++num_events;
@@ -1426,10 +1501,10 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
 
         case SDL_MOUSEBUTTONUP: {
             if (event.button.button == SDL_BUTTON_LEFT) {
-                if (rend->selection.state == SELECT_REGION) {
-                    rend->selection.state = SELECT_FINISHED;
+                if (rend->selection.type == SELECT_REGION) {
+                    rend->selection.type = SELECT_FINISHED;
                 } else {
-                    rend->selection.state = SELECT_DISABLED;
+                    rend->selection.type = SELECT_DISABLED;
                 }
                 rend->complete_redraw = true;
                 ++num_events;
@@ -1440,8 +1515,7 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
             if (!rend->grid_is_valid)
                 break;
 
-            if (rend->selection.state == SELECT_DISABLED ||
-                rend->selection.state == SELECT_FINISHED)
+            if (rend->selection.type == SELECT_DISABLED || rend->selection.type == SELECT_FINISHED)
                 break;
 
             int row = event.motion.y / rend->font_height;
@@ -1453,7 +1527,7 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
                 tile.inner = shell->working_directory.len + prompt->prefix.len + prompt->text.len;
             }
 
-            rend->selection.state = SELECT_REGION;
+            rend->selection.type = SELECT_REGION;
             rend->selection.current = tile;
 
             if ((rend->selection.current.outer < rend->selection.down.outer) ||
@@ -1465,6 +1539,8 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
                 rend->selection.start = rend->selection.down;
                 rend->selection.end = rend->selection.current;
             }
+
+            expand_selection(&rend->selection, shell, prompt, *backlogs);
 
             rend->complete_redraw = true;
             ++num_events;
