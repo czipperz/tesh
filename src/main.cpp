@@ -1100,6 +1100,12 @@ static void expand_selection(Selection* selection,
                              Shell_State* shell,
                              Prompt_State* prompt,
                              cz::Slice<Backlog_State*> backlogs) {
+    CZ_DEBUG_ASSERT(selection->start.outer != 0);
+    CZ_DEBUG_ASSERT(selection->end.outer != 0);
+
+    if (!selection->expand_word && !selection->expand_line)
+        return;
+
     cz::String prompt_buffer = {};
     CZ_DEFER(prompt_buffer.drop(temp_allocator));
 
@@ -1150,6 +1156,40 @@ static void expand_selection(Selection* selection,
         }
         if (*inner > 0)
             --*inner;
+    } else if (selection->expand_line) {
+        // Goto start of line.
+        uint64_t* inner = &selection->start.inner;
+        if (selection->start.outer - 1 < backlogs.len) {
+            Backlog_State* backlog = backlogs[selection->start.outer - 1];
+            while (*inner > 0) {
+                if (backlog->get(*inner - 1) == '\n')
+                    break;
+                --*inner;
+            }
+        } else {
+            while (*inner > 0) {
+                if (prompt_buffer.get(*inner - 1) == '\n')
+                    break;
+                --*inner;
+            }
+        }
+
+        // Goto start of next line.
+        inner = &selection->end.inner;
+        if (selection->end.outer - 1 < backlogs.len) {
+            Backlog_State* backlog = backlogs[selection->end.outer - 1];
+            while (*inner < backlog->length) {
+                if (backlog->get(*inner) == '\n')
+                    break;
+                ++*inner;
+            }
+        } else {
+            while (*inner < prompt_buffer.len) {
+                if (prompt_buffer.get(*inner) == '\n')
+                    break;
+                ++*inner;
+            }
+        }
     }
 }
 
