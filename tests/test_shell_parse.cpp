@@ -586,3 +586,30 @@ TEST_CASE("parse_script alias simple") {
     CHECK(pipeline.pipeline[0].args[0] == "bb");
     CHECK(pipeline.pipeline[0].args[1] == "cc");
 }
+
+TEST_CASE("parse_script alias not expanded when value of variable") {
+    Shell_State shell = {};
+    set_alias(&shell, "aa", "bb");
+    set_var(&shell, "x", "aa");
+    Parse_Script script = {};
+    Error error = parse_script(&shell, cz::heap_allocator(), &script, {}, "$x cc");
+    REQUIRE(error == Error_Success);
+    Parse_Pipeline pipeline = script.first.pipeline;
+    REQUIRE(pipeline.pipeline.len == 1);
+    REQUIRE(pipeline.pipeline[0].args.len == 2);
+    CHECK(pipeline.pipeline[0].args[0] == "aa");
+    CHECK(pipeline.pipeline[0].args[1] == "cc");
+}
+
+TEST_CASE("parse_script alias not expanded when quoted") {
+    Shell_State shell = {};
+    set_alias(&shell, "aa", "bb");
+    Parse_Script script = {};
+    Error error = parse_script(&shell, cz::heap_allocator(), &script, {}, "'aa' cc");
+    REQUIRE(error == Error_Success);
+    Parse_Pipeline pipeline = script.first.pipeline;
+    REQUIRE(pipeline.pipeline.len == 1);
+    REQUIRE(pipeline.pipeline[0].args.len == 2);
+    CHECK(pipeline.pipeline[0].args[0] == "aa");
+    CHECK(pipeline.pipeline[0].args[1] == "cc");
+}

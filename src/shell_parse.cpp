@@ -413,7 +413,7 @@ static Error parse_pipeline(const Shell_State* shell,
             //       If 'b' is an alias then it should be expanded.
             // Note: 'alias a="echo \""; a b"' should behave identically to 'echo "  b"'.
             cz::Str alias_value;
-            if (program.args.len == 0 && get_alias(shell, word, &alias_value)) {
+            if (program.args.len == 0 && !any_special && get_alias(shell, word, &alias_value)) {
                 // Don't double expand the same alias.
                 // For example, 'alias a=a' is basically equivalent to
                 // having no alias at all instead of infinite looping.
