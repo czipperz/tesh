@@ -713,10 +713,17 @@ static void scroll_up(Render_State* rend, cz::Slice<Backlog_State*> backlogs, in
 
             if (line_start->outer == 0)
                 break;
+
             line_start->outer--;
             backlog = backlogs[line_start->outer];
             cursor = backlog->length;
-            if (backlog->length > 0 && backlog->get(backlog->length - 1) != '\n') {
+
+            if (cursor == 0) {
+                // Empty backlog is already handled.
+                continue;
+            }
+
+            if (backlog->get(backlog->length - 1) != '\n') {
                 cursor++;
             }
 
