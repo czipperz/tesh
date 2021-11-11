@@ -60,6 +60,9 @@ static void make_info(cz::String* info,
                       Shell_State* shell,
                       Backlog_State* backlog,
                       std::chrono::high_resolution_clock::time_point now) {
+    if (backlog->cancelled)
+        return;
+
     std::chrono::high_resolution_clock::time_point end = backlog->end;
     if (!backlog->done) {
         if (!lookup_process(shell, backlog->id)) {
@@ -1294,6 +1297,9 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
 
                         backlog->exit_code = -1;
                         recycle_process(shell, script);
+                    } else {
+                        backlog->done = true;
+                        backlog->cancelled = true;
                     }
                 }
 

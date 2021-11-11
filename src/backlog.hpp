@@ -17,6 +17,7 @@ struct Backlog_State {
     cz::Vector<Backlog_Event> events;
     std::chrono::high_resolution_clock::time_point start, end;
     bool done;
+    bool cancelled;  // Subset of done where the backlog wasn't ran.
     int exit_code;
 
     char get(size_t index);
