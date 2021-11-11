@@ -1132,6 +1132,8 @@ static void expand_selection(Selection* selection,
         uint64_t* inner = &selection->start.inner;
         if (selection->start.outer - 1 < backlogs.len) {
             Backlog_State* backlog = backlogs[selection->start.outer - 1];
+            if (*inner < backlog->length)
+                ++*inner;
             // Skip non-word characters.
             while (*inner > 0) {
                 if (cz::is_alnum(backlog->get(*inner - 1)))
@@ -1145,6 +1147,7 @@ static void expand_selection(Selection* selection,
                 --*inner;
             }
         } else {
+            ++*inner;
             backward_word(prompt_buffer, inner);
         }
 
