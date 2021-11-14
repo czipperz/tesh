@@ -276,22 +276,24 @@ static Error run_program(Shell_State* shell,
             return Error_IO;
 
         if (stdio.in_type == File_Type_Terminal) {
+#ifdef _WIN32
             program->v.builtin.in = script.tty.child_in;
+#else
+            program->v.builtin.in.handle = script.tty.child_bi;
+#endif
         } else {
             program->v.builtin.in = stdio.in;
         }
         if (stdio.out_type == File_Type_Terminal) {
             program->v.builtin.out.type = Process_Output::BACKLOG;
-            program->v.builtin.out.v.backlog.state = backlog;
-            program->v.builtin.out.v.backlog.process_id = script.id;
+            program->v.builtin.out.v.backlog = backlog;
         } else {
             program->v.builtin.out.type = Process_Output::FILE;
             program->v.builtin.out.v.file = stdio.out;
         }
         if (stdio.err_type == File_Type_Terminal) {
             program->v.builtin.err.type = Process_Output::BACKLOG;
-            program->v.builtin.err.v.backlog.state = backlog;
-            program->v.builtin.err.v.backlog.process_id = script.id;
+            program->v.builtin.err.v.backlog = backlog;
         } else {
             program->v.builtin.err.type = Process_Output::FILE;
             program->v.builtin.err.v.file = stdio.err;
@@ -320,7 +322,8 @@ static Error run_program(Shell_State* shell,
 
     cz::Process_Options options;
 #ifdef _WIN32
-    if (stdio.in_type == File_Type_Terminal && stdio.out_type == File_Type_Terminal && stdio.err_type == File_Type_Terminal) {
+    if (stdio.in_type == File_Type_Terminal && stdio.out_type == File_Type_Terminal &&
+        stdio.err_type == File_Type_Terminal) {
         // TODO: test pseudo console + stdio.
         options.pseudo_console = script.tty.pseudo_console;
     } else {
@@ -342,17 +345,17 @@ static Error run_program(Shell_State* shell,
     }
 #else
     if (stdio.in_type == File_Type_Terminal) {
-        options.std_in = {script.tty.child_bi};
+        options.std_in.handle = script.tty.child_bi;
     } else {
         options.std_in = stdio.in;
     }
     if (stdio.out_type == File_Type_Terminal) {
-        options.std_out = {script.tty.child_bi};
+        options.std_out.handle = script.tty.child_bi;
     } else {
         options.std_out = stdio.out;
     }
     if (stdio.err_type == File_Type_Terminal) {
-        options.std_err = {script.tty.child_bi};
+        options.std_err.handle = script.tty.child_bi;
     } else {
         options.std_err = stdio.err;
     }

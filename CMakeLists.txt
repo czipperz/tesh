@@ -72,6 +72,14 @@ if (WIN32)
     endif()
 endif()
 
+# Link in Pseudo TTY library.
+if (NOT WIN32)
+    target_link_libraries(${PROGRAM_NAME} util)
+    if (TESH_BUILD_TESTS)
+        target_link_libraries(${TEST_PROGRAM_NAME} util)
+    endif()
+endif()
+
 # Setup logo
 if (WIN32)
     # Windows_RC.h does some Windows magic to set the app icon.

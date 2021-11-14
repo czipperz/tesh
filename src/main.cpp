@@ -610,7 +610,8 @@ static bool read_process_data(Shell_State* shell,
 #ifdef _WIN32
         cz::Input_File parent_out = script->tty.out;
 #else
-        cz::Input_File parent_out = {script->tty.parent_bi};
+        cz::Input_File parent_out;
+        parent_out.handle = script->tty.parent_bi;
 #endif
         if (parent_out.is_open()) {
             int64_t result = 0;
@@ -1307,7 +1308,9 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
 #ifdef _WIN32
                         (void)script->tty.in.write(message);
 #else
-                        (void)cz::Output_File{script->tty.parent_bi}.write(message);
+                        cz::Output_File out;
+                        out.handle = script->tty.parent_bi;
+                        (void)out.write(message);
 #endif
                     } else {
                         rend->auto_page = cfg.on_spawn_auto_page;
