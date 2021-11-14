@@ -59,6 +59,7 @@ Error start_execute_script(Shell_State* shell,
 
     Running_Script running = {};
     running.id = backlog->id;
+    running.arena = arena;
 
     if (!create_pseudo_terminal(&running.tty, shell->width, shell->height))
         return Error_IO;

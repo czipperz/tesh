@@ -35,7 +35,23 @@ bool create_pseudo_terminal(Pseudo_Terminal* tty, int width, int height) {
     size.ws_col = width;
     int result =
         openpty(&tty->parent_bi, &tty->child_bi, /*name=*/nullptr, /*termios=*/nullptr, &size);
-    return result == 0;
+    if (result < 0)
+        return false;
+
+    cz::File_Descriptor parent;
+    parent.handle = tty->parent_bi;
+    if (!parent.set_non_inheritable()) {
+        close(tty->child_bi);
+        close(tty->parent_bi);
+        return false;
+    }
+    if (!parent.set_non_blocking()) {
+        close(tty->child_bi);
+        close(tty->parent_bi);
+        return false;
+    }
+
+    return true;
 #endif
 }
 
