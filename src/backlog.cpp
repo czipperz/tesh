@@ -221,12 +221,12 @@ static bool process_escape_sequence(Backlog_State* backlog, cz::Str fresh, size_
             else if ((*text)[it] == 'm') {
                 uint64_t graphics_rendition = backlog->graphics_rendition;
                 if (args.len == 0)
-                    graphics_rendition = 0;
+                    graphics_rendition = (7 << GR_FOREGROUND_SHIFT);
 
                 for (size_t i = 0; i < args.len; ++i) {
                     if (args[i] == 0 || args[i] == -1) {
                         // Reset everything.
-                        graphics_rendition = 0;
+                        graphics_rendition = (7 << GR_FOREGROUND_SHIFT);
                     } else if (args[i] == 1) {
                         graphics_rendition |= GR_BOLD;
                     } else if (args[i] == 21) {
