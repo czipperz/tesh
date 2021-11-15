@@ -1062,7 +1062,7 @@ static bool handle_scroll_commands(Shell_State* shell,
                                    Render_State* rend,
                                    uint16_t mod,
                                    SDL_Keycode key) {
-    bool set_selected_process = false;
+    bool set_selected_process = true;
 
     if ((mod == 0 && key == SDLK_PAGEDOWN) || (mod == KMOD_CTRL && key == SDLK_v)) {
         int lines = cz::max(rend->window_rows, 6) - 3;
@@ -1085,7 +1085,8 @@ static bool handle_scroll_commands(Shell_State* shell,
         rend->backlog_start = {};
         if (backlogs.len > 0)
             rend->backlog_start.outer = backlogs.len - 1;
-        set_selected_process = true;
+        shell->selected_process = rend->backlog_start.outer;
+        set_selected_process = false;
     } else if (mod == (KMOD_CTRL | KMOD_ALT) && key == SDLK_b) {
         size_t outer = rend->backlog_start.outer;
         size_t inner = rend->backlog_start.inner;
@@ -1094,18 +1095,20 @@ static bool handle_scroll_commands(Shell_State* shell,
             rend->backlog_start.outer = outer;
         else if (outer > 0)
             rend->backlog_start.outer = outer - 1;
-        set_selected_process = true;
+        shell->selected_process = rend->backlog_start.outer;
+        set_selected_process = false;
     } else if (mod == (KMOD_CTRL | KMOD_ALT) && key == SDLK_f) {
         size_t outer = rend->backlog_start.outer;
         rend->backlog_start = {};
         if (outer + 1 <= backlogs.len)
             outer++;
         rend->backlog_start.outer = outer;
-        set_selected_process = true;
+        shell->selected_process = rend->backlog_start.outer;
+        set_selected_process = false;
     } else if (mod == 0 && key == SDLK_TAB && shell->selected_process != -1) {
         Backlog_State* backlog = backlogs[shell->selected_process];
         backlog->render_collapsed = !backlog->render_collapsed;
-        set_selected_process = true;
+        set_selected_process = false;
         // If we're scrolled inside the process then reset to the top.
         if (backlog->render_collapsed) {
             if (rend->backlog_start.outer == shell->selected_process) {
@@ -1117,7 +1120,8 @@ static bool handle_scroll_commands(Shell_State* shell,
     }
 
     shell->attached_process = -1;
-    shell->selected_process = (set_selected_process ? rend->backlog_start.outer : -1);
+    if (set_selected_process)
+        shell->selected_process = -1;
     rend->auto_page = false;
     rend->auto_scroll = false;
     rend->complete_redraw = true;
