@@ -43,21 +43,13 @@ void set_icon(SDL_Window* sdl_window) {
 
 void close_font(Render_State* rend) {
     ZoneScoped;
-    for (int i = 0; i < CZ_DIM(rend->backlog_cache); i++) {
-        SDL_FreeSurface(rend->backlog_cache[i]);
-        rend->backlog_cache[i] = NULL;
-    }
-    for (int i = 0; i < CZ_DIM(rend->prompt_cache); i++) {
-        SDL_FreeSurface(rend->prompt_cache[i]);
-        rend->prompt_cache[i] = NULL;
-    }
-    for (int i = 0; i < CZ_DIM(rend->selection_cache); i++) {
-        SDL_FreeSurface(rend->selection_cache[i]);
-        rend->selection_cache[i] = NULL;
-    }
-    for (int i = 0; i < CZ_DIM(rend->directory_cache); i++) {
-        SDL_FreeSurface(rend->directory_cache[i]);
-        rend->directory_cache[i] = NULL;
+    for (int ch = 0; ch < CZ_DIM(rend->caches); ch++) {
+        SDL_Surface** cache = rend->caches[ch];
+        for (int i = 0; i < CZ_DIM(*rend->caches); i++) {
+            SDL_Surface** surface = &cache[i];
+            SDL_FreeSurface(*surface);
+            *surface = NULL;
+        }
     }
     TTF_CloseFont(rend->font);
 }
@@ -76,17 +68,15 @@ static SDL_Surface* rasterize_character(const char* text,
     return TTF_RenderText_Blended(font, text, fgc);
 }
 
-static SDL_Surface* rasterize_character_cached(Render_State* rend,
-                                               SDL_Surface** cache,
-                                               char ch,
-                                               SDL_Color color) {
+static SDL_Surface* rasterize_character_cached(Render_State* rend, char ch, uint8_t color256) {
+    SDL_Surface** cache = rend->caches[color256];
     uint8_t index = (uint8_t)ch;
     if (cache[index])
         return cache[index];
     if (ch == '\0')
         ch = 1;
     char text[2] = {ch, 0};
-    SDL_Surface* surface = rasterize_character(text, rend->font, 0, color);
+    SDL_Surface* surface = rasterize_character(text, rend->font, 0, cfg.theme[color256]);
     CZ_ASSERT(surface);
     cache[index] = surface;
     return surface;
@@ -124,9 +114,8 @@ int coord_trans(Visual_Point* point, int num_cols, char ch) {
 bool render_char(SDL_Surface* window_surface,
                  Render_State* rend,
                  Visual_Point* point,
-                 SDL_Surface** cache,
                  uint32_t background,
-                 SDL_Color foreground,
+                 uint8_t foreground,
                  char c,
                  bool set_tile) {
     if (set_tile) {
@@ -154,8 +143,7 @@ bool render_char(SDL_Surface* window_surface,
                                (point->outer == rend->selection.end.outer - 1 &&
                                 point->inner <= rend->selection.end.inner));
             if (inside_start && inside_end) {
-                cache = rend->selection_cache;
-                foreground = rend->selection_fg_color;
+                foreground = cfg.selection_fg_color;
                 background = rend->selection.bg_color;
             }
         }
@@ -188,7 +176,7 @@ bool render_char(SDL_Surface* window_surface,
         rect.h = rend->font_height;
         SDL_FillRect(window_surface, &rect, background);
     } else {
-        SDL_Surface* s = rasterize_character_cached(rend, cache, c, foreground);
+        SDL_Surface* s = rasterize_character_cached(rend, c, foreground);
         rect.w = rend->font_width;
         rect.h = rend->font_height;
         SDL_FillRect(window_surface, &rect, background);

@@ -28,6 +28,7 @@
 #include "global.hpp"
 #include "render.hpp"
 #include "shell.hpp"
+#include "solarized_dark.hpp"
 
 void resize_font(int font_size, Render_State* rend);
 static Backlog_State* push_backlog(cz::Vector<Backlog_State*>* backlogs, uint64_t id);
@@ -123,8 +124,8 @@ static void render_info(SDL_Surface* window_surface,
     }
 
     for (size_t i = 0; i < info.len; ++i) {
-        if (!render_char(window_surface, rend, &info_start, rend->directory_cache, background,
-                         rend->directory_fg_color, info[i], false))
+        if (!render_char(window_surface, rend, &info_start, background, cfg.info_fg_color, info[i],
+                         false))
             break;
     }
 }
@@ -164,8 +165,7 @@ static bool render_backlog(SDL_Surface* window_surface,
     int info_y = point->y;
     int info_x_start = (int)(rend->window_cols - info.len);
 
-    SDL_Surface** cache = rend->backlog_cache;
-    SDL_Color fg_color = rend->backlog_fg_color;
+    uint8_t fg_color = cfg.backlog_fg_color;
 
     size_t event_index = 0;
 
@@ -173,14 +173,14 @@ static bool render_backlog(SDL_Surface* window_surface,
         while (event_index < backlog->events.len && backlog->events[event_index].index <= i) {
             Backlog_Event* event = &backlog->events[event_index];
             if (event->type == BACKLOG_EVENT_START_PROCESS) {
-                cache = rend->backlog_cache;
-                fg_color = rend->backlog_fg_color;
+                fg_color = cfg.backlog_fg_color;
             } else if (event->type == BACKLOG_EVENT_START_INPUT) {
-                cache = rend->prompt_cache;
-                fg_color = rend->prompt_fg_color;
+                fg_color = cfg.prompt_fg_color;
             } else if (event->type == BACKLOG_EVENT_START_DIRECTORY) {
-                cache = rend->directory_cache;
-                fg_color = rend->directory_fg_color;
+                fg_color = cfg.info_fg_color;
+            } else if (event->type == BACKLOG_EVENT_SET_GRAPHIC_RENDITION) {
+                uint64_t gr = event->payload;
+                fg_color = ((gr & GR_FOREGROUND_MASK) >> GR_FOREGROUND_SHIFT);
             } else {
                 CZ_PANIC("unreachable");
             }
@@ -190,7 +190,7 @@ static bool render_backlog(SDL_Surface* window_surface,
         Visual_Point old_point = *point;
 
         char c = backlog->get(i);
-        if (!render_char(window_surface, rend, point, cache, background, fg_color, c, true))
+        if (!render_char(window_surface, rend, point, background, fg_color, c, true))
             break;
 
         if (!info_has_end && point->y != info_y) {
@@ -210,8 +210,8 @@ static bool render_backlog(SDL_Surface* window_surface,
         backlog->get(backlog->length - 1) != '\n') {
         Visual_Point old_point = *point;
 
-        if (!render_char(window_surface, rend, point, rend->backlog_cache, background,
-                         rend->prompt_fg_color, '\n', true)) {
+        if (!render_char(window_surface, rend, point, background, cfg.prompt_fg_color, '\n',
+                         true)) {
             return false;
         }
 
@@ -234,8 +234,7 @@ static bool render_backlog(SDL_Surface* window_surface,
 
     bg_color = {};
     background = SDL_MapRGB(window_surface->format, bg_color.r, bg_color.g, bg_color.b);
-    if (!render_char(window_surface, rend, point, rend->backlog_cache, background,
-                     rend->prompt_fg_color, '\n', true)) {
+    if (!render_char(window_surface, rend, point, background, cfg.prompt_fg_color, '\n', true)) {
         return false;
     }
 
@@ -274,56 +273,51 @@ static void render_prompt(SDL_Surface* window_surface,
     if (shell->active_process == -1) {
         for (size_t i = 0; i < shell->working_directory.len; ++i) {
             char c = shell->working_directory[i];
-            render_char(window_surface, rend, &point, rend->directory_cache, background,
-                        rend->directory_fg_color, c, true);
+            render_char(window_surface, rend, &point, background, cfg.info_fg_color, c, true);
         }
 
         for (size_t i = 0; i < prompt->prefix.len; ++i) {
             char c = prompt->prefix[i];
-            render_char(window_surface, rend, &point, rend->backlog_cache, background,
-                        rend->backlog_fg_color, c, true);
+            render_char(window_surface, rend, &point, background, cfg.backlog_fg_color, c, true);
         }
     } else {
         cz::Str input_prefix = "> ";
         for (size_t i = 0; i < input_prefix.len; ++i) {
             char c = input_prefix[i];
-            render_char(window_surface, rend, &point, rend->backlog_cache, background,
-                        rend->backlog_fg_color, c, true);
+            render_char(window_surface, rend, &point, background, cfg.backlog_fg_color, c, true);
         }
     }
 
+    SDL_Color prompt_fg_color = cfg.theme[cfg.prompt_fg_color];
     for (size_t i = 0; i < prompt->text.len; ++i) {
         char c = prompt->text[i];
 
         if (prompt->cursor == i) {
             SDL_Rect fill_rect = {point.x * rend->font_width - 1, point.y * rend->font_height, 2,
                                   rend->font_height};
-            uint32_t foreground = SDL_MapRGB(window_surface->format, rend->prompt_fg_color.r,
-                                             rend->prompt_fg_color.g, rend->prompt_fg_color.b);
+            uint32_t foreground = SDL_MapRGB(window_surface->format, prompt_fg_color.r,
+                                             prompt_fg_color.g, prompt_fg_color.b);
             SDL_FillRect(window_surface, &fill_rect, foreground);
 
-            render_char(window_surface, rend, &point, rend->prompt_cache, background,
-                        rend->prompt_fg_color, c, true);
+            render_char(window_surface, rend, &point, background, cfg.prompt_fg_color, c, true);
 
             if (point.x != 0) {
                 SDL_FillRect(window_surface, &fill_rect, foreground);
             }
         } else {
-            render_char(window_surface, rend, &point, rend->prompt_cache, background,
-                        rend->prompt_fg_color, c, true);
+            render_char(window_surface, rend, &point, background, cfg.prompt_fg_color, c, true);
         }
     }
 
     // Fill rest of line.
     Visual_Point eol = point;
-    render_char(window_surface, rend, &point, rend->backlog_cache, background,
-                rend->backlog_fg_color, '\n', true);
+    render_char(window_surface, rend, &point, background, cfg.backlog_fg_color, '\n', true);
 
     if (prompt->cursor == prompt->text.len) {
         SDL_Rect fill_rect = {eol.x * rend->font_width - 1, eol.y * rend->font_height, 2,
                               rend->font_height};
-        uint32_t foreground = SDL_MapRGB(window_surface->format, rend->prompt_fg_color.r,
-                                         rend->prompt_fg_color.g, rend->prompt_fg_color.b);
+        uint32_t foreground = SDL_MapRGB(window_surface->format, prompt_fg_color.r,
+                                         prompt_fg_color.g, prompt_fg_color.b);
         SDL_FillRect(window_surface, &fill_rect, foreground);
     }
 
@@ -331,21 +325,19 @@ static void render_prompt(SDL_Surface* window_surface,
         cz::Str prefix = "HISTORY: ";
         for (size_t i = 0; i < prefix.len; ++i) {
             char c = prefix[i];
-            render_char(window_surface, rend, &point, rend->backlog_cache, background,
-                        rend->backlog_fg_color, c, true);
+            render_char(window_surface, rend, &point, background, cfg.backlog_fg_color, c, true);
         }
         cz::Vector<cz::Str>* history = prompt_history(prompt, shell->active_process != -1);
         if (prompt->history_counter < history->len) {
             cz::Str hist = history->get(prompt->history_counter);
             for (size_t i = 0; i < hist.len; ++i) {
                 char c = hist[i];
-                render_char(window_surface, rend, &point, rend->backlog_cache, background,
-                            rend->backlog_fg_color, c, true);
+                render_char(window_surface, rend, &point, background, cfg.backlog_fg_color, c,
+                            true);
             }
         }
 
-        render_char(window_surface, rend, &point, rend->backlog_cache, background,
-                    rend->backlog_fg_color, '\n', true);
+        render_char(window_surface, rend, &point, background, cfg.backlog_fg_color, '\n', true);
     }
 }
 
@@ -430,8 +422,8 @@ static void render_frame(SDL_Window* window,
         rend->grid_is_valid = true;
     }
     memset(rend->grid.elems, 0, sizeof(Visual_Tile) * rend->grid.len);
-    rend->selection.bg_color = SDL_MapRGB(window_surface->format, rend->selection_bg_color.r,
-                                          rend->selection_bg_color.g, rend->selection_bg_color.b);
+    rend->selection.bg_color = SDL_MapRGB(window_surface->format, cfg.selection_bg_color.r,
+                                          cfg.selection_bg_color.g, cfg.selection_bg_color.b);
 
     render_backlogs(window_surface, rend, shell, now, backlogs);
     render_prompt(window_surface, rend, prompt, shell);
@@ -1742,6 +1734,14 @@ static void load_default_configuration() {
         {0x11, 0x11, 0, 0xff}, {0, 0x11, 0x11, 0xff}, {0x11, 0, 0x17, 0xff},
     };
     cfg.process_colors = process_colors;
+
+    cfg.theme = solarized_dark;
+
+    cfg.backlog_fg_color = 7;
+    cfg.prompt_fg_color = 51;
+    cfg.info_fg_color = 201;
+    cfg.selection_fg_color = 7;
+    cfg.selection_bg_color = {0x66, 0x00, 0x66, 0xff};
 }
 
 static void load_environment_variables(Shell_State* shell) {
@@ -1890,11 +1890,13 @@ int actual_main(int argc, char** argv) {
     rend.font_width = 10;
     TTF_GlyphMetrics(rend.font, ' ', nullptr, nullptr, nullptr, nullptr, &rend.font_width);
 
+#if 0
     rend.backlog_fg_color = {0xdd, 0xdd, 0xdd, 0xff};
     rend.prompt_fg_color = {0x77, 0xf9, 0xff, 0xff};
-    rend.directory_fg_color = {0xff, 0x44, 0xff, 0xff};
+    rend.info_fg_color = {0xff, 0x44, 0xff, 0xff};
     rend.selection_fg_color = {0xff, 0xff, 0xff, 0xff};
     rend.selection_bg_color = {0x66, 0x00, 0x66, 0xff};
+#endif
 
     cz::env::set("PAGER", "cat");
 

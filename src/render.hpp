@@ -34,6 +34,8 @@ struct Selection {
     bool expand_line : 1;
 };
 
+typedef SDL_Surface*Surface_Cache[256];
+
 struct Render_State {
     TTF_Font* font;
     int font_size;
@@ -43,28 +45,19 @@ struct Render_State {
     int window_cols;
     int window_rows;
     int window_rows_ru;
-    SDL_Surface* backlog_cache[256];
-    SDL_Surface* prompt_cache[256];
-    SDL_Surface* directory_cache[256];
-    SDL_Surface* selection_cache[256];
+
+    Surface_Cache caches[256];
 
     bool grid_is_valid;
     cz::Vector<Visual_Tile> grid;
 
     bool complete_redraw;
 
-    SDL_Color backlog_fg_color;
     Visual_Point backlog_start;  // First point that was drawn
     Visual_Point backlog_end;    // Last point that was drawn
 
     bool auto_page;
     bool auto_scroll;
-
-    SDL_Color prompt_fg_color;
-    SDL_Color directory_fg_color;
-
-    SDL_Color selection_fg_color;
-    SDL_Color selection_bg_color;
 
     Selection selection;
 };
@@ -79,8 +72,7 @@ int coord_trans(Visual_Point* point, int num_cols, char ch);
 bool render_char(SDL_Surface* window_surface,
                  Render_State* rend,
                  Visual_Point* point,
-                 SDL_Surface** cache,
                  uint32_t background,
-                 SDL_Color foreground,
+                 uint8_t foreground,
                  char c,
                  bool set_tile);
