@@ -7,8 +7,21 @@
 #include <windows.h>
 #else
 #include <pty.h>
+#include <termios.h>
 #include <unistd.h>
 #endif
+
+bool disable_echo(Pseudo_Terminal* tty) {
+#ifndef _WIN32
+    struct termios termios;
+    if (tcgetattr(tty->child_bi, &termios) < 0)
+        return false;
+    termios.c_lflag &= ~(ECHO);
+    if (tcsetattr(tty->child_bi, TCSANOW, &termios) < 0)
+        return false;
+#endif
+    return true;
+}
 
 bool create_pseudo_terminal(Pseudo_Terminal* tty, int width, int height) {
 #ifdef _WIN32

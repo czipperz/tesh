@@ -1354,6 +1354,9 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
 
                 if (event.key.keysym.sym == SDLK_RETURN) {
                     if (script) {
+                        // Disable echo so we can print stdin in a different color.
+                        disable_echo(&script->tty);
+
                         cz::Str message = cz::format(temp_allocator, prompt->text, '\n');
 #ifdef _WIN32
                         (void)script->tty.in.write(message);

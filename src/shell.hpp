@@ -102,6 +102,9 @@ bool create_pseudo_terminal(Pseudo_Terminal* tty, int width, int height);
 bool set_window_size(Pseudo_Terminal* tty, int width, int height);
 void destroy_pseudo_terminal(Pseudo_Terminal* tty);
 
+/// Disable echo so we can print stdin in a different color.
+bool disable_echo(Pseudo_Terminal* tty);
+
 ///////////////////////////////////////////////////////////////////////////////
 
 struct Running_Program {
