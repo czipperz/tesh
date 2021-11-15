@@ -1786,7 +1786,7 @@ static void load_default_configuration() {
     cfg.default_font_size = 12;
     cfg.tab_width = 8;
 
-    cfg.max_length = (64 << 20);  // 64MB
+    cfg.max_length = ((uint64_t)1 << 30);  // 1GB
 
     static SDL_Color process_colors[] = {
         {0x18, 0, 0, 0xff},    {0, 0x13, 0, 0xff},    {0, 0, 0x20, 0xff},
