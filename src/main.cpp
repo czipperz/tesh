@@ -1354,17 +1354,8 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
 
                 if (event.key.keysym.sym == SDLK_RETURN) {
                     if (script) {
-                        // Disable echo so we can print stdin in a different color.
-                        disable_echo(&script->tty);
-
                         cz::Str message = cz::format(temp_allocator, prompt->text, '\n');
-#ifdef _WIN32
-                        (void)script->tty.in.write(message);
-#else
-                        cz::Output_File out;
-                        out.handle = script->tty.parent_bi;
-                        (void)out.write(message);
-#endif
+                        (void)tty_write(&script->tty, message);
                     } else {
                         rend->auto_page = cfg.on_spawn_auto_page;
                         rend->auto_scroll = cfg.on_spawn_auto_scroll;
@@ -1432,23 +1423,21 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
                 ++num_events;
             }
 
-            // TODO close stdin
-#if 0
             if (mod == KMOD_CTRL && key == SDLK_d) {
-                if (shell->active_process == -1) {
-                    if (prompt->cursor < prompt->text.len) {
-                        prompt->text.remove(prompt->cursor);
-                        ++num_events;
-                    }
-                } else {
-                    Running_Script* script = active_process(shell);
-                    script->in.close();
-                    script->in = {};
-                    shell->active_process = -1;
+                if (prompt->cursor < prompt->text.len) {
+                    prompt->text.remove(prompt->cursor);
+                    ++num_events;
+                } else if (shell->attached_process != -1) {
+                    Running_Script* script = attached_process(shell);
+
+                    // 4 = EOT / EOF
+                    (void)tty_write(&script->tty, "\4");
+
+                    shell->attached_process = -1;
+                    shell->selected_process = shell->attached_process;
                     ++num_events;
                 }
             }
-#endif
 
             if (mod == KMOD_CTRL && key == SDLK_l) {
                 clear_screen(rend, shell, *backlogs);

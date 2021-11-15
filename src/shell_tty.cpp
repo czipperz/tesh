@@ -11,7 +11,7 @@
 #include <unistd.h>
 #endif
 
-bool disable_echo(Pseudo_Terminal* tty) {
+static bool disable_echo(Pseudo_Terminal* tty) {
 #ifndef _WIN32
     struct termios termios;
     if (tcgetattr(tty->child_bi, &termios) < 0)
@@ -103,5 +103,18 @@ bool set_window_size(Pseudo_Terminal* tty, int width, int height) {
     size.ws_col = width;
     int result = ioctl(tty->child_bi, TIOCSWINSZ, &size);
     return result == 0;
+#endif
+}
+
+int64_t tty_write(Pseudo_Terminal* tty, cz::Str message) {
+    // Disable echo so we can print stdin in a different color.
+    (void)disable_echo(tty);
+
+#ifdef _WIN32
+    return tty->in.write(message);
+#else
+    cz::Output_File in;
+    in.handle = tty->parent_bi;
+    return in.write(message);
 #endif
 }
