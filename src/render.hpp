@@ -34,7 +34,7 @@ struct Selection {
     bool expand_line : 1;
 };
 
-typedef SDL_Surface*Surface_Cache[256];
+typedef SDL_Surface* Surface_Cache[256];
 
 struct Render_State {
     TTF_Font* font;
