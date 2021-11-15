@@ -26,6 +26,8 @@ struct Backlog_State {
     bool cancelled;  // Subset of done where the backlog wasn't ran.
     int exit_code;
 
+    bool render_collapsed;
+
     char get(size_t index);
 };
 

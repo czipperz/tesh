@@ -143,6 +143,12 @@ static void render_info(SDL_Surface* window_surface,
     }
 }
 
+static uint64_t render_length(Backlog_State* backlog) {
+    if (backlog->render_collapsed && backlog->lines.len > 0)
+        return backlog->lines[0];
+    return backlog->length;
+}
+
 static bool render_backlog(SDL_Surface* window_surface,
                            Render_State* rend,
                            Shell_State* shell,
@@ -182,7 +188,8 @@ static bool render_backlog(SDL_Surface* window_surface,
 
     size_t event_index = 0;
 
-    for (; i < backlog->length; ++i) {
+    uint64_t end = render_length(backlog);
+    for (; i < end; ++i) {
         while (event_index < backlog->events.len && backlog->events[event_index].index <= i) {
             Backlog_Event* event = &backlog->events[event_index];
             if (event->type == BACKLOG_EVENT_START_PROCESS) {
@@ -668,10 +675,10 @@ static void scroll_down1(Render_State* rend, cz::Slice<Backlog_State*> backlogs,
     if (start->outer < backlogs.len) {
         int desired_y = start->y + lines;
         Backlog_State* backlog = backlogs[start->outer];
+        uint64_t end = render_length(backlog);
         while (1) {
-            if (start->inner >= backlog->length) {
-                if (start->inner == backlog->length && backlog->length > 0 &&
-                    backlog->get(backlog->length - 1) != '\n') {
+            if (start->inner >= end) {
+                if (start->inner == end && end > 0 && backlog->get(end - 1) != '\n') {
                     coord_trans(start, rend->window_cols, '\n');
                     if (start->y >= desired_y)
                         break;
@@ -684,6 +691,7 @@ static void scroll_down1(Render_State* rend, cz::Slice<Backlog_State*> backlogs,
                 if (start->outer == backlogs.len)
                     break;
                 backlog = backlogs[start->outer];
+                end = render_length(backlog);
 
                 if (start->y >= desired_y)
                     break;
@@ -734,14 +742,14 @@ static void scroll_up(Render_State* rend, cz::Slice<Backlog_State*> backlogs, in
 
             line_start->outer--;
             backlog = backlogs[line_start->outer];
-            cursor = backlog->length;
+            cursor = render_length(backlog);
 
             if (cursor == 0) {
                 // Empty backlog is already handled.
                 continue;
             }
 
-            if (backlog->get(backlog->length - 1) != '\n') {
+            if (backlog->get(cursor - 1) != '\n') {
                 cursor++;
             }
 
@@ -1094,6 +1102,16 @@ static bool handle_scroll_commands(Shell_State* shell,
             outer++;
         rend->backlog_start.outer = outer;
         set_selected_process = true;
+    } else if (mod == 0 && key == SDLK_TAB && shell->selected_process != -1) {
+        Backlog_State* backlog = backlogs[shell->selected_process];
+        backlog->render_collapsed = !backlog->render_collapsed;
+        set_selected_process = true;
+        // If we're scrolled inside the process then reset to the top.
+        if (backlog->render_collapsed) {
+            if (rend->backlog_start.outer == shell->selected_process) {
+                rend->backlog_start.inner = 0;
+            }
+        }
     } else {
         return false;
     }
