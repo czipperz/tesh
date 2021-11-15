@@ -11,12 +11,16 @@ struct Backlog_Event;
 
 struct Backlog_State {
     uint64_t id;
+
     uint64_t max_length;
     cz::Vector<char*> buffers;
     uint64_t length;
+    cz::Vector<uint64_t> lines;
+
     cz::Vector<Backlog_Event> events;
     cz::String escape_backlog;
     uint64_t graphics_rendition;
+
     std::chrono::high_resolution_clock::time_point start, end;
     bool done;
     bool cancelled;  // Subset of done where the backlog wasn't ran.

@@ -25,8 +25,8 @@ static int64_t append_chunk(Backlog_State* backlog, cz::Str text) {
             memcpy(backlog->buffers.last() + inner, text.buffer + 0, underhang);
 
             if (backlog->length + underhang == backlog->max_length) {
-                backlog->length += underhang;
-                return underhang;
+                text = text.slice_end(underhang);
+                goto finish;
             }
         }
 
@@ -38,6 +38,17 @@ static int64_t append_chunk(Backlog_State* backlog, cz::Str text) {
         memcpy(backlog->buffers.last() + 0, text.buffer + underhang, overhang);
     } else {
         memcpy(backlog->buffers.last() + inner, text.buffer, text.len);
+    }
+
+finish:
+    // Log all the line starts.
+    for (size_t i = 0;;) {
+        const char* ptr = text.slice_start(i).find('\n');
+        if (!ptr)
+            break;
+        i = ptr - text.buffer + 1;
+        backlog->lines.reserve(cz::heap_allocator(), 1);
+        backlog->lines.push(backlog->length + i);
     }
 
     backlog->length += text.len;

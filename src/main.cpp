@@ -5,6 +5,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <Tracy.hpp>
+#include <cz/binary_search.hpp>
 #include <cz/defer.hpp>
 #include <cz/env.hpp>
 #include <cz/format.hpp>
@@ -60,6 +61,7 @@ static void make_info(cz::String* info,
                       Render_State* rend,
                       Shell_State* shell,
                       Backlog_State* backlog,
+                      uint64_t first_line_index,
                       std::chrono::high_resolution_clock::time_point now) {
     if (backlog->cancelled)
         return;
@@ -72,6 +74,17 @@ static void make_info(cz::String* info,
         }
         end = now;
     }
+
+    // Find the line number.
+    size_t first_line_number = 0;
+    if (cz::binary_search(backlog->lines.as_slice(), first_line_index, &first_line_number))
+        ++first_line_number;  // Go after the match.
+    // Find the max number of lines.  There's a free newline after the
+    // prompt so we subtract 1 if there is no auto trailing newline.
+    size_t max_lines = backlog->lines.len;
+    if (backlog->length > 0 && backlog->get(backlog->length - 1) == '\n')
+        max_lines--;
+    cz::append(temp_allocator, info, 'L', first_line_number, '/', max_lines, ' ');
 
     uint64_t millis =
         std::chrono::duration_cast<std::chrono::milliseconds>(end - backlog->start).count();
@@ -159,7 +172,7 @@ static bool render_backlog(SDL_Surface* window_surface,
     uint32_t background = SDL_MapRGB(window_surface->format, bg_color.r, bg_color.g, bg_color.b);
 
     cz::String info = {};
-    make_info(&info, rend, shell, backlog, now);
+    make_info(&info, rend, shell, backlog, point->inner, now);
     bool info_has_start = false, info_has_end = false;
     Visual_Point info_start = {}, info_end = {};
     int info_y = point->y;
