@@ -253,6 +253,7 @@ static bool process_escape_sequence(Backlog_State* backlog, cz::Str fresh, size_
                         if (color == 8) {
                             // TODO Parse extended colors.
                             color = 7;
+                            CZ_PANIC("todo");
                         }
                         graphics_rendition |= (color << GR_FOREGROUND_SHIFT);
                     } else if ((args[i] >= 40 && args[i] <= 49) ||
@@ -269,6 +270,7 @@ static bool process_escape_sequence(Backlog_State* backlog, cz::Str fresh, size_
                         if (color == 8) {
                             // TODO Parse extended colors.
                             color = 0;
+                            CZ_PANIC("todo");
                         }
                         graphics_rendition |= (color << GR_BACKGROUND_SHIFT);
                     } else {
