@@ -1040,6 +1040,7 @@ static bool handle_prompt_manipulation_commands(Shell_State* shell,
         return false;
     }
 
+    shell->selected_process = shell->attached_process;
     ensure_prompt_on_screen(rend, *backlogs);
     rend->auto_page = false;
     rend->auto_scroll = true;
@@ -1384,12 +1385,14 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
                         // TODO close stdin
                         if (1) {
                             shell->attached_process = script->id;
+                            shell->selected_process = shell->attached_process;
                             prompt->history_counter = prompt->stdin_history.len;
                             break;
                         }
                     }
                 } else {
                     shell->attached_process = -1;
+                    shell->selected_process = shell->attached_process;
                     prompt->history_counter = prompt->history.len;
                 }
                 ++num_events;
@@ -1424,6 +1427,7 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
                 rend->complete_redraw = true;
                 ++num_events;
 
+                shell->selected_process = shell->attached_process;
                 rend->auto_page = false;
                 rend->auto_scroll = true;
                 int lines = cz::max(rend->window_rows, 3) - 3;
@@ -1518,6 +1522,7 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
             prompt->text.reserve(cz::heap_allocator(), text.len);
             prompt->text.insert(prompt->cursor, text);
             prompt->cursor += text.len;
+            shell->selected_process = shell->attached_process;
             ensure_prompt_on_screen(rend, *backlogs);
             stop_selecting(rend);
             ++num_events;
