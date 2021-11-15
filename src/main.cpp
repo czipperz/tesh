@@ -1974,6 +1974,7 @@ static Backlog_State* push_backlog(cz::Vector<Backlog_State*>* backlogs, uint64_
     backlog->buffers.reserve(cz::heap_allocator(), 1);
     backlog->buffers.push(buffer);
     backlog->start = std::chrono::high_resolution_clock::now();
+    backlog->graphics_rendition = (7 << GR_FOREGROUND_SHIFT);
 
     backlogs->reserve(cz::heap_allocator(), 1);
     backlogs->push(backlog);
