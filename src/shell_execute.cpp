@@ -324,7 +324,9 @@ static Error run_program(Shell_State* shell,
     cz::Process_Options options;
 #ifdef _WIN32
     if (stdio.in_type == File_Type_Terminal && stdio.out_type == File_Type_Terminal &&
-        stdio.err_type == File_Type_Terminal) {
+        stdio.err_type == File_Type_Terminal &&
+        // TODO: pseudo console work
+        false) {
         // TODO: test pseudo console + stdio.
         options.pseudo_console = script.tty.pseudo_console;
     } else {
