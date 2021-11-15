@@ -64,6 +64,15 @@ bool create_pseudo_terminal(Pseudo_Terminal* tty, int width, int height) {
         return false;
     }
 
+    // Make child non-blocking so builtins don't hang.
+    cz::File_Descriptor child;
+    child.handle = tty->child_bi;
+    if (!child.set_non_blocking()) {
+        close(tty->child_bi);
+        close(tty->parent_bi);
+        return false;
+    }
+
     return true;
 #endif
 }
