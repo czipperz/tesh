@@ -1898,7 +1898,8 @@ int actual_main(int argc, char** argv) {
     rend.selection_bg_color = {0x66, 0x00, 0x66, 0xff};
 #endif
 
-    cz::env::set("PAGER", "cat");
+    set_var(&shell, "PAGER", "cat");
+    make_env_var(&shell, "PAGER");
 
     {
         int w, h;
