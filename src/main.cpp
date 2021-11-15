@@ -1214,6 +1214,8 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
                           Prompt_State* prompt,
                           Render_State* rend,
                           Shell_State* shell) {
+    static uint32_t ignore_key_events_until = 0;
+
     int num_events = 0;
     for (SDL_Event event; SDL_PollEvent(&event);) {
         ZoneScopedN("process_event");
@@ -1225,9 +1227,14 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
             // Ignore mouse window events.
             if (event.window.event == SDL_WINDOWEVENT_ENTER ||
                 event.window.event == SDL_WINDOWEVENT_LEAVE ||
-                event.window.event == SDL_WINDOWEVENT_FOCUS_GAINED ||
                 event.window.event == SDL_WINDOWEVENT_FOCUS_LOST) {
                 continue;
+            }
+            if (event.window.event == SDL_WINDOWEVENT_FOCUS_GAINED) {
+                // Ignore keyboard input events because, on Linux, if a window closes due to a
+                // key combo (ex C-d), then we are selected, then all the depressed keys will
+                // be sent to our process.  But the user didn't press them in our process.
+                ignore_key_events_until = event.window.timestamp + 10;
             }
 
             rend->grid_is_valid = false;
@@ -1236,6 +1243,9 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
             break;
 
         case SDL_KEYDOWN: {
+            if (event.key.timestamp < ignore_key_events_until)
+                break;
+
             transform_shift_numbers(&event.key.keysym);
 
             int mod = (event.key.keysym.mod & ~(KMOD_CAPS | KMOD_NUM));
@@ -1473,6 +1483,9 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
         } break;
 
         case SDL_TEXTINPUT: {
+            if (event.key.timestamp < ignore_key_events_until)
+                break;
+
             rend->auto_page = false;
             rend->auto_scroll = true;
 
