@@ -616,12 +616,10 @@ static bool read_process_data(Shell_State* shell,
         if (parent_out.is_open()) {
             int64_t result = 0;
             for (int rounds = 0; rounds < 1024; ++rounds) {
-#ifdef _WIN32
+                // Even strip carriage returns on linux because
+                // some programs (ex. 'git status') use CRLF.
                 result = parent_out.read_strip_carriage_returns(buffer, sizeof(buffer),
                                                                 &script->tty.out_carry);
-#else
-                result = parent_out.read(buffer, sizeof(buffer));
-#endif
                 if (result <= 0)
                     break;
 

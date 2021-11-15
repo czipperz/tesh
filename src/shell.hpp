@@ -85,13 +85,13 @@ struct Pseudo_Terminal {
     /// The parent state.
     cz::Output_File in;
     cz::Input_File out;
-    cz::Carriage_Return_Carry out_carry;
 #else
     /// The child state.
     int child_bi;
     /// The parent state.
     int parent_bi;
 #endif
+    cz::Carriage_Return_Carry out_carry;
 };
 
 bool create_pseudo_terminal(Pseudo_Terminal* tty, int width, int height);
