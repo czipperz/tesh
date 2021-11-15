@@ -1182,7 +1182,8 @@ static void expand_selection(Selection* selection,
                 ++*inner;
             // Skip non-word characters.
             while (*inner > 0) {
-                if (cz::is_alnum(backlog->get(*inner - 1)))
+                char ch = backlog->get(*inner - 1);
+                if (cz::is_alnum(ch) || ch == '\n')
                     break;
                 --*inner;
             }
@@ -1201,7 +1202,8 @@ static void expand_selection(Selection* selection,
         if (selection->end.outer - 1 < backlogs.len) {
             Backlog_State* backlog = backlogs[selection->end.outer - 1];
             while (*inner < backlog->length) {
-                if (cz::is_alnum(backlog->get(*inner)))
+                char ch = backlog->get(*inner);
+                if (cz::is_alnum(ch) || ch == '\n')
                     break;
                 ++*inner;
             }
@@ -1209,6 +1211,11 @@ static void expand_selection(Selection* selection,
                 if (!cz::is_alnum(backlog->get(*inner)))
                     break;
                 ++*inner;
+            }
+            // Include newline if selected.
+            if (*inner < backlog->length) {
+                if (backlog->get(*inner) == '\n')
+                    ++*inner;
             }
         } else {
             forward_word(prompt_buffer, inner);
