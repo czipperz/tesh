@@ -285,9 +285,11 @@ static void render_prompt(SDL_Surface* window_surface,
     uint64_t process_id =
         (shell->attached_process == -1 ? prompt->process_id : shell->attached_process);
     SDL_Color bg_color = cfg.process_colors[process_id % cfg.process_colors.len];
-    bg_color.r *= 2;
-    bg_color.g *= 2;
-    bg_color.b *= 2;
+    if (shell->selected_process == -1 || shell->attached_process == shell->selected_process) {
+        bg_color.r *= 2;
+        bg_color.g *= 2;
+        bg_color.b *= 2;
+    }
     uint32_t background = SDL_MapRGB(window_surface->format, bg_color.r, bg_color.g, bg_color.b);
 
     if (shell->attached_process == -1) {
