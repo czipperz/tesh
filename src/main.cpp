@@ -1486,14 +1486,14 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
             if (event.key.timestamp < ignore_key_events_until)
                 break;
 
-            rend->auto_page = false;
-            rend->auto_scroll = true;
-
             // SDL will send a text input and a key down event even when modifier keys
             // are held down.  But we only want to handle unmodified text input here.
             SDL_Keymod mods = SDL_GetModState();
             if (mods & (KMOD_CTRL | KMOD_ALT))
                 break;
+
+            rend->auto_page = false;
+            rend->auto_scroll = true;
 
             cz::Str text = event.text.text;
             prompt->text.reserve(cz::heap_allocator(), text.len);
