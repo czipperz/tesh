@@ -127,17 +127,23 @@ void recycle_process(Shell_State* shell, Running_Script* script) {
     if (script->fg.pipeline.length > 0)
         recycle_arena(shell, script->fg.pipeline.arena);
 
-    if (script->id == shell->active_process)
-        shell->active_process = -1;
+    if (script->id == shell->attached_process)
+        shell->attached_process = -1;
+    if (script->id == shell->selected_process)
+        shell->selected_process = -1;
 
     shell->scripts.remove(script - shell->scripts.elems);
 }
 
-Running_Script* active_process(Shell_State* shell) {
-    if (shell->active_process == -1)
+Running_Script* attached_process(Shell_State* shell) {
+    if (shell->attached_process == -1)
         return nullptr;
-
-    return lookup_process(shell, shell->active_process);
+    return lookup_process(shell, shell->attached_process);
+}
+Running_Script* selected_process(Shell_State* shell) {
+    if (shell->selected_process == -1)
+        return nullptr;
+    return lookup_process(shell, shell->selected_process);
 }
 
 Running_Script* lookup_process(Shell_State* shell, uint64_t id) {

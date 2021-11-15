@@ -28,7 +28,8 @@ struct Shell_State {
     cz::Vector<cz::Str> alias_values;
 
     cz::Vector<Running_Script> scripts;
-    uint64_t active_process = ~0ull;
+    uint64_t selected_process = ~0ull;
+    uint64_t attached_process = ~0ull;
 
     cz::Vector<cz::Buffer_Array> arenas;
 
@@ -48,8 +49,11 @@ void recycle_pipeline(Shell_State* shell, Running_Pipeline* script);
 cz::Buffer_Array alloc_arena(Shell_State* shell);
 void recycle_arena(Shell_State* shell, cz::Buffer_Array arena);
 
-/// Get the active process, or `nullptr` if there is none.
-Running_Script* active_process(Shell_State* shell);
+/// Get the attached process, or `nullptr` if there is none.
+Running_Script* attached_process(Shell_State* shell);
+/// Get the selected process, or `nullptr` if there is none.
+Running_Script* selected_process(Shell_State* shell);
+
 /// Find a process by id, or `nullptr` if no matches.
 Running_Script* lookup_process(Shell_State* shell, uint64_t id);
 

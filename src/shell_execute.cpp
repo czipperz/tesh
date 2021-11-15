@@ -91,8 +91,10 @@ Error start_execute_script(Shell_State* shell,
     shell->scripts.reserve(cz::heap_allocator(), 1);
     shell->scripts.push(running);
 
-    if (cfg.on_spawn_attach)
-        shell->active_process = running.id;
+    if (cfg.on_spawn_attach) {
+        shell->attached_process = running.id;
+        shell->selected_process = running.id;
+    }
 
     return Error_Success;
 

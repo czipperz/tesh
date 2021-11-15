@@ -164,7 +164,7 @@ static bool render_backlog(SDL_Surface* window_surface,
 
     uint64_t process_id = backlog->id;
     SDL_Color bg_color = cfg.process_colors[process_id % cfg.process_colors.len];
-    if (shell->active_process == process_id) {
+    if (shell->selected_process == process_id) {
         bg_color.r *= 2;
         bg_color.g *= 2;
         bg_color.b *= 2;
@@ -276,14 +276,14 @@ static void render_prompt(SDL_Surface* window_surface,
     point.inner = 0;
 
     uint64_t process_id =
-        (shell->active_process == -1 ? prompt->process_id : shell->active_process);
+        (shell->attached_process == -1 ? prompt->process_id : shell->attached_process);
     SDL_Color bg_color = cfg.process_colors[process_id % cfg.process_colors.len];
     bg_color.r *= 2;
     bg_color.g *= 2;
     bg_color.b *= 2;
     uint32_t background = SDL_MapRGB(window_surface->format, bg_color.r, bg_color.g, bg_color.b);
 
-    if (shell->active_process == -1) {
+    if (shell->attached_process == -1) {
         for (size_t i = 0; i < shell->working_directory.len; ++i) {
             char c = shell->working_directory[i];
             render_char(window_surface, rend, &point, background, cfg.info_fg_color, c, true);
@@ -340,7 +340,7 @@ static void render_prompt(SDL_Surface* window_surface,
             char c = prefix[i];
             render_char(window_surface, rend, &point, background, cfg.backlog_fg_color, c, true);
         }
-        cz::Vector<cz::Str>* history = prompt_history(prompt, shell->active_process != -1);
+        cz::Vector<cz::Str>* history = prompt_history(prompt, shell->attached_process != -1);
         if (prompt->history_counter < history->len) {
             cz::Str hist = history->get(prompt->history_counter);
             for (size_t i = 0; i < hist.len; ++i) {
@@ -415,7 +415,7 @@ static void render_frame(SDL_Window* window,
     if (rend->auto_scroll)
         ensure_prompt_on_screen(rend, backlogs);
 
-    if (shell->active_process != -1)
+    if (shell->attached_process != -1)
         ensure_prompt_on_screen(rend, backlogs);
 
     // TODO remove this
@@ -581,7 +581,7 @@ static void finish_script(Shell_State* shell,
     // If we're attached then we auto scroll but we can hit an edge case where the
     // final output isn't scrolled to.  So we stop halfway through the output.  I
     // think it would be better if this just called `ensure_prompt_on_screen`.
-    if (shell->active_process == script->id)
+    if (shell->attached_process == script->id)
         rend->auto_scroll = true;
 
     recycle_process(shell, script);
@@ -928,7 +928,7 @@ static bool handle_prompt_manipulation_commands(Shell_State* shell,
                                                 Render_State* rend,
                                                 uint16_t mod,
                                                 SDL_Keycode key) {
-    cz::Vector<cz::Str>* history = prompt_history(prompt, shell->active_process != -1);
+    cz::Vector<cz::Str>* history = prompt_history(prompt, shell->attached_process != -1);
     if ((mod & ~KMOD_SHIFT) == 0 && key == SDLK_BACKSPACE) {
         if (prompt->cursor > 0) {
             --prompt->cursor;
@@ -1053,6 +1053,8 @@ static bool handle_scroll_commands(Shell_State* shell,
                                    Render_State* rend,
                                    uint16_t mod,
                                    SDL_Keycode key) {
+    bool set_selected_process = false;
+
     if ((mod == 0 && key == SDLK_PAGEDOWN) || (mod == KMOD_CTRL && key == SDLK_v)) {
         int lines = cz::max(rend->window_rows, 6) - 3;
         scroll_down(rend, backlogs, lines);
@@ -1060,7 +1062,7 @@ static bool handle_scroll_commands(Shell_State* shell,
         int lines = cz::max(rend->window_rows, 6) - 3;
         scroll_up(rend, backlogs, lines);
     } else if ((mod == KMOD_CTRL && key == SDLK_d) &&
-               (shell->active_process == -1 && prompt->text.len == 0)) {
+               (shell->attached_process == -1 && prompt->text.len == 0)) {
         int lines = rend->window_rows / 2;
         scroll_down(rend, backlogs, lines);
     } else if (mod == KMOD_CTRL && key == SDLK_u) {
@@ -1074,6 +1076,7 @@ static bool handle_scroll_commands(Shell_State* shell,
         rend->backlog_start = {};
         if (backlogs.len > 0)
             rend->backlog_start.outer = backlogs.len - 1;
+        set_selected_process = true;
     } else if (mod == (KMOD_CTRL | KMOD_ALT) && key == SDLK_b) {
         size_t outer = rend->backlog_start.outer;
         size_t inner = rend->backlog_start.inner;
@@ -1082,17 +1085,20 @@ static bool handle_scroll_commands(Shell_State* shell,
             rend->backlog_start.outer = outer;
         else if (outer > 0)
             rend->backlog_start.outer = outer - 1;
+        set_selected_process = true;
     } else if (mod == (KMOD_CTRL | KMOD_ALT) && key == SDLK_f) {
         size_t outer = rend->backlog_start.outer;
         rend->backlog_start = {};
         if (outer + 1 <= backlogs.len)
             outer++;
         rend->backlog_start.outer = outer;
+        set_selected_process = true;
     } else {
         return false;
     }
 
-    shell->active_process = -1;
+    shell->attached_process = -1;
+    shell->selected_process = (set_selected_process ? rend->backlog_start.outer : -1);
     rend->auto_page = false;
     rend->auto_scroll = false;
     rend->complete_redraw = true;
@@ -1137,7 +1143,7 @@ static void expand_selection(Selection* selection,
     CZ_DEFER(prompt_buffer.drop(temp_allocator));
 
     if (selection->start.outer - 1 == backlogs.len || selection->end.outer - 1 == backlogs.len) {
-        if (shell->active_process == -1) {
+        if (shell->attached_process == -1) {
             cz::append(temp_allocator, &prompt_buffer, shell->working_directory, prompt->prefix);
         } else {
             cz::append(temp_allocator, &prompt_buffer, "> ");
@@ -1293,11 +1299,11 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
 
                 {
                     cz::Vector<cz::Str>* history =
-                        prompt_history(prompt, shell->active_process != -1);
+                        prompt_history(prompt, shell->attached_process != -1);
                     resolve_history_searching(prompt, history);
                 }
 
-                Running_Script* script = active_process(shell);
+                Running_Script* script = attached_process(shell);
                 uint64_t process_id = (script ? script->id : prompt->process_id);
                 Backlog_State* backlog;
                 if (script) {
@@ -1361,7 +1367,7 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
                     ++prompt->process_id;
                 {
                     cz::Vector<cz::Str>* history =
-                        prompt_history(prompt, shell->active_process != -1);
+                        prompt_history(prompt, shell->attached_process != -1);
                     prompt->history_counter = history->len;
                 }
 
@@ -1372,18 +1378,18 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
             if (mod == KMOD_CTRL && key == SDLK_z) {
                 rend->auto_page = false;
                 rend->auto_scroll = true;
-                if (shell->active_process == -1) {
+                if (shell->attached_process == -1) {
                     for (size_t i = shell->scripts.len; i-- > 0;) {
                         Running_Script* script = &shell->scripts[i];
                         // TODO close stdin
                         if (1) {
-                            shell->active_process = script->id;
+                            shell->attached_process = script->id;
                             prompt->history_counter = prompt->stdin_history.len;
                             break;
                         }
                     }
                 } else {
-                    shell->active_process = -1;
+                    shell->attached_process = -1;
                     prompt->history_counter = prompt->history.len;
                 }
                 ++num_events;
@@ -1520,7 +1526,7 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
         case SDL_MOUSEWHEEL: {
             rend->auto_page = false;
             rend->auto_scroll = false;
-            shell->active_process = -1;
+            shell->attached_process = -1;
 
             if (event.wheel.direction == SDL_MOUSEWHEEL_FLIPPED) {
                 event.wheel.y *= -1;
@@ -1558,7 +1564,8 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
 
         case SDL_MOUSEBUTTONDOWN: {
             if (event.button.button == SDL_BUTTON_LEFT) {
-                shell->active_process = -1;
+                shell->attached_process = -1;
+                shell->selected_process = -1;
                 rend->auto_page = false;
                 rend->auto_scroll = false;
                 rend->selection.type = SELECT_DISABLED;
@@ -1585,6 +1592,7 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
                     }
                 } else {
                     rend->selection.type = SELECT_EMPTY;
+                    shell->selected_process = tile.outer - 1;
                 }
 
                 rend->selection.down = tile;
