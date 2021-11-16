@@ -1618,7 +1618,6 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
 
         case SDL_MOUSEBUTTONDOWN: {
             if (event.button.button == SDL_BUTTON_LEFT) {
-                shell->attached_process = -1;
                 shell->selected_process = -1;
                 rend->auto_page = false;
                 rend->auto_scroll = false;
