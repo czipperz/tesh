@@ -1646,8 +1646,8 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
                     }
                 } else {
                     rend->selection.type = SELECT_EMPTY;
-                    shell->selected_process = tile.outer - 1;
                 }
+                shell->selected_process = tile.outer - 1;
 
                 rend->selection.down = tile;
                 rend->selection.current = tile;
