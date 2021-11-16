@@ -224,6 +224,7 @@ static bool process_escape_sequence(Backlog_State* backlog, cz::Str fresh, size_
             // ESC [ 6 n            Report Cursor Position (term should print ESC [ <y> ; <x> R)
             // ESC [ 0 c            Report Device Attributes (term should print ESC [ ? 1 ; 0 c)
             else if ((*text)[it] == 'n' || (*text)[it] == 'c') {
+                CZ_PANIC("todo");
                 return true;
             }
 
