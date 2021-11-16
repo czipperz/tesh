@@ -78,6 +78,14 @@ struct Process_Output {
     int64_t write(const void* buffer, size_t len);
 };
 
+struct Process_Input {
+    bool polling;
+    cz::Input_File file;
+
+    int64_t read(void* buffer, size_t len);
+    int64_t read_text(char* buffer, size_t len, cz::Carriage_Return_Carry* carry);
+};
+
 ///////////////////////////////////////////////////////////////////////////////
 
 struct Pseudo_Terminal {
@@ -130,7 +138,7 @@ struct Running_Program {
         cz::Process process;
         struct {
             cz::Slice<const cz::Str> args;
-            cz::Input_File in;
+            Process_Input in;
             Process_Output out;
             Process_Output err;
             cz::Str working_directory;  // null terminated
@@ -141,7 +149,7 @@ struct Running_Program {
                 } echo;
                 struct {
                     size_t outer;
-                    cz::Input_File file;
+                    Process_Input file;
                     cz::Carriage_Return_Carry carry;
                     char* buffer;
                     size_t len, offset;

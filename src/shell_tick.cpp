@@ -95,7 +95,7 @@ bool tick_program(Shell_State* shell,
 
         int64_t result = 0;
         int rounds = 0;
-        while (st.file.is_open() || st.outer < builtin.args.len) {
+        while (st.file.file.is_open() || st.outer < builtin.args.len) {
             // Rate limit to prevent hanging.
             if (rounds++ == 1024)
                 return false;
@@ -112,14 +112,15 @@ bool tick_program(Shell_State* shell,
             }
 
             // Get a new file if we don't have one.
-            if (!st.file.is_open()) {
+            if (!st.file.file.is_open()) {
                 cz::Str arg = builtin.args[st.outer];
                 if (arg == "-") {
                     st.file = builtin.in;
                 } else {
                     cz::String path = {};
                     cz::path::make_absolute(arg, shell->working_directory, temp_allocator, &path);
-                    if (!st.file.open(path.buffer)) {
+                    st.file.polling = false;
+                    if (!st.file.file.open(path.buffer)) {
                         builtin.exit_code = 1;
                         cz::Str message = cz::format("cat: ", arg, ": No such file or directory\n");
                         (void)builtin.err.write(message);
@@ -134,8 +135,8 @@ bool tick_program(Shell_State* shell,
             if (result <= 0) {
                 if (result < 0)
                     break;
-                if (st.file.handle != builtin.in.handle)
-                    st.file.close();
+                if (st.file.file.handle != builtin.in.file.handle)
+                    st.file.file.close();
                 st.file = {};
                 ++st.outer;
                 continue;

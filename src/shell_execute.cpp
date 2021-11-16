@@ -279,13 +279,15 @@ static Error run_program(Shell_State* shell,
             return Error_IO;
 
         if (stdio.in_type == File_Type_Terminal) {
+            program->v.builtin.in.polling = true;
 #ifdef _WIN32
-            program->v.builtin.in = script.tty.child_in;
+            program->v.builtin.in.file = script.tty.child_in;
 #else
-            program->v.builtin.in.handle = script.tty.child_bi;
+            program->v.builtin.in.file.handle = script.tty.child_bi;
 #endif
         } else {
-            program->v.builtin.in = stdio.in;
+            program->v.builtin.in.polling = false;
+            program->v.builtin.in.file = stdio.in;
         }
         if (stdio.out_type == File_Type_Terminal) {
             program->v.builtin.out.type = Process_Output::BACKLOG;
