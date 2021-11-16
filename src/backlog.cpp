@@ -328,8 +328,18 @@ static bool process_escape_sequence(Backlog_State* backlog, cz::Str fresh, size_
     }
 }
 
+static void truncate_to(Backlog_State* backlog, uint64_t new_length) {
+    size_t outer_before = OUTER_INDEX(backlog->length);
+    backlog->length = new_length;
+    for (size_t i = outer_before + 1; i-- > OUTER_INDEX(backlog->length) + 1;) {
+        cz::heap_allocator().dealloc({backlog->buffers.last(), BUFFER_SIZE});
+        backlog->buffers.pop();
+    }
+}
+
 int64_t append_text(Backlog_State* backlog, cz::Str text) {
     const char escape = 0x1b;
+    const char del = 0x08;
     int64_t done = 0;
 
     if (backlog->escape_backlog.len != 0) {
@@ -348,6 +358,7 @@ int64_t append_text(Backlog_State* backlog, cz::Str text) {
         size_t chunk_len = text.len;
         chunk_len = text.slice_end(chunk_len).find_index('\r');
         chunk_len = text.slice_end(chunk_len).find_index(escape);
+        chunk_len = text.slice_end(chunk_len).find_index(del);
 
         // Append the normal text before it.
         int64_t result = append_chunk(backlog, text.slice_end(chunk_len));
@@ -363,13 +374,18 @@ int64_t append_text(Backlog_State* backlog, cz::Str text) {
         case '\r': {
             // TODO: this isn't right -- this should only move the cursor
             // and not change the line.  But in practice this works.
-            size_t outer_before = OUTER_INDEX(backlog->length);
-            backlog->length = (backlog->lines.len > 0 ? backlog->lines.last() : 0);
-            for (size_t i = outer_before + 1; i-- > OUTER_INDEX(backlog->length) + 1; ++i) {
-                cz::heap_allocator().dealloc({backlog->buffers.last(), BUFFER_SIZE});
-                backlog->buffers.pop();
-            }
+            uint64_t line_start = backlog->lines.len > 0 ? backlog->lines.last() : 0;
+            truncate_to(backlog, line_start);
+            text = text.slice_start(chunk_len + 1);
+            done++;
+        } break;
 
+        case del: {
+            // TODO: this isn't right -- this should only move the cursor
+            // and not change the line.  But in practice this works.
+            uint64_t line_start = backlog->lines.len > 0 ? backlog->lines.last() : 0;
+            if (line_start < backlog->length)
+                truncate_to(backlog, backlog->length - 1);
             text = text.slice_start(chunk_len + 1);
             done++;
         } break;
