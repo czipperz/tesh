@@ -282,7 +282,7 @@ static bool process_escape_sequence(Backlog_State* backlog, cz::Str fresh, size_
             }
             return true;
         } else {
-            size_t it = 3;
+            size_t it = 2;
             cz::Vector<int32_t> args = {};
             if (!parse_args(backlog, &it, fresh, skip, &args))
                 return false;
