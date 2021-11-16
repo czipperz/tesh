@@ -1260,8 +1260,11 @@ static void expand_selection(Selection* selection,
                 --*inner;
             }
         } else {
-            ++*inner;
-            backward_word(prompt_buffer, inner);
+            // Don't expand if we're on a newline character.
+            if (*inner < prompt_buffer.len) {
+                ++*inner;
+                backward_word(prompt_buffer, inner);
+            }
         }
 
         inner = &selection->end.inner;
@@ -1286,7 +1289,10 @@ static void expand_selection(Selection* selection,
                     ++*inner;
             }
         } else {
-            forward_word(prompt_buffer, inner);
+            if (*inner >= prompt_buffer.len)
+                ++*inner;
+            else
+                forward_word(prompt_buffer, inner);
         }
         if (*inner > 0)
             --*inner;
