@@ -216,9 +216,15 @@ static bool parse_hyperlink(Backlog_State* backlog, cz::Str fresh, size_t* skip)
     while (1) {
         if (!ensure_char(backlog, it, fresh, skip))
             return false;
-        if ((*text)[it] == 0x1b) {
+        char ch = (*text)[it];
+        if (ch == 0x1b) {
             ++it;
             break;
+        }
+        if (ch == '\a') {
+            // Ignore alarm characters.
+            text->remove(it);
+            continue;
         }
         ++it;
     }
@@ -476,6 +482,7 @@ int64_t append_text(Backlog_State* backlog, cz::Str text) {
         chunk_len = text.slice_end(chunk_len).find_index('\r');
         chunk_len = text.slice_end(chunk_len).find_index(escape);
         chunk_len = text.slice_end(chunk_len).find_index(del);
+        chunk_len = text.slice_end(chunk_len).find_index('\a');
 
         // Append the normal text before it.
         int64_t result = append_chunk(backlog, text.slice_end(chunk_len));
@@ -517,6 +524,12 @@ int64_t append_text(Backlog_State* backlog, cz::Str text) {
             backlog->escape_backlog.len = 0;
             text = remaining.slice_start(skip);
             done += skip;
+        } break;
+
+        case '\a': {
+            // Ignore alarm characters.
+            text = text.slice_start(chunk_len + 1);
+            done++;
         } break;
         }
     }
