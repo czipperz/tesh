@@ -808,6 +808,8 @@ void clear_screen(Render_State* rend, Shell_State* shell, cz::Slice<Backlog_Stat
     if (shell->scripts.len > 0)
         scroll_up(rend, backlogs, 2);
     rend->complete_redraw = true;
+    rend->auto_page = false;
+    rend->auto_scroll = false;
 }
 
 static void ensure_prompt_on_screen(Render_State* rend, cz::Slice<Backlog_State*> backlogs) {
