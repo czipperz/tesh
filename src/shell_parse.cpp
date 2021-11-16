@@ -555,8 +555,17 @@ static bool get_var_at_point(Text_Iter* it, cz::Str* key) {
             break;
     }
 
-    if (start == item->index)
+    if (start == item->index && item->index < item.text.len) {
+        char first = item->text[item->index];
+        if (first == '?' || first == '!') {
+            CZ_PANIC("$? / $! aren't actually implemented yet");
+            ++item->index;
+        }
+    }
+
+    if (start == item->index) {
         return false;
+    }
 
     *key = item->text.slice(start, item->index);
     return true;
