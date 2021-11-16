@@ -367,7 +367,7 @@ static bool process_escape_sequence(Backlog_State* backlog, cz::Str fresh, size_
         }
     } else if ((*text)[1] == '(') {
         CZ_PANIC("todo");
-    } else if ((*text)[1] == ')') {
+    } else if ((*text)[1] == ']') {
         CZ_PANIC("todo");
     } else {
 #if 0
