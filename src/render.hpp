@@ -76,3 +76,4 @@ bool render_char(SDL_Surface* window_surface,
                  uint8_t foreground,
                  char c,
                  bool set_tile);
+void resize_font(int font_size, Render_State* rend);

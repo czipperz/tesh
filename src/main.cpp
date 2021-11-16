@@ -31,7 +31,6 @@
 #include "shell.hpp"
 #include "solarized_dark.hpp"
 
-void resize_font(int font_size, Render_State* rend);
 static Backlog_State* push_backlog(cz::Vector<Backlog_State*>* backlogs, uint64_t id);
 static void scroll_down1(Render_State* rend, cz::Slice<Backlog_State*> backlogs, int lines);
 

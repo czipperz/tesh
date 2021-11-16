@@ -500,5 +500,7 @@ static void recognize_builtins(Running_Program* program,
         program->type = Running_Program::SLEEP;
         program->v.builtin.st.sleep = {};
         program->v.builtin.st.sleep.start = std::chrono::high_resolution_clock::now();
+    } else if (parse.args[0] == "configure") {
+        program->type = Running_Program::CONFIGURE;
     }
 }

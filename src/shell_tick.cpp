@@ -262,6 +262,28 @@ bool tick_program(Shell_State* shell,
         goto finish_builtin;
     } break;
 
+    case Running_Program::CONFIGURE: {
+        auto& builtin = program->v.builtin;
+        if (builtin.args.len != 3) {
+            builtin.err.write("Usage: configure [option] [value]\n");
+            goto finish_builtin;
+        }
+        auto option  = builtin.args[1];
+        auto int_val = atoi(builtin.args[2].buffer);
+        if (option == "font_size") {
+            if (int_val == 0) {
+                builtin.err.write("Invalid font_height\n");
+            } else {
+                resize_font(int_val, rend);
+            }
+        } else {
+            builtin.err.write("Unrecognized option ");
+            builtin.err.write(option);
+            builtin.err.write("\n");
+        }
+        goto finish_builtin;
+    }
+
     case Running_Program::VARIABLES: {
         auto& st = program->v.builtin.st.variables;
         for (size_t i = 0; i < st.names.len; ++i) {
@@ -272,7 +294,6 @@ bool tick_program(Shell_State* shell,
 
     case Running_Program::WHICH: {
         auto& builtin = program->v.builtin;
-        auto& st = builtin.st.variables;
         cz::String path = {};
         for (size_t i = 1; i < builtin.args.len; ++i) {
             cz::Str arg = builtin.args[i];

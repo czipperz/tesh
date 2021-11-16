@@ -124,6 +124,7 @@ struct Running_Program {
         CLEAR,
         SOURCE,
         SLEEP,
+        CONFIGURE,
     } type;
     union {
         cz::Process process;
