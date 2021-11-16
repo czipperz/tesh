@@ -1074,6 +1074,7 @@ static bool handle_scroll_commands(Shell_State* shell,
                                    Render_State* rend,
                                    uint16_t mod,
                                    SDL_Keycode key) {
+    bool auto_scroll = false;
     if ((mod == 0 && key == SDLK_PAGEDOWN) || (mod == KMOD_CTRL && key == SDLK_v)) {
         int lines = cz::max(rend->window_rows, 6) - 3;
         scroll_down(rend, backlogs, lines);
@@ -1092,26 +1093,64 @@ static bool handle_scroll_commands(Shell_State* shell,
     } else if (mod == KMOD_ALT && key == SDLK_p) {
         scroll_up(rend, backlogs, 1);
     } else if (mod == KMOD_ALT && key == SDLK_LESS) {
+        // Goto start of selected process.
         rend->backlog_start = {};
-        if (backlogs.len > 0)
-            rend->backlog_start.outer = backlogs.len - 1;
-        shell->selected_process = rend->backlog_start.outer;
+        rend->backlog_start.outer =
+            (shell->selected_process == -1 ? backlogs.len : shell->selected_process);
+    } else if (mod == KMOD_ALT && key == SDLK_GREATER) {
+        // Goto end of selected process.
+        rend->backlog_start = {};
+        rend->backlog_start.outer =
+            (shell->selected_process == -1 ? backlogs.len : shell->selected_process + 1);
+        int lines = cz::max(rend->window_rows, 6) - 3;
+        scroll_up(rend, backlogs, lines);
+        auto_scroll = true;
     } else if (mod == (KMOD_CTRL | KMOD_ALT) && key == SDLK_b) {
-        size_t outer = rend->backlog_start.outer;
-        size_t inner = rend->backlog_start.inner;
-        rend->backlog_start = {};
-        if (inner > 0)
-            rend->backlog_start.outer = outer;
-        else if (outer > 0)
-            rend->backlog_start.outer = outer - 1;
-        shell->selected_process = rend->backlog_start.outer;
+        // Select the process before the currently selected
+        // process, or the last process if this is the prompt.
+        if (shell->selected_process == -1 && backlogs.len > 0) {
+            shell->selected_process = backlogs.len - 1;
+        } else if (shell->selected_process > 0) {
+            --shell->selected_process;
+        }
+
+        // If offscreen then scroll up to fit it.
+        if (shell->selected_process <= rend->backlog_start.outer) {
+            rend->backlog_start = {};
+            rend->backlog_start.outer = shell->selected_process;
+        }
     } else if (mod == (KMOD_CTRL | KMOD_ALT) && key == SDLK_f) {
-        size_t outer = rend->backlog_start.outer;
+        // Select the next process, or the prompt if this is the last process.
+        if (shell->selected_process != -1 && shell->selected_process + 1 < backlogs.len)
+            ++shell->selected_process;
+        else
+            shell->selected_process = -1;
+
+        // Go to the earliest point where the entire process / prompt is visible.
+        Visual_Point backup = rend->backlog_start;
         rend->backlog_start = {};
-        if (outer + 1 <= backlogs.len)
-            outer++;
-        rend->backlog_start.outer = outer;
-        shell->selected_process = rend->backlog_start.outer;
+        rend->backlog_start.outer =
+            (shell->selected_process == -1 ? backlogs.len : shell->selected_process + 1);
+        int lines = cz::max(rend->window_rows, 3) - 3;
+        scroll_up(rend, backlogs, lines);
+
+        if ((rend->backlog_start.outer > backup.outer) ||
+            (rend->backlog_start.outer == backup.outer &&
+             rend->backlog_start.inner > backup.inner)) {
+            if (rend->backlog_start.outer ==
+                (shell->selected_process == -1 ? backlogs.len : shell->selected_process)) {
+                // The process is really long so go to the start instead.
+                rend->backlog_start.inner = 0;
+            }
+        } else {
+            rend->backlog_start = backup;
+        }
+
+        // If offscreen then scroll up to fit it.
+        if (shell->selected_process < rend->backlog_start.outer) {
+            rend->backlog_start = {};
+            rend->backlog_start.outer = shell->selected_process;
+        }
     } else if (mod == 0 && key == SDLK_TAB && shell->selected_process != -1) {
         Backlog_State* backlog = backlogs[shell->selected_process];
         backlog->render_collapsed = !backlog->render_collapsed;
@@ -1150,7 +1189,7 @@ static bool handle_scroll_commands(Shell_State* shell,
 #endif
 
     rend->auto_page = false;
-    rend->auto_scroll = false;
+    rend->auto_scroll = auto_scroll;
     rend->complete_redraw = true;
     return true;
 }
