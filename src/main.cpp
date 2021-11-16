@@ -931,6 +931,29 @@ static void forward_word(cz::Str text, size_t* cursor) {
     }
 }
 
+static void finish_prompt_manipulation(Shell_State* shell,
+                                       Render_State* rend,
+                                       cz::Slice<Backlog_State*> backlogs) {
+    shell->selected_process = shell->attached_process;
+    ensure_prompt_on_screen(rend, backlogs);
+    rend->auto_page = false;
+    rend->auto_scroll = true;
+    stop_selecting(rend);
+}
+
+static void run_paste(Prompt_State* prompt) {
+    char* clip = SDL_GetClipboardText();
+    if (clip) {
+        CZ_DEFER(SDL_free(clip));
+        size_t len = strlen(clip);
+        cz::String str = {clip, len, len};
+        cz::strip_carriage_returns(&str);
+        prompt->text.reserve(cz::heap_allocator(), str.len);
+        prompt->text.insert(prompt->cursor, str);
+        prompt->cursor += str.len;
+    }
+}
+
 static bool handle_prompt_manipulation_commands(Shell_State* shell,
                                                 Prompt_State* prompt,
                                                 cz::Vector<Backlog_State*>* backlogs,
@@ -1034,26 +1057,14 @@ static bool handle_prompt_manipulation_commands(Shell_State* shell,
     } else if ((mod == KMOD_CTRL && key == SDLK_RIGHT) || (mod == KMOD_ALT && key == SDLK_RIGHT) ||
                (mod == KMOD_ALT && key == SDLK_f)) {
         forward_word(prompt->text, &prompt->cursor);
-    } else if (mod == KMOD_SHIFT && key == SDLK_INSERT) {
-        char* clip = SDL_GetClipboardText();
-        if (clip) {
-            CZ_DEFER(SDL_free(clip));
-            size_t len = strlen(clip);
-            cz::String str = {clip, len, len};
-            cz::strip_carriage_returns(&str);
-            prompt->text.reserve(cz::heap_allocator(), str.len);
-            prompt->text.insert(prompt->cursor, str);
-            prompt->cursor += str.len;
-        }
+    } else if ((mod == KMOD_SHIFT && key == SDLK_INSERT) ||
+               (mod == (KMOD_CTRL | KMOD_SHIFT) && key == SDLK_v)) {
+        run_paste(prompt);
     } else {
         return false;
     }
 
-    shell->selected_process = shell->attached_process;
-    ensure_prompt_on_screen(rend, *backlogs);
-    rend->auto_page = false;
-    rend->auto_scroll = true;
-    stop_selecting(rend);
+    finish_prompt_manipulation(shell, rend, *backlogs);
     return true;
 }
 
@@ -1558,16 +1569,11 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
             if (mods & (KMOD_CTRL | KMOD_ALT))
                 break;
 
-            rend->auto_page = false;
-            rend->auto_scroll = true;
-
             cz::Str text = event.text.text;
             prompt->text.reserve(cz::heap_allocator(), text.len);
             prompt->text.insert(prompt->cursor, text);
             prompt->cursor += text.len;
-            shell->selected_process = shell->attached_process;
-            ensure_prompt_on_screen(rend, *backlogs);
-            stop_selecting(rend);
+            finish_prompt_manipulation(shell, rend, *backlogs);
             ++num_events;
         } break;
 
@@ -1651,6 +1657,10 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
                 expand_selection(&rend->selection, shell, prompt, *backlogs);
 
                 rend->complete_redraw = true;
+                ++num_events;
+            } else if (event.button.button == SDL_BUTTON_MIDDLE) {
+                run_paste(prompt);
+                finish_prompt_manipulation(shell, rend, *backlogs);
                 ++num_events;
             }
         } break;
