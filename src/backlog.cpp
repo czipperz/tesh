@@ -360,17 +360,19 @@ int64_t append_text(Backlog_State* backlog, cz::Str text) {
 
         // Handle the special character.
         switch (text[chunk_len]) {
-        case '\r':
-            // TODO: actually do carriage return?
-            // Note: ignore empty lines.
-            if (backlog->length > 0 && backlog->get(backlog->length - 1) != '\n') {
-                result = append_chunk(backlog, "\n");
-                if (result != 1)
-                    return done + result;
+        case '\r': {
+            // TODO: this isn't right -- this should only move the cursor
+            // and not change the line.  But in practice this works.
+            size_t outer_before = OUTER_INDEX(backlog->length);
+            backlog->length = (backlog->lines.len > 0 ? backlog->lines.last() : 0);
+            for (size_t i = outer_before + 1; i-- > OUTER_INDEX(backlog->length) + 1; ++i) {
+                cz::heap_allocator().dealloc({backlog->buffers.last(), BUFFER_SIZE});
+                backlog->buffers.pop();
             }
+
             text = text.slice_start(chunk_len + 1);
             done++;
-            break;
+        } break;
 
         case escape: {
             cz::Str remaining = text.slice_start(chunk_len);
