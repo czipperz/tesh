@@ -129,8 +129,6 @@ void recycle_process(Shell_State* shell, Running_Script* script) {
 
     if (script->id == shell->attached_process)
         shell->attached_process = -1;
-    if (script->id == shell->selected_process)
-        shell->selected_process = -1;
 
     shell->scripts.remove(script - shell->scripts.elems);
 }
