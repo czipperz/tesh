@@ -202,6 +202,66 @@ static uint64_t parse_graphics_rendition(cz::Slice<int32_t> args, uint64_t graph
     return graphics_rendition;
 }
 
+static bool parse_hyperlink(Backlog_State* backlog, cz::Str fresh, size_t* skip) {
+    // ESC]8;; <HYPERLINK> ESC]8;;
+    cz::String* text = &backlog->escape_backlog;
+    if (!ensure_char(backlog, 3, fresh, skip))
+        return false;
+    if (!ensure_char(backlog, 4, fresh, skip))
+        return false;
+    if ((*text)[3] != ';' || (*text)[4] != ';')
+        CZ_PANIC("todo");
+
+    size_t it = 5;
+    while (1) {
+        if (!ensure_char(backlog, it, fresh, skip))
+            return false;
+        if ((*text)[it] == 0x1b) {
+            ++it;
+            break;
+        }
+        ++it;
+    }
+
+    if (!ensure_char(backlog, it, fresh, skip))
+        return false;
+    if ((*text)[it] != ']')
+        CZ_PANIC("todo");
+    ++it;
+
+    if (!ensure_char(backlog, it, fresh, skip))
+        return false;
+    if ((*text)[it] != '8')
+        CZ_PANIC("todo");
+    ++it;
+
+    if (!ensure_char(backlog, it, fresh, skip))
+        return false;
+    if ((*text)[it] != ';')
+        CZ_PANIC("todo");
+    ++it;
+
+    if (!ensure_char(backlog, it, fresh, skip))
+        return false;
+    if ((*text)[it] != ';')
+        CZ_PANIC("todo");
+    ++it;
+
+    cz::Str hyperlink = text->slice(5, text->len - 5);
+
+    // TODO: have a special event to start link
+    uint64_t old_graphics_rendition = backlog->graphics_rendition;
+    uint64_t graphics_rendition = backlog->graphics_rendition;
+    graphics_rendition &= ~GR_FOREGROUND_MASK;
+    graphics_rendition |= (5 << GR_FOREGROUND_SHIFT);
+    set_graphics_rendition(backlog, graphics_rendition);
+
+    append_chunk(backlog, hyperlink);
+
+    set_graphics_rendition(backlog, old_graphics_rendition);
+    return true;
+}
+
 /// Attempt to process an escape sequence.  Returns `true` if it
 /// was processed, `false` if we need more input to process it.
 static bool process_escape_sequence(Backlog_State* backlog, cz::Str fresh, size_t* skip) {
@@ -368,7 +428,14 @@ static bool process_escape_sequence(Backlog_State* backlog, cz::Str fresh, size_
     } else if ((*text)[1] == '(') {
         CZ_PANIC("todo");
     } else if ((*text)[1] == ']') {
-        CZ_PANIC("todo");
+        if (!ensure_char(backlog, 2, fresh, skip))
+            return false;
+
+        if ((*text)[2] == '8') {
+            return parse_hyperlink(backlog, fresh, skip);
+        } else {
+            CZ_PANIC("todo");
+        }
     } else {
 #if 0
         // The other escape sequences are key values so just pass them through with the escape.
