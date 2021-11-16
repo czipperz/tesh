@@ -6,5 +6,4 @@ enum Error {
     Error_Parse = 2,
     Error_InvalidPath = 3,
     Error_InvalidProgram = 4,
-    Error_Empty = 5,
 };

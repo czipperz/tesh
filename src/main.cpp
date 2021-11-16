@@ -478,10 +478,6 @@ static bool run_script(Shell_State* shell, Backlog_State* backlog, cz::Str text)
         goto fail;
 
     error = start_execute_script(shell, backlog, arena, script, text);
-    if (error == Error_Empty) {
-        recycle_arena(shell, arena);
-        return true;
-    }
     if (error != Error_Success)
         goto fail;
 
@@ -575,7 +571,7 @@ static bool finish_line(Shell_State* shell,
     }
 
     Error error = start_execute_line(shell, backlog, script, *next, background);
-    if (error != Error_Success && error != Error_Empty) {
+    if (error != Error_Success) {
         append_text(backlog, "Error: failed to execute continuation\n");
     }
 
