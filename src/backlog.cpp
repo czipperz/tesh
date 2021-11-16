@@ -132,6 +132,76 @@ static bool parse_args(Backlog_State* backlog,
     return true;
 }
 
+static void set_graphics_rendition(Backlog_State* backlog, uint64_t graphics_rendition) {
+    Backlog_Event event = {};
+    event.index = backlog->length;
+    event.type = BACKLOG_EVENT_SET_GRAPHIC_RENDITION;
+    event.payload = graphics_rendition;
+    backlog->events.reserve(cz::heap_allocator(), 1);
+    backlog->events.push(event);
+    backlog->graphics_rendition = graphics_rendition;
+}
+
+static uint64_t parse_graphics_rendition(cz::Slice<int32_t> args, uint64_t graphics_rendition) {
+    if (args.len == 0)
+        graphics_rendition = (7 << GR_FOREGROUND_SHIFT);
+
+    for (size_t i = 0; i < args.len; ++i) {
+        if (args[i] == 0 || args[i] == -1) {
+            // Reset everything.
+            graphics_rendition = (7 << GR_FOREGROUND_SHIFT);
+        } else if (args[i] == 1) {
+            graphics_rendition |= GR_BOLD;
+        } else if (args[i] == 21) {
+            graphics_rendition &= ~GR_BOLD;
+        } else if (args[i] == 4) {
+            graphics_rendition |= GR_UNDERLINE;
+        } else if (args[i] == 24) {
+            graphics_rendition &= ~GR_UNDERLINE;
+        } else if (args[i] == 7) {
+            graphics_rendition |= GR_REVERSE;
+        } else if (args[i] == 27) {
+            graphics_rendition &= ~GR_REVERSE;
+        } else if ((args[i] >= 30 && args[i] <= 39) || (args[i] >= 90 && args[i] <= 99)) {
+            // Set foreground color.
+            if (args[i] <= 39)
+                graphics_rendition &= ~GR_BRIGHT;
+            else
+                graphics_rendition |= GR_BRIGHT;
+            graphics_rendition &= ~GR_FOREGROUND_MASK;
+            uint64_t color = args[i] - 30;
+            if (color == 9)
+                color = 7;
+            if (color == 8) {
+                // TODO Parse extended colors.
+                color = 7;
+                CZ_PANIC("todo");
+            }
+            graphics_rendition |= (color << GR_FOREGROUND_SHIFT);
+        } else if ((args[i] >= 40 && args[i] <= 49) || (args[i] >= 100 && args[i] <= 109)) {
+            // Set background color.
+            if (args[i] <= 49)
+                graphics_rendition &= ~GR_BRIGHT;
+            else
+                graphics_rendition |= GR_BRIGHT;
+            graphics_rendition &= ~GR_BACKGROUND_MASK;
+            uint64_t color = args[i] - 40;
+            if (color == 9)
+                color = 0;
+            if (color == 8) {
+                // TODO Parse extended colors.
+                color = 0;
+                CZ_PANIC("todo");
+            }
+            graphics_rendition |= (color << GR_BACKGROUND_SHIFT);
+        } else {
+            // Ignored.
+        }
+    }
+
+    return graphics_rendition;
+}
+
 /// Attempt to process an escape sequence.  Returns `true` if it
 /// was processed, `false` if we need more input to process it.
 static bool process_escape_sequence(Backlog_State* backlog, cz::Str fresh, size_t* skip) {
@@ -158,18 +228,61 @@ static bool process_escape_sequence(Backlog_State* backlog, cz::Str fresh, size_
     }
 
     if ((*text)[1] == '[') {
-        size_t it = 2;
-
         if (!ensure_char(backlog, 2, fresh, skip))
             return false;
 
         if ((*text)[2] == '?') {
-            it = 3;
-            CZ_PANIC("todo");
+            size_t it = 3;
+
+            // Parse code.
+            int32_t arg = -1;
+            if (!eat_number(backlog, &it, fresh, skip, &arg))
+                return false;
+
+            // Parse high or low flag.
+            if (!ensure_char(backlog, it, fresh, skip))
+                return false;
+            bool high = false;
+            if ((*text)[it] == 'h') {
+                high = true;
+            } else if ((*text)[it] == 'l') {
+                high = false;
+            } else {
+                append_chunk(backlog, text->slice_start(1));
+                return true;
+            }
+
+            if (arg == 12) {
+                // Start/Stop Blinking
+                (void)high;
+            } else if (arg == 25) {
+                // Show/Hide Cursor
+            } else if (arg == 1) {
+                // Enable/Disable Numlock
+            } else if (arg == 3) {
+                // Set Columns to 132/80
+            } else if (arg == 1049) {
+                // Enable/Disable Alternate Screen Buffer
+            } else {
+                append_chunk(backlog, text->slice_start(1));
+            }
+            return true;
         } else if ((*text)[2] == '!') {
-            it = 3;
-            CZ_PANIC("todo");
+            if (!ensure_char(backlog, 3, fresh, skip))
+                return false;
+
+            if ((*text)[3] == 'p') {
+                uint64_t graphics_rendition = (7 << GR_FOREGROUND_SHIFT);
+                set_graphics_rendition(backlog, graphics_rendition);
+            } else {
+                // Undo skipping the unrecognized character.
+                CZ_DEBUG_ASSERT(*skip > 0);
+                --*skip;
+                append_chunk(backlog, "[!");
+            }
+            return true;
         } else {
+            size_t it = 3;
             cz::Vector<int32_t> args = {};
             if (!parse_args(backlog, &it, fresh, skip, &args))
                 return false;
@@ -232,72 +345,8 @@ static bool process_escape_sequence(Backlog_State* backlog, cz::Str fresh, size_
             //                      how future characters are rendered)
             else if ((*text)[it] == 'm') {
                 uint64_t graphics_rendition = backlog->graphics_rendition;
-                if (args.len == 0)
-                    graphics_rendition = (7 << GR_FOREGROUND_SHIFT);
-
-                for (size_t i = 0; i < args.len; ++i) {
-                    if (args[i] == 0 || args[i] == -1) {
-                        // Reset everything.
-                        graphics_rendition = (7 << GR_FOREGROUND_SHIFT);
-                    } else if (args[i] == 1) {
-                        graphics_rendition |= GR_BOLD;
-                    } else if (args[i] == 21) {
-                        graphics_rendition &= ~GR_BOLD;
-                    } else if (args[i] == 4) {
-                        graphics_rendition |= GR_UNDERLINE;
-                    } else if (args[i] == 24) {
-                        graphics_rendition &= ~GR_UNDERLINE;
-                    } else if (args[i] == 7) {
-                        graphics_rendition |= GR_REVERSE;
-                    } else if (args[i] == 27) {
-                        graphics_rendition &= ~GR_REVERSE;
-                    } else if ((args[i] >= 30 && args[i] <= 39) ||
-                               (args[i] >= 90 && args[i] <= 99)) {
-                        // Set foreground color.
-                        if (args[i] <= 39)
-                            graphics_rendition &= ~GR_BRIGHT;
-                        else
-                            graphics_rendition |= GR_BRIGHT;
-                        graphics_rendition &= ~GR_FOREGROUND_MASK;
-                        uint64_t color = args[i] - 30;
-                        if (color == 9)
-                            color = 7;
-                        if (color == 8) {
-                            // TODO Parse extended colors.
-                            color = 7;
-                            CZ_PANIC("todo");
-                        }
-                        graphics_rendition |= (color << GR_FOREGROUND_SHIFT);
-                    } else if ((args[i] >= 40 && args[i] <= 49) ||
-                               (args[i] >= 100 && args[i] <= 109)) {
-                        // Set background color.
-                        if (args[i] <= 49)
-                            graphics_rendition &= ~GR_BRIGHT;
-                        else
-                            graphics_rendition |= GR_BRIGHT;
-                        graphics_rendition &= ~GR_BACKGROUND_MASK;
-                        uint64_t color = args[i] - 40;
-                        if (color == 9)
-                            color = 0;
-                        if (color == 8) {
-                            // TODO Parse extended colors.
-                            color = 0;
-                            CZ_PANIC("todo");
-                        }
-                        graphics_rendition |= (color << GR_BACKGROUND_SHIFT);
-                    } else {
-                        // Ignored.
-                    }
-                }
-
-                Backlog_Event event = {};
-                event.index = backlog->length;
-                event.type = BACKLOG_EVENT_SET_GRAPHIC_RENDITION;
-                event.payload = graphics_rendition;
-                backlog->events.reserve(cz::heap_allocator(), 1);
-                backlog->events.push(event);
-                backlog->graphics_rendition = graphics_rendition;
-
+                graphics_rendition = parse_graphics_rendition(args, graphics_rendition);
+                set_graphics_rendition(backlog, graphics_rendition);
                 return true;
             }
 
