@@ -1223,13 +1223,15 @@ static void expand_selection(Selection* selection,
                     break;
                 ++*inner;
             }
+            bool word_chars = false;
             while (*inner < backlog->length) {
                 if (!cz::is_alnum(backlog->get(*inner)))
                     break;
                 ++*inner;
+                word_chars = true;
             }
             // Include newline if selected.
-            if (*inner < backlog->length) {
+            if (!word_chars && *inner < backlog->length) {
                 if (backlog->get(*inner) == '\n')
                     ++*inner;
             }
