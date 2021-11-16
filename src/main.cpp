@@ -1376,6 +1376,7 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
                         if (!run_script(shell, backlog, prompt->text)) {
                             append_text(backlog, "Error: failed to execute\n");
                         }
+                        shell->selected_process = backlog->id;
                     }
                 } else {
                     if (script) {
