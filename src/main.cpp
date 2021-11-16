@@ -1420,10 +1420,13 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
                 rend->auto_page = false;
                 rend->auto_scroll = true;
                 if (shell->attached_process == -1) {
-                    for (size_t i = shell->scripts.len; i-- > 0;) {
-                        Running_Script* script = &shell->scripts[i];
-                        // TODO close stdin
-                        if (1) {
+                    // If the selected process is still running then attach to it.
+                    // Otherwise, attach to the most recently launched process.
+                    if (selected_process(shell)) {
+                        shell->attached_process = shell->selected_process;
+                    } else {
+                        for (size_t i = shell->scripts.len; i-- > 0;) {
+                            Running_Script* script = &shell->scripts[i];
                             shell->attached_process = script->id;
                             shell->selected_process = shell->attached_process;
                             prompt->history_counter = prompt->stdin_history.len;
