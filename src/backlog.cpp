@@ -335,8 +335,6 @@ int64_t append_text(Backlog_State* backlog, cz::Str text) {
     if (backlog->escape_backlog.len != 0) {
         uint64_t skip = 0;
         if (!process_escape_sequence(backlog, text, &skip)) {
-            backlog->escape_backlog.reserve(cz::heap_allocator(), text.len);
-            backlog->escape_backlog.append(text);
             return text.len;
         }
 
@@ -378,8 +376,6 @@ int64_t append_text(Backlog_State* backlog, cz::Str text) {
             cz::Str remaining = text.slice_start(chunk_len);
             uint64_t skip = 0;
             if (!process_escape_sequence(backlog, remaining, &skip)) {
-                backlog->escape_backlog.reserve(cz::heap_allocator(), remaining.len);
-                backlog->escape_backlog.append(remaining);
                 return done + remaining.len;
             }
 
