@@ -464,45 +464,57 @@ static void recognize_builtins(Running_Program* program,
         return;
     }
 
-    // Setup builtins.
-    if (parse.args[0] == "echo") {
-        program->type = Running_Program::ECHO;
-        program->v.builtin.st.echo = {};
-        program->v.builtin.st.echo.outer = 1;
-    } else if (parse.args[0] == "cat") {
-        program->type = Running_Program::CAT;
-        program->v.builtin.st.cat = {};
-        program->v.builtin.st.cat.buffer = (char*)allocator.alloc({4096, 1});
-        program->v.builtin.st.cat.outer = 0;
-    } else if (parse.args[0] == "exit") {
-        program->type = Running_Program::EXIT;
-    } else if (parse.args[0] == "return") {
-        program->type = Running_Program::RETURN;
-    } else if (parse.args[0] == "pwd") {
-        program->type = Running_Program::PWD;
-    } else if (parse.args[0] == "cd") {
-        program->type = Running_Program::CD;
-    } else if (parse.args[0] == "ls") {
-        program->type = Running_Program::LS;
-    } else if (parse.args[0] == "alias") {
-        program->type = Running_Program::ALIAS;
-    } else if (parse.args[0] == "which") {
-        program->type = Running_Program::WHICH;
-    } else if (parse.args[0] == "true") {
-        program->type = Running_Program::TRUE_;
-    } else if (parse.args[0] == "false") {
-        program->type = Running_Program::FALSE_;
-    } else if (parse.args[0] == "export") {
-        program->type = Running_Program::EXPORT;
-    } else if (parse.args[0] == "clear") {
-        program->type = Running_Program::CLEAR;
-    } else if (parse.args[0] == "." || parse.args[0] == "source") {
-        program->type = Running_Program::SOURCE;
-    } else if (parse.args[0] == "sleep") {
-        program->type = Running_Program::SLEEP;
-        program->v.builtin.st.sleep = {};
-        program->v.builtin.st.sleep.start = std::chrono::high_resolution_clock::now();
-    } else if (parse.args[0] == "configure") {
-        program->type = Running_Program::CONFIGURE;
+    // Strictly necessary builtins.
+    if (cfg.builtin_level >= 0) {
+        if (parse.args[0] == "exit") {
+            program->type = Running_Program::EXIT;
+        } else if (parse.args[0] == "return") {
+            program->type = Running_Program::RETURN;
+        } else if (parse.args[0] == "cd") {
+            program->type = Running_Program::CD;
+        } else if (parse.args[0] == "alias") {
+            program->type = Running_Program::ALIAS;
+        } else if (parse.args[0] == "export") {
+            program->type = Running_Program::EXPORT;
+        } else if (parse.args[0] == "clear") {
+            program->type = Running_Program::CLEAR;
+        } else if (parse.args[0] == "." || parse.args[0] == "source") {
+            program->type = Running_Program::SOURCE;
+        } else if (parse.args[0] == "sleep") {
+            program->type = Running_Program::SLEEP;
+            program->v.builtin.st.sleep = {};
+            program->v.builtin.st.sleep.start = std::chrono::high_resolution_clock::now();
+        } else if (parse.args[0] == "configure") {
+            program->type = Running_Program::CONFIGURE;
+        }
+    }
+
+    // Compromise builtins.
+    if (cfg.builtin_level >= 1) {
+        if (parse.args[0] == "echo") {
+            program->type = Running_Program::ECHO;
+            program->v.builtin.st.echo = {};
+            program->v.builtin.st.echo.outer = 1;
+        } else if (parse.args[0] == "pwd") {
+            program->type = Running_Program::PWD;
+        } else if (parse.args[0] == "which") {
+            program->type = Running_Program::WHICH;
+        } else if (parse.args[0] == "true") {
+            program->type = Running_Program::TRUE_;
+        } else if (parse.args[0] == "false") {
+            program->type = Running_Program::FALSE_;
+        }
+    }
+
+    // All builtins.
+    if (cfg.builtin_level >= 2) {
+        if (parse.args[0] == "cat") {
+            program->type = Running_Program::CAT;
+            program->v.builtin.st.cat = {};
+            program->v.builtin.st.cat.buffer = (char*)allocator.alloc({4096, 1});
+            program->v.builtin.st.cat.outer = 0;
+        } else if (parse.args[0] == "ls") {
+            program->type = Running_Program::LS;
+        }
     }
 }

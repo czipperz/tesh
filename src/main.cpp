@@ -1859,6 +1859,14 @@ static void load_default_configuration() {
     cfg.default_font_size = 12;
     cfg.tab_width = 8;
 
+#ifdef _WIN32
+    // Windows just doesn't have functionality we don't implement.
+    cfg.builtin_level = 2;
+#else
+    // Linux we can fall back to default implementations that better.
+    cfg.builtin_level = 1;
+#endif
+
     cfg.max_length = ((uint64_t)1 << 30);  // 1GB
 
     static SDL_Color process_colors[] = {

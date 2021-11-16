@@ -12,6 +12,9 @@ struct Config_State {
     int tab_width;
     uint64_t max_length;
 
+    /// 0 = absolute minimum, 1 = compromise, 2 = everything builtin.
+    int builtin_level;
+
     // RGB colors.
     cz::Slice<SDL_Color> process_colors;
     SDL_Color selection_bg_color;
