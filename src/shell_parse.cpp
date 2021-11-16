@@ -28,7 +28,7 @@ struct Text_Iter {
         stack.push({text, 0, alias_key});
     }
 
-    bool at_eob() const { return stack.len == 0; }
+    bool at_eob() const { return stack.len == 1 && stack[0].index == stack[0].text.len; }
 
     char get() const {
         const Text_Item* item = &stack.last();
@@ -55,6 +55,13 @@ struct Text_Iter {
         Text_Item* item = &stack.last();
         size_t pad = (stack.len > 1 ? 1 : 0);
         if (item->index + 1 < item->text.len + pad) {
+            ++item->index;
+            return;
+        }
+
+        // If we pop the stack and then something is pushed then it won't
+        // be handled properly because the bottom of the stack is special.
+        if (stack.len == 1) {
             ++item->index;
             return;
         }
