@@ -1063,8 +1063,6 @@ static bool handle_scroll_commands(Shell_State* shell,
                                    Render_State* rend,
                                    uint16_t mod,
                                    SDL_Keycode key) {
-    bool set_selected_process = true;
-
     if ((mod == 0 && key == SDLK_PAGEDOWN) || (mod == KMOD_CTRL && key == SDLK_v)) {
         int lines = cz::max(rend->window_rows, 6) - 3;
         scroll_down(rend, backlogs, lines);
@@ -1087,7 +1085,6 @@ static bool handle_scroll_commands(Shell_State* shell,
         if (backlogs.len > 0)
             rend->backlog_start.outer = backlogs.len - 1;
         shell->selected_process = rend->backlog_start.outer;
-        set_selected_process = false;
     } else if (mod == (KMOD_CTRL | KMOD_ALT) && key == SDLK_b) {
         size_t outer = rend->backlog_start.outer;
         size_t inner = rend->backlog_start.inner;
@@ -1097,7 +1094,6 @@ static bool handle_scroll_commands(Shell_State* shell,
         else if (outer > 0)
             rend->backlog_start.outer = outer - 1;
         shell->selected_process = rend->backlog_start.outer;
-        set_selected_process = false;
     } else if (mod == (KMOD_CTRL | KMOD_ALT) && key == SDLK_f) {
         size_t outer = rend->backlog_start.outer;
         rend->backlog_start = {};
@@ -1105,11 +1101,9 @@ static bool handle_scroll_commands(Shell_State* shell,
             outer++;
         rend->backlog_start.outer = outer;
         shell->selected_process = rend->backlog_start.outer;
-        set_selected_process = false;
     } else if (mod == 0 && key == SDLK_TAB && shell->selected_process != -1) {
         Backlog_State* backlog = backlogs[shell->selected_process];
         backlog->render_collapsed = !backlog->render_collapsed;
-        set_selected_process = false;
         // If we're scrolled inside the process then reset to the top.
         if (backlog->render_collapsed) {
             if (rend->backlog_start.outer == shell->selected_process) {
@@ -1120,9 +1114,30 @@ static bool handle_scroll_commands(Shell_State* shell,
         return false;
     }
 
+    // Note(chris.gregory): I'm not really sure why I detached or deselected on
+    // scroll before but it might be useful so want to remind myself.
+#if 0
     shell->attached_process = -1;
-    if (set_selected_process)
+
+    if (shell->selected_process < rend->backlog_start.outer) {
+        // Above the screen so deselect.
         shell->selected_process = -1;
+    } else if (rend->window_rows >= 3) {
+        Visual_Point backup = rend->backlog_start;
+        scroll_down(rend, backlogs, rend->window_rows - 3);
+
+        if (shell->selected_process >= rend->backlog_start.outer) {
+            // Above the screen so deselect.
+            shell->selected_process = -1;
+        }
+
+        rend->backlog_start = backup;
+    } else if (shell->selected_process < rend->backlog_start.outer) {
+        // Above the screen so deselect.
+        shell->selected_process = -1;
+    }
+#endif
+
     rend->auto_page = false;
     rend->auto_scroll = false;
     rend->complete_redraw = true;
