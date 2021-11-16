@@ -320,7 +320,7 @@ bool tick_program(Shell_State* shell,
 
     case Running_Program::EXPORT: {
         auto& builtin = program->v.builtin;
-        for (size_t i = 2; i < builtin.args.len; ++i) {
+        for (size_t i = 1; i < builtin.args.len; ++i) {
             cz::Str arg = builtin.args[i];
             cz::Str key = arg, value;
             if (arg.split_excluding('=', &key, &value)) {
