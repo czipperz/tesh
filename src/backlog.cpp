@@ -142,6 +142,29 @@ static void set_graphics_rendition(Backlog_State* backlog, uint64_t graphics_ren
     backlog->graphics_rendition = graphics_rendition;
 }
 
+static bool parse_extended_color(uint64_t* color, cz::Slice<int32_t> args, size_t* i) {
+    if (*i + 2 >= args.len) {
+        *i = args.len - 1;
+        return false;
+    }
+
+    if (args[*i + 1] == 5) {
+        if (args[*i + 2] == -1) {
+            *i += 2;
+            return false;
+        }
+        *color = args[*i + 2];
+        *i += 2;
+        return true;
+    } else if (args[*i + 1] == 2) {
+        // r = i + 2
+        // g = i + 3
+        // b = i + 4
+        *i += 4;
+    }
+    return false;
+}
+
 static uint64_t parse_graphics_rendition(cz::Slice<int32_t> args, uint64_t graphics_rendition) {
     if (args.len == 0)
         graphics_rendition = (7 << GR_FOREGROUND_SHIFT);
@@ -173,9 +196,8 @@ static uint64_t parse_graphics_rendition(cz::Slice<int32_t> args, uint64_t graph
             if (color == 9)
                 color = 7;
             if (color == 8) {
-                // TODO Parse extended colors.
-                color = 7;
-                CZ_PANIC("todo");
+                if (!parse_extended_color(&color, args, &i))
+                    color = 7;
             }
             graphics_rendition |= (color << GR_FOREGROUND_SHIFT);
         } else if ((args[i] >= 40 && args[i] <= 49) || (args[i] >= 100 && args[i] <= 109)) {
@@ -189,9 +211,8 @@ static uint64_t parse_graphics_rendition(cz::Slice<int32_t> args, uint64_t graph
             if (color == 9)
                 color = 0;
             if (color == 8) {
-                // TODO Parse extended colors.
-                color = 0;
-                CZ_PANIC("todo");
+                if (!parse_extended_color(&color, args, &i))
+                    color = 0;
             }
             graphics_rendition |= (color << GR_BACKGROUND_SHIFT);
         } else {
