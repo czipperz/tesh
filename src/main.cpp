@@ -363,6 +363,10 @@ static void render_prompt(SDL_Surface* window_surface,
 }
 
 static void ensure_prompt_on_screen(Render_State* rend, cz::Slice<Backlog_State*> backlogs);
+static void ensure_end_of_selected_process_on_screen(Render_State* rend,
+                                                     cz::Slice<Backlog_State*> backlogs,
+                                                     uint64_t selected_process);
+
 static void auto_scroll_start_paging(Render_State* rend, cz::Slice<Backlog_State*> backlogs) {
     if (rend->window_rows <= 3)
         return;
@@ -421,8 +425,7 @@ static void render_frame(SDL_Window* window,
     if (rend->auto_page)
         auto_scroll_start_paging(rend, backlogs);
     if (rend->auto_scroll)
-        ensure_prompt_on_screen(rend, backlogs);
-
+        ensure_end_of_selected_process_on_screen(rend, backlogs, shell->selected_process);
     if (shell->attached_process != -1)
         ensure_prompt_on_screen(rend, backlogs);
 
@@ -1075,10 +1078,7 @@ static void ensure_selected_process_on_screen(Render_State* rend,
     } else {
         // Go to the earliest point where the entire process / prompt is visible.
         Visual_Point backup = rend->backlog_start;
-        rend->backlog_start = {};
-        rend->backlog_start.outer = (selected_process == -1 ? backlogs.len : selected_process + 1);
-        int lines = cz::max(rend->window_rows, 3) - 3;
-        scroll_up(rend, backlogs, lines);
+        ensure_end_of_selected_process_on_screen(rend, backlogs, selected_process);
 
         if ((rend->backlog_start.outer > backup.outer) ||
             (rend->backlog_start.outer == backup.outer &&
@@ -1098,6 +1098,15 @@ static void ensure_selected_process_on_screen(Render_State* rend,
             rend->backlog_start.outer = selected_process;
         }
     }
+}
+
+static void ensure_end_of_selected_process_on_screen(Render_State* rend,
+                                                     cz::Slice<Backlog_State*> backlogs,
+                                                     uint64_t selected_process) {
+    rend->backlog_start = {};
+    rend->backlog_start.outer = (selected_process == -1 ? backlogs.len : selected_process + 1);
+    int lines = cz::max(rend->window_rows, 6) - 3;
+    scroll_up(rend, backlogs, lines);
 }
 
 static bool handle_scroll_commands(Shell_State* shell,
@@ -1131,11 +1140,7 @@ static bool handle_scroll_commands(Shell_State* shell,
             (shell->selected_process == -1 ? backlogs.len : shell->selected_process);
     } else if (mod == KMOD_ALT && key == SDLK_GREATER) {
         // Goto end of selected process.
-        rend->backlog_start = {};
-        rend->backlog_start.outer =
-            (shell->selected_process == -1 ? backlogs.len : shell->selected_process + 1);
-        int lines = cz::max(rend->window_rows, 6) - 3;
-        scroll_up(rend, backlogs, lines);
+        ensure_end_of_selected_process_on_screen(rend, backlogs, shell->selected_process);
         auto_scroll = true;
     } else if (mod == (KMOD_CTRL | KMOD_ALT) && key == SDLK_b) {
         // Select the process before the currently selected
