@@ -365,7 +365,8 @@ static void render_prompt(SDL_Surface* window_surface,
 static void ensure_prompt_on_screen(Render_State* rend, cz::Slice<Backlog_State*> backlogs);
 static void ensure_end_of_selected_process_on_screen(Render_State* rend,
                                                      cz::Slice<Backlog_State*> backlogs,
-                                                     uint64_t selected_process);
+                                                     uint64_t selected_process,
+                                                     bool gotostart);
 
 static void auto_scroll_start_paging(Render_State* rend, cz::Slice<Backlog_State*> backlogs) {
     if (rend->window_rows <= 3)
@@ -425,7 +426,7 @@ static void render_frame(SDL_Window* window,
     if (rend->auto_page)
         auto_scroll_start_paging(rend, backlogs);
     if (rend->auto_scroll)
-        ensure_end_of_selected_process_on_screen(rend, backlogs, shell->selected_process);
+        ensure_end_of_selected_process_on_screen(rend, backlogs, shell->selected_process, false);
     if (shell->attached_process != -1)
         ensure_prompt_on_screen(rend, backlogs);
 
@@ -1084,37 +1085,43 @@ static void ensure_selected_process_on_screen(Render_State* rend,
         rend->backlog_start = {};
         rend->backlog_start.outer = selected_process;
     } else {
-        // Go to the earliest point where the entire process / prompt is visible.
-        Visual_Point backup = rend->backlog_start;
-        ensure_end_of_selected_process_on_screen(rend, backlogs, selected_process);
-
-        if ((rend->backlog_start.outer > backup.outer) ||
-            (rend->backlog_start.outer == backup.outer &&
-             rend->backlog_start.inner > backup.inner)) {
-            if (rend->backlog_start.outer ==
-                (selected_process == -1 ? backlogs.len : selected_process)) {
-                // The process is really long so go to the start instead.
-                rend->backlog_start.inner = 0;
-            }
-        } else {
-            rend->backlog_start = backup;
-        }
-
-        // If offscreen then scroll up to fit it.
-        if (selected_process < rend->backlog_start.outer) {
-            rend->backlog_start = {};
-            rend->backlog_start.outer = selected_process;
-        }
+        ensure_end_of_selected_process_on_screen(rend, backlogs, selected_process, true);
     }
 }
 
-static void ensure_end_of_selected_process_on_screen(Render_State* rend,
-                                                     cz::Slice<Backlog_State*> backlogs,
-                                                     uint64_t selected_process) {
+static void scroll_to_end_of_selected_process(Render_State* rend,
+                                              cz::Slice<Backlog_State*> backlogs,
+                                              uint64_t selected_process) {
     rend->backlog_start = {};
     rend->backlog_start.outer = (selected_process == -1 ? backlogs.len : selected_process + 1);
     int lines = cz::max(rend->window_rows, 6) - 3;
     scroll_up(rend, backlogs, lines);
+}
+
+static void ensure_end_of_selected_process_on_screen(Render_State* rend,
+                                                     cz::Slice<Backlog_State*> backlogs,
+                                                     uint64_t selected_process,
+                                                     bool gotostart) {
+    // Go to the earliest point where the entire process / prompt is visible.
+    Visual_Point backup = rend->backlog_start;
+    scroll_to_end_of_selected_process(rend, backlogs, selected_process);
+
+    if ((rend->backlog_start.outer > backup.outer) ||
+        (rend->backlog_start.outer == backup.outer && rend->backlog_start.inner > backup.inner)) {
+        if (gotostart && rend->backlog_start.outer ==
+                             (selected_process == -1 ? backlogs.len : selected_process)) {
+            // The process is really long so go to the start instead.
+            rend->backlog_start.inner = 0;
+        }
+    } else {
+        rend->backlog_start = backup;
+    }
+
+    // If offscreen then scroll up to fit it.
+    if (selected_process < rend->backlog_start.outer) {
+        rend->backlog_start = {};
+        rend->backlog_start.outer = selected_process;
+    }
 }
 
 static bool handle_scroll_commands(Shell_State* shell,
@@ -1148,7 +1155,7 @@ static bool handle_scroll_commands(Shell_State* shell,
             (shell->selected_process == -1 ? backlogs.len : shell->selected_process);
     } else if (mod == KMOD_ALT && key == SDLK_GREATER) {
         // Goto end of selected process.
-        ensure_end_of_selected_process_on_screen(rend, backlogs, shell->selected_process);
+        scroll_to_end_of_selected_process(rend, backlogs, shell->selected_process);
         auto_scroll = true;
     } else if (mod == (KMOD_CTRL | KMOD_ALT) && key == SDLK_b) {
         // Select the process before the currently selected
