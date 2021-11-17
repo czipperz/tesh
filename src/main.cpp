@@ -1066,6 +1066,40 @@ static bool handle_prompt_manipulation_commands(Shell_State* shell,
     return true;
 }
 
+static void ensure_selected_process_on_screen(Render_State* rend,
+                                              cz::Slice<Backlog_State*> backlogs,
+                                              uint64_t selected_process) {
+    if (selected_process <= rend->backlog_start.outer) {
+        rend->backlog_start = {};
+        rend->backlog_start.outer = selected_process;
+    } else {
+        // Go to the earliest point where the entire process / prompt is visible.
+        Visual_Point backup = rend->backlog_start;
+        rend->backlog_start = {};
+        rend->backlog_start.outer = (selected_process == -1 ? backlogs.len : selected_process + 1);
+        int lines = cz::max(rend->window_rows, 3) - 3;
+        scroll_up(rend, backlogs, lines);
+
+        if ((rend->backlog_start.outer > backup.outer) ||
+            (rend->backlog_start.outer == backup.outer &&
+             rend->backlog_start.inner > backup.inner)) {
+            if (rend->backlog_start.outer ==
+                (selected_process == -1 ? backlogs.len : selected_process)) {
+                // The process is really long so go to the start instead.
+                rend->backlog_start.inner = 0;
+            }
+        } else {
+            rend->backlog_start = backup;
+        }
+
+        // If offscreen then scroll up to fit it.
+        if (selected_process < rend->backlog_start.outer) {
+            rend->backlog_start = {};
+            rend->backlog_start.outer = selected_process;
+        }
+    }
+}
+
 static bool handle_scroll_commands(Shell_State* shell,
                                    Prompt_State* prompt,
                                    cz::Slice<Backlog_State*> backlogs,
@@ -1111,53 +1145,18 @@ static bool handle_scroll_commands(Shell_State* shell,
         } else if (shell->selected_process > 0) {
             --shell->selected_process;
         }
-
-        // If offscreen then scroll up to fit it.
-        if (shell->selected_process <= rend->backlog_start.outer) {
-            rend->backlog_start = {};
-            rend->backlog_start.outer = shell->selected_process;
-        }
+        ensure_selected_process_on_screen(rend, backlogs, shell->selected_process);
     } else if (mod == (KMOD_CTRL | KMOD_ALT) && key == SDLK_f) {
         // Select the next process, or the prompt if this is the last process.
         if (shell->selected_process != -1 && shell->selected_process + 1 < backlogs.len)
             ++shell->selected_process;
         else
             shell->selected_process = -1;
-
-        // Go to the earliest point where the entire process / prompt is visible.
-        Visual_Point backup = rend->backlog_start;
-        rend->backlog_start = {};
-        rend->backlog_start.outer =
-            (shell->selected_process == -1 ? backlogs.len : shell->selected_process + 1);
-        int lines = cz::max(rend->window_rows, 3) - 3;
-        scroll_up(rend, backlogs, lines);
-
-        if ((rend->backlog_start.outer > backup.outer) ||
-            (rend->backlog_start.outer == backup.outer &&
-             rend->backlog_start.inner > backup.inner)) {
-            if (rend->backlog_start.outer ==
-                (shell->selected_process == -1 ? backlogs.len : shell->selected_process)) {
-                // The process is really long so go to the start instead.
-                rend->backlog_start.inner = 0;
-            }
-        } else {
-            rend->backlog_start = backup;
-        }
-
-        // If offscreen then scroll up to fit it.
-        if (shell->selected_process < rend->backlog_start.outer) {
-            rend->backlog_start = {};
-            rend->backlog_start.outer = shell->selected_process;
-        }
+        ensure_selected_process_on_screen(rend, backlogs, shell->selected_process);
     } else if (mod == 0 && key == SDLK_TAB && shell->selected_process != -1) {
         Backlog_State* backlog = backlogs[shell->selected_process];
         backlog->render_collapsed = !backlog->render_collapsed;
-        // If we're scrolled inside the process then reset to the top.
-        if (backlog->render_collapsed) {
-            if (rend->backlog_start.outer == shell->selected_process) {
-                rend->backlog_start.inner = 0;
-            }
-        }
+        ensure_selected_process_on_screen(rend, backlogs, shell->selected_process);
     } else {
         return false;
     }
