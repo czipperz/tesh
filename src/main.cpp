@@ -989,6 +989,14 @@ static bool handle_prompt_manipulation_commands(Shell_State* shell,
         size_t end = prompt->cursor;
         prompt->cursor = 0;
         prompt->text.remove_range(prompt->cursor, end);
+    } else if (mod == KMOD_CTRL && key == SDLK_t) {
+        if (prompt->cursor < prompt->text.len && prompt->cursor > 0) {
+            char ch1 = prompt->text[prompt->cursor - 1];
+            char ch2 = prompt->text[prompt->cursor];
+            prompt->text[prompt->cursor - 1] = ch2;
+            prompt->text[prompt->cursor] = ch1;
+            prompt->cursor++;
+        }
     } else if ((mod == 0 && key == SDLK_LEFT) || (mod == KMOD_CTRL && key == SDLK_b)) {
         if (prompt->cursor > 0) {
             --prompt->cursor;
