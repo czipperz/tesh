@@ -765,87 +765,108 @@ static void scroll_down(Render_State* rend, cz::Slice<Backlog_State*> backlogs, 
 }
 
 static void scroll_up(Render_State* rend, cz::Slice<Backlog_State*> backlogs, int lines) {
-    Visual_Point* line_start = &rend->backlog_start;
-    Backlog_State* backlog = backlogs[line_start->outer];
-    uint64_t cursor = line_start->inner;
-    uint64_t line_chars = 0;
-    uint64_t backwards_tab = 0;
-    // We need to retreat one character at the start.  This either just
-    // decrements the cursor or goes to the end of the previous backlog.
-    bool first = true;
-    while (lines > 0) {
-        if (cursor == 0) {
-            if (!first) {
-                line_start->inner = cursor;
-                --lines;
-                line_chars = 0;
-                backwards_tab = 0;
-                if (lines == 0)
-                    break;
+    uint64_t* visual_line_starts = temp_allocator.alloc<uint64_t>(lines);
+
+    Visual_Point* point = &rend->backlog_start;
+
+    // If the prompt is at the top of the screen then reset the
+    // point to the point where the prompt is in the last backlog.
+    if (point->outer == backlogs.len) {
+        if (point->outer == 0)
+            return;
+        point->outer--;
+        Backlog_State* backlog = backlogs[point->outer];
+        point->inner = backlog->length + 1;
+        if (backlog->length > 0 && backlog->get(backlog->length - 1) != '\n')
+            point->inner++;
+    }
+
+    while (1) {
+        Backlog_State* backlog = backlogs[point->outer];
+        uint64_t cursor = point->inner;
+        if (cursor >= backlog->length + 1) {
+            cursor--;
+            lines--;
+        }
+        if (cursor >= backlog->length && backlog->length > 0 &&
+            backlog->get(backlog->length - 1) != '\n') {
+            cursor--;
+            lines--;
+        }
+
+        while (lines > 0 && cursor > 0) {
+            size_t line_index;
+            if (cz::binary_search(backlog->lines.as_slice(), cursor - 1, &line_index))
+                ++line_index;  // Go after the match.
+            uint64_t line_start = (line_index == 0 ? 0 : backlog->lines[line_index - 1]);
+
+            size_t vlsi = 0;
+            size_t visual_line_count = 0;
+            {
+                // First visual line start is at the physical line start.
+                visual_line_starts[vlsi++] = line_start;
+                if (vlsi == lines)
+                    vlsi = 0;
+                visual_line_count++;
             }
 
-            if (line_start->outer == 0)
+            uint64_t visual_column = 0;
+            uint64_t actual_column = 0;
+            for (uint64_t iter = line_start;;) {
+                // Advance to next character.
+                char seq[5] = {backlog->get(iter)};
+                iter += make_backlog_code_point(seq, backlog, iter);
+                if (iter >= cursor)
+                    break;
+
+                // Advance columns.
+                uint64_t delta = 1;
+                if (seq[0] == '\t') {
+                    delta = cfg.tab_width - (actual_column % cfg.tab_width);
+                }
+                visual_column += delta;
+                actual_column += delta;
+
+                // If trip line boundary then record it.
+                if (visual_column >= rend->window_cols) {
+                    visual_column -= rend->window_cols;
+                    visual_line_starts[vlsi++] = iter;
+                    if (vlsi == lines)
+                        vlsi = 0;
+                    visual_line_count++;
+                }
+            }
+
+            if (lines <= visual_line_count) {
+                cursor = visual_line_starts[vlsi];
+                lines = 0;
+                break;
+            }
+            lines -= visual_line_count;
+
+            if (line_start == 0)
                 break;
 
-            line_start->outer--;
-            backlog = backlogs[line_start->outer];
-            cursor = render_length(backlog);
-
-            if (cursor == 0) {
-                // Empty backlog is already handled.
-                continue;
-            }
-
-            if (backlog->get(cursor - 1) != '\n') {
-                cursor++;
-            }
-
-            if (first) {
-                first = false;
-                continue;
-            }
+            cursor = line_start;  // put cursor after the '\n'
         }
 
-        cursor--;
-
-        if (first) {
-            first = false;
-            continue;
+        if (lines == 0) {
+            point->inner = cursor;
+            // TODO set column
+            break;
         }
 
-        char c = (cursor >= backlog->length ? '\n' : backlog->get(cursor));
-        if (backwards_tab == 0) {
-            line_chars++;
-        } else {
-            backwards_tab--;
-        }
-
-        if (c == '\n') {
-            line_start->inner = cursor + 1;
-            --lines;
-            line_chars = 0;
-            backwards_tab = 0;
-        } else if (c == '\t') {
-            line_chars--;
-            if (line_chars + (8 - (line_chars % 8)) > rend->window_cols) {
-                ++cursor;  // Don't consume the tab, it was actually on the previous line
-                --lines;
-                line_chars = 0;
-                backwards_tab = 0;
-                continue;
-            }
-            backwards_tab = (8 - (line_chars % 8));
-            line_chars += backwards_tab;
-        }
-        if (line_chars == rend->window_cols) {
-            line_start->inner = cursor + 1;
-            --lines;
-            line_chars = 0;
-            backwards_tab = 0;
-        }
+        if (point->outer == 0)
+            break;
+        point->outer--;
+        backlog = backlogs[point->outer];
+        point->inner = backlog->length + 1;
+        if (backlog->length > 0 && backlog->get(backlog->length - 1) != '\n')
+            point->inner++;
     }
-    line_start->y = 0;
-    line_start->x = 0;
+
+    point->y = 0;
+    point->x = 0;
 }
 
 void clear_screen(Render_State* rend, Shell_State* shell, cz::Slice<Backlog_State*> backlogs) {
