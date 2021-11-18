@@ -64,24 +64,6 @@ Error start_execute_script(Shell_State* shell,
     if (!create_pseudo_terminal(&running.tty, shell->width, shell->height))
         return Error_IO;
 
-#if 0
-    if (!cz::create_process_input_pipe(&running.script_in, &running.in))
-        return Error_IO;
-    if (!cz::create_process_output_pipe(&running.script_out, &running.out)) {
-        error = Error_IO;
-        goto cleanup1;
-    }
-
-    if (!running.in.set_non_blocking()) {
-        error = Error_IO;
-        goto cleanup2;
-    }
-    if (!running.out.set_non_blocking()) {
-        error = Error_IO;
-        goto cleanup2;
-    }
-#endif
-
     error = start_execute_line(shell, backlog, &running, parse.first, /*background=*/false);
     if (error != Error_Success) {
         destroy_pseudo_terminal(&running.tty);

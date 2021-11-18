@@ -1181,30 +1181,6 @@ static bool handle_scroll_commands(Shell_State* shell,
         return false;
     }
 
-    // Note(chris.gregory): I'm not really sure why I detached or deselected on
-    // scroll before but it might be useful so want to remind myself.
-#if 0
-    shell->attached_process = -1;
-
-    if (shell->selected_process < rend->backlog_start.outer) {
-        // Above the screen so deselect.
-        shell->selected_process = -1;
-    } else if (rend->window_rows >= 3) {
-        Visual_Point backup = rend->backlog_start;
-        scroll_down(rend, backlogs, rend->window_rows - 3);
-
-        if (shell->selected_process >= rend->backlog_start.outer) {
-            // Above the screen so deselect.
-            shell->selected_process = -1;
-        }
-
-        rend->backlog_start = backup;
-    } else if (shell->selected_process < rend->backlog_start.outer) {
-        // Above the screen so deselect.
-        shell->selected_process = -1;
-    }
-#endif
-
     rend->auto_page = false;
     rend->auto_scroll = auto_scroll;
     rend->complete_redraw = true;
@@ -2054,14 +2030,6 @@ int actual_main(int argc, char** argv) {
     rend.font_height = TTF_FontLineSkip(rend.font);
     rend.font_width = 10;
     TTF_GlyphMetrics(rend.font, ' ', nullptr, nullptr, nullptr, nullptr, &rend.font_width);
-
-#if 0
-    rend.backlog_fg_color = {0xdd, 0xdd, 0xdd, 0xff};
-    rend.prompt_fg_color = {0x77, 0xf9, 0xff, 0xff};
-    rend.info_fg_color = {0xff, 0x44, 0xff, 0xff};
-    rend.selection_fg_color = {0xff, 0xff, 0xff, 0xff};
-    rend.selection_bg_color = {0x66, 0x00, 0x66, 0xff};
-#endif
 
     {
         int w, h;
