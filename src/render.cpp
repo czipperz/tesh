@@ -165,6 +165,7 @@ bool render_code_point(SDL_Surface* window_surface,
     SDL_Rect rect = {point->x * rend->font_width, point->y * rend->font_height, 0, 0};
     uint64_t old_y = point->y;
     int width = coord_trans(point, rend->window_cols, seq[0]);
+    point->inner += strlen(seq);
 
     if (point->y != old_y) {
         rect.w = window_surface->w - rect.x;

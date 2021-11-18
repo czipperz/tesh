@@ -134,6 +134,21 @@ static size_t make_string_code_point(char sequence[5], cz::Str info, size_t star
     return width;
 }
 
+static size_t make_backlog_code_point(char sequence[5], Backlog_State* backlog, size_t start) {
+    size_t width = cz::min(unicode::utf8_width(sequence[0]), backlog->length - start);
+    for (size_t off = 1; off < width; ++off) {
+        char ch = backlog->get(start + off);
+        if (!unicode::utf8_is_continuation(ch)) {
+            // Invalid utf8 so treat the char as a single byte.
+            width = 1;
+            memset(sequence + 1, 0, 4);
+            break;
+        }
+        sequence[off] = ch;
+    }
+    return width;
+}
+
 static void render_string(SDL_Surface* window_surface,
                           Render_State* rend,
                           Visual_Point* info_start,
@@ -242,18 +257,7 @@ static bool render_backlog(SDL_Surface* window_surface,
 
         // Get the chars that compose this code point.
         char seq[5] = {backlog->get(i)};
-        size_t width = cz::min(unicode::utf8_width(seq[0]), backlog->length - i);
-        for (size_t o = 1; o < width; ++o) {
-            char ch = backlog->get(i + o);
-            if (!unicode::utf8_is_continuation(ch)) {
-                // Invalid utf8 so treat the char as a single byte.
-                width = 1;
-                memset(&seq[1], 0, sizeof(seq) - 1);
-                break;
-            }
-            seq[o] = ch;
-        }
-        i += width;
+        i += make_backlog_code_point(seq, backlog, i);
 
         if (!render_code_point(window_surface, rend, point, background, fg_color, seq, true))
             break;
@@ -738,8 +742,11 @@ static void scroll_down1(Render_State* rend, cz::Slice<Backlog_State*> backlogs,
             }
 
             Visual_Point sp = *start;
-            char c = backlog->get(start->inner);
-            coord_trans(start, rend->window_cols, c);
+
+            char seq[5] = {backlog->get(start->inner)};
+            make_backlog_code_point(seq, backlog, start->inner);
+            coord_trans(start, rend->window_cols, seq[0]);
+
             if (start->y >= desired_y) {
                 if (start->x > 0) {
                     *start = sp;
