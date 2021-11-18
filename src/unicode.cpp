@@ -40,22 +40,22 @@ uint32_t utf8_code_point(const uint8_t* seq) {
     switch (len) {
     case 1:
         // Either 1 byte sequence: 0xxxxxxx or garbage byte.
-        return seq[0];
+        return (uint32_t)seq[0];
     case 2:
         // 2 byte sequence: 110xxxxx 10xxxxxx
-        return ((seq[0] & 0x1f) << 6) |  //
-               ((seq[1] & 0x3f));
+        return (((uint32_t)seq[0] & 0x1f) << 6) |  //
+               (((uint32_t)seq[1] & 0x3f));
     case 3:
         // 3 byte sequence: 1110xxxx 10xxxxxx 10xxxxxx
-        return ((seq[0] & 0x0f) << 12) |  //
-               ((seq[1] & 0x3f) << 6) |   //
-               ((seq[2] & 0x3f));
+        return (((uint32_t)seq[0] & 0x0f) << 12) |  //
+               (((uint32_t)seq[1] & 0x3f) << 6) |   //
+               (((uint32_t)seq[2] & 0x3f));
     case 4:
         // 4 byte sequence: 11110xxx 10xxxxxx 10xxxxxx 10xxxxxx
-        return ((seq[0] & 0x07) << 18) |  //
-               ((seq[1] & 0x3f) << 12) |  //
-               ((seq[2] & 0x3f) << 6) |   //
-               ((seq[3] & 0x3f));
+        return (((uint32_t)seq[0] & 0x07) << 18) |  //
+               (((uint32_t)seq[1] & 0x3f) << 12) |  //
+               (((uint32_t)seq[2] & 0x3f) << 6) |   //
+               (((uint32_t)seq[3] & 0x3f));
     default:
         CZ_PANIC("unreachable");
     }
