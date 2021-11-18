@@ -746,6 +746,7 @@ static void scroll_down1(Render_State* rend, cz::Slice<Backlog_State*> backlogs,
             char seq[5] = {backlog->get(start->inner)};
             make_backlog_code_point(seq, backlog, start->inner);
             coord_trans(start, rend->window_cols, seq[0]);
+            start->inner += strlen(seq) - 1;
 
             if (start->y >= desired_y) {
                 if (start->x > 0) {
