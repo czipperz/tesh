@@ -1280,6 +1280,55 @@ static void append_piece(cz::String* clip,
     *off += part.len;
 }
 
+static void set_clipboard_contents_to_selection(Render_State* rend,
+                                                Shell_State* shell,
+                                                Prompt_State* prompt,
+                                                cz::Slice<Backlog_State*> backlogs) {
+    cz::String clip = {};
+    CZ_DEFER(clip.drop(temp_allocator));
+    for (size_t outer = rend->selection.start.outer; outer <= rend->selection.end.outer; ++outer) {
+        if (outer - 1 < backlogs.len) {
+            Backlog_State* backlog = backlogs.get(outer - 1);
+
+            size_t inner_start = 0;
+            size_t inner_end = backlog->length;
+            if (outer == rend->selection.start.outer)
+                inner_start = rend->selection.start.inner;
+            if (outer == rend->selection.end.outer)
+                inner_end = rend->selection.end.inner;
+
+            clip.reserve(temp_allocator, inner_end - inner_start + 2);
+
+            // TODO: make this append a bucket at a time
+            for (size_t inner = inner_start; inner < inner_end; ++inner) {
+                clip.push(backlog->get(inner));
+            }
+
+            if (inner_end >= backlog->length) {
+                clip.reserve(temp_allocator, inner_end + 1 - backlog->length + 1);
+                for (size_t i = backlog->length; i <= inner_end; ++i)
+                    clip.push('\n');
+            } else
+                clip.push(backlog->get(inner_end));
+        } else {
+            size_t inner_start = 0;
+            size_t inner_end = shell->working_directory.len + prompt->prefix.len + prompt->text.len;
+            if (outer == rend->selection.start.outer)
+                inner_start = rend->selection.start.inner;
+            if (outer == rend->selection.end.outer)
+                inner_end = rend->selection.end.inner;
+
+            clip.reserve(temp_allocator, inner_end - inner_start + 2);
+            size_t off = 0;
+            append_piece(&clip, &off, inner_start, inner_end, shell->working_directory);
+            append_piece(&clip, &off, inner_start, inner_end, prompt->prefix);
+            append_piece(&clip, &off, inner_start, inner_end, prompt->text);
+        }
+    }
+    clip.null_terminate();
+    (void)SDL_SetClipboardText(clip.buffer);
+}
+
 static void expand_selection(Selection* selection,
                              Shell_State* shell,
                              Prompt_State* prompt,
@@ -1603,53 +1652,7 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
                     rend->selection.type = SELECT_DISABLED;
                     rend->complete_redraw = true;
                     ++num_events;
-
-                    cz::String clip = {};
-                    CZ_DEFER(clip.drop(temp_allocator));
-                    for (size_t outer = rend->selection.start.outer;
-                         outer <= rend->selection.end.outer; ++outer) {
-                        if (outer - 1 < backlogs->len) {
-                            Backlog_State* backlog = backlogs->get(outer - 1);
-
-                            size_t inner_start = 0;
-                            size_t inner_end = backlog->length;
-                            if (outer == rend->selection.start.outer)
-                                inner_start = rend->selection.start.inner;
-                            if (outer == rend->selection.end.outer)
-                                inner_end = rend->selection.end.inner;
-
-                            clip.reserve(temp_allocator, inner_end - inner_start + 2);
-
-                            // TODO: make this append a bucket at a time
-                            for (size_t inner = inner_start; inner < inner_end; ++inner) {
-                                clip.push(backlog->get(inner));
-                            }
-
-                            if (inner_end >= backlog->length) {
-                                clip.reserve(temp_allocator, inner_end + 1 - backlog->length + 1);
-                                for (size_t i = backlog->length; i <= inner_end; ++i)
-                                    clip.push('\n');
-                            } else
-                                clip.push(backlog->get(inner_end));
-                        } else {
-                            size_t inner_start = 0;
-                            size_t inner_end = shell->working_directory.len + prompt->prefix.len +
-                                               prompt->text.len;
-                            if (outer == rend->selection.start.outer)
-                                inner_start = rend->selection.start.inner;
-                            if (outer == rend->selection.end.outer)
-                                inner_end = rend->selection.end.inner;
-
-                            clip.reserve(temp_allocator, inner_end - inner_start + 2);
-                            size_t off = 0;
-                            append_piece(&clip, &off, inner_start, inner_end,
-                                         shell->working_directory);
-                            append_piece(&clip, &off, inner_start, inner_end, prompt->prefix);
-                            append_piece(&clip, &off, inner_start, inner_end, prompt->text);
-                        }
-                    }
-                    clip.null_terminate();
-                    (void)SDL_SetClipboardText(clip.buffer);
+                    set_clipboard_contents_to_selection(rend, shell, prompt, *backlogs);
                 }
             }
 
@@ -1777,6 +1780,9 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
             if (event.button.button == SDL_BUTTON_LEFT) {
                 if (rend->selection.type == SELECT_REGION) {
                     rend->selection.type = SELECT_FINISHED;
+                    if (cfg.on_select_auto_copy) {
+                        set_clipboard_contents_to_selection(rend, shell, prompt, *backlogs);
+                    }
                 } else {
                     rend->selection.type = SELECT_DISABLED;
                 }
@@ -1920,6 +1926,8 @@ static void load_default_configuration() {
     cfg.on_spawn_attach = false;
     cfg.on_spawn_auto_page = true;
     cfg.on_spawn_auto_scroll = false;
+
+    cfg.on_select_auto_copy = true;
 
 #ifdef _WIN32
     cfg.font_path = "C:/Windows/Fonts/MesloLGM-Regular.ttf";

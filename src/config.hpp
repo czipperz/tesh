@@ -7,6 +7,7 @@ struct Config_State {
     bool on_spawn_attach;
     bool on_spawn_auto_page;
     bool on_spawn_auto_scroll;
+    bool on_select_auto_copy;
     const char* font_path;
     int default_font_size;
     int tab_width;
