@@ -34,7 +34,10 @@ struct Selection {
     bool expand_line : 1;
 };
 
-typedef SDL_Surface* Surface_Cache[256];
+struct Surface_Cache {
+    cz::Vector<uint32_t> code_points;
+    cz::Vector<SDL_Surface*> surfaces;
+};
 
 struct Render_State {
     TTF_Font* font;
@@ -69,11 +72,11 @@ TTF_Font* open_font(const char* path, int font_size);
 
 int coord_trans(Visual_Point* point, int num_cols, char ch);
 
-bool render_char(SDL_Surface* window_surface,
-                 Render_State* rend,
-                 Visual_Point* point,
-                 uint32_t background,
-                 uint8_t foreground,
-                 char c,
-                 bool set_tile);
+bool render_code_point(SDL_Surface* window_surface,
+                       Render_State* rend,
+                       Visual_Point* point,
+                       uint32_t background,
+                       uint8_t foreground,
+                       const char seq[5],
+                       bool set_tile);
 void resize_font(int font_size, Render_State* rend);

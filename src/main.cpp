@@ -30,6 +30,7 @@
 #include "render.hpp"
 #include "shell.hpp"
 #include "solarized_dark.hpp"
+#include "unicode.hpp"
 
 static Backlog_State* push_backlog(cz::Vector<Backlog_State*>* backlogs, uint64_t id);
 static void scroll_down1(Render_State* rend, cz::Slice<Backlog_State*> backlogs, int lines);
@@ -118,6 +119,41 @@ static void make_info(cz::String* info,
     cz::append_sprintf(temp_allocator, info, ".%.3us", (unsigned)(millis % 1000));
 }
 
+static size_t make_string_code_point(char sequence[5], cz::Str info, size_t start) {
+    size_t width = cz::min(unicode::utf8_width(sequence[0]), info.len - start);
+    for (size_t off = 1; off < width; ++off) {
+        char ch = info[start + off];
+        if (!unicode::utf8_is_continuation(ch)) {
+            // Invalid utf8 so treat the char as a single byte.
+            width = 1;
+            memset(sequence + 1, 0, 4);
+            break;
+        }
+        sequence[off] = ch;
+    }
+    return width;
+}
+
+static void render_string(SDL_Surface* window_surface,
+                          Render_State* rend,
+                          Visual_Point* info_start,
+                          uint32_t background,
+                          uint8_t foreground,
+                          cz::Str info,
+                          bool set_tile) {
+    for (size_t i = 0; i < info.len;) {
+        // Get the chars that compose this code point.
+        char seq[5] = {info[i]};
+        i += make_string_code_point(seq, info, i);
+
+        // Render this code point.
+        if (!render_code_point(window_surface, rend, info_start, background, foreground, seq,
+                               set_tile)) {
+            break;
+        }
+    }
+}
+
 static void render_info(SDL_Surface* window_surface,
                         Render_State* rend,
                         Visual_Point info_start,
@@ -135,11 +171,7 @@ static void render_info(SDL_Surface* window_surface,
             return;
     }
 
-    for (size_t i = 0; i < info.len; ++i) {
-        if (!render_char(window_surface, rend, &info_start, background, cfg.info_fg_color, info[i],
-                         false))
-            break;
-    }
+    render_string(window_surface, rend, &info_start, background, cfg.info_fg_color, info, false);
 }
 
 static uint64_t render_length(Backlog_State* backlog) {
@@ -188,7 +220,7 @@ static bool render_backlog(SDL_Surface* window_surface,
     size_t event_index = 0;
 
     uint64_t end = render_length(backlog);
-    for (; i < end; ++i) {
+    while (i < end) {
         while (event_index < backlog->events.len && backlog->events[event_index].index <= i) {
             Backlog_Event* event = &backlog->events[event_index];
             if (event->type == BACKLOG_EVENT_START_PROCESS) {
@@ -208,8 +240,22 @@ static bool render_backlog(SDL_Surface* window_surface,
 
         Visual_Point old_point = *point;
 
-        char c = backlog->get(i);
-        if (!render_char(window_surface, rend, point, background, fg_color, c, true))
+        // Get the chars that compose this code point.
+        char seq[5] = {backlog->get(i)};
+        size_t width = cz::min(unicode::utf8_width(seq[0]), backlog->length - i);
+        for (size_t o = 1; o < width; ++o) {
+            char ch = backlog->get(i + o);
+            if (!unicode::utf8_is_continuation(ch)) {
+                // Invalid utf8 so treat the char as a single byte.
+                width = 1;
+                memset(&seq[1], 0, sizeof(seq) - 1);
+                break;
+            }
+            seq[o] = ch;
+        }
+        i += width;
+
+        if (!render_code_point(window_surface, rend, point, background, fg_color, seq, true))
             break;
 
         if (!info_has_end && point->y != info_y) {
@@ -229,8 +275,8 @@ static bool render_backlog(SDL_Surface* window_surface,
         backlog->get(backlog->length - 1) != '\n') {
         Visual_Point old_point = *point;
 
-        if (!render_char(window_surface, rend, point, background, cfg.prompt_fg_color, '\n',
-                         true)) {
+        if (!render_code_point(window_surface, rend, point, background, cfg.prompt_fg_color, "\n",
+                               true)) {
             return false;
         }
 
@@ -253,7 +299,8 @@ static bool render_backlog(SDL_Surface* window_surface,
 
     bg_color = {};
     background = SDL_MapRGB(window_surface->format, bg_color.r, bg_color.g, bg_color.b);
-    if (!render_char(window_surface, rend, point, background, cfg.prompt_fg_color, '\n', true)) {
+    if (!render_code_point(window_surface, rend, point, background, cfg.prompt_fg_color, "\n",
+                           true)) {
         return false;
     }
 
@@ -292,73 +339,64 @@ static void render_prompt(SDL_Surface* window_surface,
     uint32_t background = SDL_MapRGB(window_surface->format, bg_color.r, bg_color.g, bg_color.b);
 
     if (shell->attached_process == -1) {
-        for (size_t i = 0; i < shell->working_directory.len; ++i) {
-            char c = shell->working_directory[i];
-            render_char(window_surface, rend, &point, background, cfg.info_fg_color, c, true);
-        }
-
-        for (size_t i = 0; i < prompt->prefix.len; ++i) {
-            char c = prompt->prefix[i];
-            render_char(window_surface, rend, &point, background, cfg.backlog_fg_color, c, true);
-        }
+        render_string(window_surface, rend, &point, background, cfg.info_fg_color,
+                      shell->working_directory, true);
+        render_string(window_surface, rend, &point, background, cfg.backlog_fg_color,
+                      prompt->prefix, true);
     } else {
-        cz::Str input_prefix = "> ";
-        for (size_t i = 0; i < input_prefix.len; ++i) {
-            char c = input_prefix[i];
-            render_char(window_surface, rend, &point, background, cfg.backlog_fg_color, c, true);
-        }
+        render_string(window_surface, rend, &point, background, cfg.backlog_fg_color, "> ", true);
     }
 
+    bool drawn_cursor = false;
     SDL_Color prompt_fg_color = cfg.theme[cfg.prompt_fg_color];
-    for (size_t i = 0; i < prompt->text.len; ++i) {
-        char c = prompt->text[i];
+    uint32_t cursor_color =
+        SDL_MapRGB(window_surface->format, prompt_fg_color.r, prompt_fg_color.g, prompt_fg_color.b);
+    for (size_t i = 0; i < prompt->text.len;) {
+        bool draw_cursor = (!drawn_cursor && i >= prompt->cursor);
+        SDL_Rect cursor_rect;
+        if (draw_cursor) {
+            cursor_rect = {point.x * rend->font_width - 1, point.y * rend->font_height, 2,
+                           rend->font_height};
+            SDL_FillRect(window_surface, &cursor_rect, cursor_color);
+            drawn_cursor = true;
+        }
 
-        if (prompt->cursor == i) {
-            SDL_Rect fill_rect = {point.x * rend->font_width - 1, point.y * rend->font_height, 2,
-                                  rend->font_height};
-            uint32_t foreground = SDL_MapRGB(window_surface->format, prompt_fg_color.r,
-                                             prompt_fg_color.g, prompt_fg_color.b);
-            SDL_FillRect(window_surface, &fill_rect, foreground);
+        // Get the chars that compose this code point.
+        char seq[5] = {prompt->text[i]};
+        i += make_string_code_point(seq, prompt->text, i);
 
-            render_char(window_surface, rend, &point, background, cfg.prompt_fg_color, c, true);
+        // Render this code point.
+        render_code_point(window_surface, rend, &point, background, cfg.prompt_fg_color, seq, true);
 
-            if (point.x != 0) {
-                SDL_FillRect(window_surface, &fill_rect, foreground);
-            }
-        } else {
-            render_char(window_surface, rend, &point, background, cfg.prompt_fg_color, c, true);
+        // Draw cursor.
+        if (draw_cursor && point.x != 0) {
+            SDL_FillRect(window_surface, &cursor_rect, cursor_color);
         }
     }
 
     // Fill rest of line.
     Visual_Point eol = point;
-    render_char(window_surface, rend, &point, background, cfg.backlog_fg_color, '\n', true);
+    render_code_point(window_surface, rend, &point, background, cfg.backlog_fg_color, "\n", true);
 
     if (prompt->cursor == prompt->text.len) {
-        SDL_Rect fill_rect = {eol.x * rend->font_width - 1, eol.y * rend->font_height, 2,
-                              rend->font_height};
-        uint32_t foreground = SDL_MapRGB(window_surface->format, prompt_fg_color.r,
-                                         prompt_fg_color.g, prompt_fg_color.b);
-        SDL_FillRect(window_surface, &fill_rect, foreground);
+        // Draw cursor.
+        SDL_Rect cursor_rect = {eol.x * rend->font_width - 1, eol.y * rend->font_height, 2,
+                                rend->font_height};
+        SDL_FillRect(window_surface, &cursor_rect, cursor_color);
     }
 
     if (prompt->history_searching) {
         cz::Str prefix = "HISTORY: ";
-        for (size_t i = 0; i < prefix.len; ++i) {
-            char c = prefix[i];
-            render_char(window_surface, rend, &point, background, cfg.backlog_fg_color, c, true);
-        }
+        render_string(window_surface, rend, &point, background, cfg.backlog_fg_color, prefix, true);
         cz::Vector<cz::Str>* history = prompt_history(prompt, shell->attached_process != -1);
         if (prompt->history_counter < history->len) {
             cz::Str hist = history->get(prompt->history_counter);
-            for (size_t i = 0; i < hist.len; ++i) {
-                char c = hist[i];
-                render_char(window_surface, rend, &point, background, cfg.backlog_fg_color, c,
-                            true);
-            }
+            render_string(window_surface, rend, &point, background, cfg.backlog_fg_color, hist,
+                          true);
         }
 
-        render_char(window_surface, rend, &point, background, cfg.backlog_fg_color, '\n', true);
+        render_code_point(window_surface, rend, &point, background, cfg.backlog_fg_color, "\n",
+                          true);
     }
 }
 

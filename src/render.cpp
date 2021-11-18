@@ -2,11 +2,13 @@
 
 #include <SDL_image.h>
 #include <Tracy.hpp>
+#include <cz/binary_search.hpp>
 #include <cz/format.hpp>
 #include <cz/string.hpp>
 
 #include "config.hpp"
 #include "global.hpp"
+#include "unicode.hpp"
 
 #ifdef _WIN32
 #include <SDL_syswm.h>
@@ -44,12 +46,14 @@ void set_icon(SDL_Window* sdl_window) {
 void close_font(Render_State* rend) {
     ZoneScoped;
     for (int ch = 0; ch < CZ_DIM(rend->caches); ch++) {
-        SDL_Surface** cache = rend->caches[ch];
-        for (int i = 0; i < CZ_DIM(*rend->caches); i++) {
-            SDL_Surface** surface = &cache[i];
+        Surface_Cache* cache = &rend->caches[ch];
+        for (int i = 0; i < cache->surfaces.len; i++) {
+            SDL_Surface** surface = &cache->surfaces.get(i);
             SDL_FreeSurface(*surface);
             *surface = NULL;
         }
+        cache->code_points.len = 0;
+        cache->surfaces.len = 0;
     }
     TTF_CloseFont(rend->font);
 }
@@ -59,26 +63,35 @@ TTF_Font* open_font(const char* path, int font_size) {
     return TTF_OpenFont(path, font_size);
 }
 
-static SDL_Surface* rasterize_character(const char* text,
-                                        TTF_Font* font,
-                                        int style,
-                                        SDL_Color fgc) {
+static SDL_Surface* rasterize_code_point(const char* text,
+                                         TTF_Font* font,
+                                         int style,
+                                         SDL_Color fgc) {
     ZoneScoped;
     TTF_SetFontStyle(font, style);
-    return TTF_RenderText_Blended(font, text, fgc);
+    return TTF_RenderUTF8_Blended(font, text, fgc);
 }
 
-static SDL_Surface* rasterize_character_cached(Render_State* rend, char ch, uint8_t color256) {
-    SDL_Surface** cache = rend->caches[color256];
-    uint8_t index = (uint8_t)ch;
-    if (cache[index])
-        return cache[index];
-    if (ch == '\0')
-        ch = 1;
-    char text[2] = {ch, 0};
-    SDL_Surface* surface = rasterize_character(text, rend->font, 0, cfg.theme[color256]);
+static SDL_Surface* rasterize_code_point_cached(Render_State* rend,
+                                                const char seq[5],
+                                                uint8_t color256) {
+    uint32_t code_point = unicode::utf8_code_point((const uint8_t*)seq);
+
+    // Check the cache.
+    Surface_Cache* cache = &rend->caches[color256];
+    size_t index;
+    if (cz::binary_search(cache->code_points.as_slice(), code_point, &index))
+        return cache->surfaces[index];  // Cache hit.
+
+    // Cache miss.  Rasterize and add to the cache.
+    SDL_Surface* surface = rasterize_code_point(seq, rend->font, 0, cfg.theme[color256]);
     CZ_ASSERT(surface);
-    cache[index] = surface;
+
+    cache->code_points.reserve(cz::heap_allocator(), 1);
+    cache->code_points.insert(index, code_point);
+    cache->surfaces.reserve(cz::heap_allocator(), 1);
+    cache->surfaces.insert(index, surface);
+
     return surface;
 }
 
@@ -111,13 +124,13 @@ int coord_trans(Visual_Point* point, int num_cols, char ch) {
     return width;
 }
 
-bool render_char(SDL_Surface* window_surface,
-                 Render_State* rend,
-                 Visual_Point* point,
-                 uint32_t background,
-                 uint8_t foreground,
-                 char c,
-                 bool set_tile) {
+bool render_code_point(SDL_Surface* window_surface,
+                       Render_State* rend,
+                       Visual_Point* point,
+                       uint32_t background,
+                       uint8_t foreground,
+                       const char seq[5],
+                       bool set_tile) {
     if (set_tile) {
         size_t index = point->y * rend->window_cols + point->x;
         if (index < rend->grid.len) {
@@ -125,7 +138,7 @@ bool render_char(SDL_Surface* window_surface,
             tile->outer = point->outer + 1;
             tile->inner = point->inner;
 
-            if (c == '\n') {
+            if (seq[0] == '\n') {
                 for (int x = point->x + 1; x < rend->window_cols; ++x) {
                     ++index;
                     ++tile;
@@ -149,9 +162,9 @@ bool render_char(SDL_Surface* window_surface,
         }
     }
 
-    SDL_Rect rect = {point->x * rend->font_width, point->y * rend->font_height};
+    SDL_Rect rect = {point->x * rend->font_width, point->y * rend->font_height, 0, 0};
     uint64_t old_y = point->y;
-    int width = coord_trans(point, rend->window_cols, c);
+    int width = coord_trans(point, rend->window_cols, seq[0]);
 
     if (point->y != old_y) {
         rect.w = window_surface->w - rect.x;
@@ -171,12 +184,14 @@ bool render_char(SDL_Surface* window_surface,
     }
 
     ZoneScopedN("blit_character");
-    if (c == '\t') {
+    if (seq[0] == '\t') {
         rect.w = width * rend->font_width;
         rect.h = rend->font_height;
         SDL_FillRect(window_surface, &rect, background);
     } else {
-        SDL_Surface* s = rasterize_character_cached(rend, c, foreground);
+        const char binseq[5] = {1};
+        const char* seq2 = (seq[0] != '\0' ? seq : binseq);
+        SDL_Surface* s = rasterize_code_point_cached(rend, seq2, foreground);
         rect.w = rend->font_width;
         rect.h = rend->font_height;
         SDL_FillRect(window_surface, &rect, background);
