@@ -1788,16 +1788,16 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
                 rend->selection.expand_word = 0;
                 rend->selection.expand_line = 0;
 
-                if (event.button.clicks >= 2) {
+                if (event.button.clicks % 3 == 0) {
                     rend->selection.type = SELECT_REGION;
-                    if ((event.button.clicks - 2) % 2 == 0) {
-                        rend->selection.expand_word = 1;
-                    } else {
-                        rend->selection.expand_line = 1;
-                    }
+                    rend->selection.expand_line = 1;
+                } else if (event.button.clicks % 3 == 2) {
+                    rend->selection.type = SELECT_REGION;
+                    rend->selection.expand_word = 1;
                 } else {
                     rend->selection.type = SELECT_EMPTY;
                 }
+
                 shell->selected_process = tile.outer - 1;
                 if (shell->selected_process == backlogs->len)
                     shell->selected_process = -1;
