@@ -1329,6 +1329,15 @@ static void set_clipboard_contents_to_selection(Render_State* rend,
     (void)SDL_SetClipboardText(clip.buffer);
 }
 
+static int word_char_category(char ch) {
+    if (cz::is_alnum(ch))
+        return 1;
+    else if (cz::is_space(ch))
+        return 2;
+    else
+        return 3;
+}
+
 static void expand_selection(Selection* selection,
                              Shell_State* shell,
                              Prompt_State* prompt,
@@ -1357,16 +1366,20 @@ static void expand_selection(Selection* selection,
             Backlog_State* backlog = backlogs[selection->start.outer - 1];
             if (*inner < backlog->length)
                 ++*inner;
-            // Skip non-word characters.
+
+            // Skip until we find a different category.
+            int category = -1;
             while (*inner > 0) {
                 char ch = backlog->get(*inner - 1);
-                if (cz::is_alnum(ch) || ch == '\n')
+                if (ch == '\n') {
+                    if (category == -1)
+                        --*inner;
                     break;
-                --*inner;
-            }
-            // Skip word characters.
-            while (*inner > 0) {
-                if (!cz::is_alnum(backlog->get(*inner - 1)))
+                }
+                int cat2 = word_char_category(ch);
+                if (category == -1)
+                    category = cat2;
+                else if (category != cat2)
                     break;
                 --*inner;
             }
@@ -1374,36 +1387,65 @@ static void expand_selection(Selection* selection,
             // Don't expand if we're on a newline character.
             if (*inner < prompt_buffer.len) {
                 ++*inner;
-                backward_word(prompt_buffer, inner);
+                // Skip until we find a different category.
+                int category = -1;
+                while (*inner > 0) {
+                    char ch = prompt_buffer[*inner - 1];
+                    if (ch == '\n') {
+                        if (category == -1)
+                            --*inner;
+                        break;
+                    }
+                    int cat2 = word_char_category(ch);
+                    if (category == -1)
+                        category = cat2;
+                    else if (category != cat2)
+                        break;
+                    --*inner;
+                }
             }
         }
 
         inner = &selection->end.inner;
         if (selection->end.outer - 1 < backlogs.len) {
             Backlog_State* backlog = backlogs[selection->end.outer - 1];
+            // Skip until we find a different category.
+            int category = -1;
             while (*inner < backlog->length) {
                 char ch = backlog->get(*inner);
-                if (cz::is_alnum(ch) || ch == '\n')
+                if (ch == '\n') {
+                    if (category == -1)
+                        ++*inner;
+                    break;
+                }
+                int cat2 = word_char_category(ch);
+                if (category == -1)
+                    category = cat2;
+                else if (category != cat2)
                     break;
                 ++*inner;
-            }
-            bool word_chars = false;
-            while (*inner < backlog->length) {
-                if (!cz::is_alnum(backlog->get(*inner)))
-                    break;
-                ++*inner;
-                word_chars = true;
-            }
-            // Include newline if selected.
-            if (!word_chars && *inner < backlog->length) {
-                if (backlog->get(*inner) == '\n')
-                    ++*inner;
             }
         } else {
-            if (*inner >= prompt_buffer.len)
+            if (*inner >= prompt_buffer.len) {
                 ++*inner;
-            else
-                forward_word(prompt_buffer, inner);
+            } else {
+                // Skip until we find a different category.
+                int category = -1;
+                while (*inner < prompt_buffer.len) {
+                    char ch = prompt_buffer[*inner];
+                    if (ch == '\n') {
+                        if (category == -1)
+                            ++*inner;
+                        break;
+                    }
+                    int cat2 = word_char_category(ch);
+                    if (category == -1)
+                        category = cat2;
+                    else if (category != cat2)
+                        break;
+                    ++*inner;
+                }
+            }
         }
         if (*inner > 0)
             --*inner;
