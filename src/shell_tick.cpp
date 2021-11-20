@@ -171,8 +171,7 @@ bool tick_program(Shell_State* shell,
 
     case Running_Program::PWD: {
         auto& builtin = program->v.builtin;
-        builtin.out.write(shell->working_directory);
-        builtin.out.write("\n");
+        (void)builtin.out.write(cz::format(temp_allocator, shell->working_directory, '\n'));
         goto finish_builtin;
     } break;
 
@@ -254,9 +253,8 @@ bool tick_program(Shell_State* shell,
                 }
                 if (i == shell->alias_names.len) {
                     builtin.exit_code = 1;
-                    (void)builtin.err.write("alias: ");
-                    (void)builtin.err.write(arg);
-                    (void)builtin.err.write(": unbound alias\n");
+                    (void)builtin.err.write(
+                        cz::format(temp_allocator, "alias: ", arg, ": unbound alias\n"));
                 }
             }
         }
@@ -266,21 +264,26 @@ bool tick_program(Shell_State* shell,
     case Running_Program::CONFIGURE: {
         auto& builtin = program->v.builtin;
         if (builtin.args.len != 3) {
-            builtin.err.write("Usage: configure [option] [value]\n");
+            (void)builtin.err.write("configure: Usage: configure [option] [value]\n");
             goto finish_builtin;
         }
-        auto option = builtin.args[1];
-        auto int_val = atoi(builtin.args[2].buffer);
+
+        cz::Str option = builtin.args[1];
+        int64_t value;
+        if (!cz::parse(builtin.args[2], &value)) {
+            (void)builtin.err.write("configure: Usage: configure [option] [value]\n");
+            goto finish_builtin;
+        }
+
         if (option == "font_size") {
-            if (int_val == 0) {
-                builtin.err.write("Invalid font_height\n");
+            if (value <= 0) {
+                (void)builtin.err.write("configure: Invalid font_height\n");
             } else {
-                resize_font(int_val, rend);
+                resize_font(value, rend);
             }
         } else {
-            builtin.err.write("Unrecognized option ");
-            builtin.err.write(option);
-            builtin.err.write("\n");
+            (void)builtin.err.write(
+                cz::format(temp_allocator, "configure: Unrecognized option ", option, '\n'));
         }
         goto finish_builtin;
     }
@@ -300,13 +303,12 @@ bool tick_program(Shell_State* shell,
             cz::Str arg = builtin.args[i];
             path.len = 0;
             if (find_in_path(shell, arg, temp_allocator, &path)) {
+                path.push('\n');
                 (void)builtin.out.write(path);
-                (void)builtin.out.write("\n");
             } else {
                 builtin.exit_code = 1;
-                (void)builtin.err.write("which: Couldn't find ");
-                (void)builtin.err.write(arg);
-                (void)builtin.err.write("\n");
+                (void)builtin.err.write(
+                    cz::format(temp_allocator, "which: Couldn't find ", arg, '\n'));
             }
         }
         goto finish_builtin;
