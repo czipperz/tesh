@@ -35,6 +35,11 @@ bool create_pseudo_terminal(Pseudo_Terminal* tty, int width, int height) {
     if (!tty->out.set_non_blocking())
         return false;  // TODO cleanup
 
+    if (!tty->child_in.set_non_blocking())
+        return false;  // TODO cleanup
+    if (!tty->child_out.set_non_blocking())
+        return false;  // TODO cleanup
+
     COORD size = {};
     size.X = width;
     size.Y = height;
