@@ -269,7 +269,7 @@ bool tick_program(Shell_State* shell,
             builtin.err.write("Usage: configure [option] [value]\n");
             goto finish_builtin;
         }
-        auto option  = builtin.args[1];
+        auto option = builtin.args[1];
         auto int_val = atoi(builtin.args[2].buffer);
         if (option == "font_size") {
             if (int_val == 0) {
@@ -405,6 +405,13 @@ bool tick_program(Shell_State* shell,
         uint64_t actual = std::chrono::duration_cast<std::chrono::seconds>(now - st.start).count();
         if (actual >= max)
             goto finish_builtin;
+    } break;
+
+    case Running_Program::ATTACH: {
+        uint64_t this_process = backlog->id;
+        shell->selected_process = this_process;
+        shell->attached_process = this_process;
+        goto finish_builtin;
     } break;
 
     default:

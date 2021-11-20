@@ -464,6 +464,8 @@ static void recognize_builtins(Running_Program* program,
             program->v.builtin.st.sleep.start = std::chrono::high_resolution_clock::now();
         } else if (parse.args[0] == "configure") {
             program->type = Running_Program::CONFIGURE;
+        } else if (parse.args[0] == "attach") {
+            program->type = Running_Program::ATTACH;
         }
     }
 

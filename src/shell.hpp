@@ -133,6 +133,7 @@ struct Running_Program {
         SOURCE,
         SLEEP,
         CONFIGURE,
+        ATTACH,
     } type;
     union {
         cz::Process process;
