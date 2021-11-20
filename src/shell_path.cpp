@@ -14,12 +14,6 @@
 #endif
 
 #ifdef _WIN32
-#define PATH_ENV_VAR "Path"
-#else
-#define PATH_ENV_VAR "PATH"
-#endif
-
-#ifdef _WIN32
 #define PATH_SPLIT ';'
 #else
 #define PATH_SPLIT ':'
@@ -74,7 +68,7 @@ bool find_in_path(Shell_State* shell,
     }
 
     cz::Str path;
-    if (!get_var(shell, PATH_ENV_VAR, &path))
+    if (!get_var(shell, "PATH", &path))
         return false;
 
     while (1) {

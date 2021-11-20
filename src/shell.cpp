@@ -2,7 +2,17 @@
 
 #include <cz/heap.hpp>
 
+static cz::Str canonical_var(cz::Str key) {
+#ifdef _WIN32
+    if (key == "PATH")
+        return "Path";
+#endif
+    return key;
+}
+
 bool get_var(const Shell_State* shell, cz::Str key, cz::Str* value) {
+    key = canonical_var(key);
+
     for (size_t i = 0; i < shell->variable_names.len; ++i) {
         if (key == shell->variable_names[i]) {
             *value = shell->variable_values[i];
@@ -14,6 +24,8 @@ bool get_var(const Shell_State* shell, cz::Str key, cz::Str* value) {
 }
 
 void set_var(Shell_State* shell, cz::Str key, cz::Str value) {
+    key = canonical_var(key);
+
     for (size_t i = 0; i < shell->variable_names.len; ++i) {
         if (key == shell->variable_names[i]) {
             shell->variable_values[i].drop(cz::heap_allocator());
@@ -29,6 +41,8 @@ void set_var(Shell_State* shell, cz::Str key, cz::Str value) {
 }
 
 void make_env_var(Shell_State* shell, cz::Str key) {
+    key = canonical_var(key);
+
     for (size_t i = 0; i < shell->exported_vars.len; ++i) {
         if (key == shell->exported_vars[i])
             return;
