@@ -1155,7 +1155,8 @@ static bool handle_prompt_manipulation_commands(Shell_State* shell,
             prompt->text[prompt->cursor] = ch1;
             prompt->cursor++;
         }
-    } else if ((mod & ~KMOD_SHIFT) == 0 && key == SDLK_TAB) {
+    } else if ((mod & ~KMOD_SHIFT) == 0 && key == SDLK_TAB &&
+               shell->selected_process == shell->attached_process) {
         doing_completion = true;
 
         if (prompt->completion.is) {
