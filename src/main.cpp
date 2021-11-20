@@ -1126,10 +1126,18 @@ static bool handle_prompt_manipulation_commands(Shell_State* shell,
         }
     } else if (mod == KMOD_CTRL && key == SDLK_g) {
         resolve_history_searching(prompt, history);
-    } else if ((mod == 0 && key == SDLK_HOME) || (mod == KMOD_CTRL && key == SDLK_a)) {
+    } else if (mod == KMOD_CTRL && key == SDLK_a) {
         prompt->cursor = 0;
-    } else if ((mod == 0 && key == SDLK_END) || (mod == KMOD_CTRL && key == SDLK_e)) {
+    } else if (mod == KMOD_CTRL && key == SDLK_e) {
         prompt->cursor = prompt->text.len;
+    } else if ((mod == 0 && key == SDLK_HOME) || (mod == KMOD_ALT && key == SDLK_a)) {
+        const char * nl = prompt->text.slice_end(prompt->cursor).rfind('\n');
+        if (nl)
+            prompt->cursor = nl + 1 - prompt->text.buffer;
+        else
+            prompt->cursor = 0;
+    } else if ((mod == 0 && key == SDLK_END) || (mod == KMOD_ALT && key == SDLK_e)) {
+        prompt->cursor += prompt->text.slice_start(prompt->cursor).find_index('\n');
     } else if ((mod == KMOD_CTRL && key == SDLK_LEFT) || (mod == KMOD_ALT && key == SDLK_LEFT) ||
                (mod == KMOD_ALT && key == SDLK_b)) {
         backward_word(prompt->text, &prompt->cursor);
