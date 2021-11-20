@@ -1079,12 +1079,17 @@ static void start_completing(Prompt_State* prompt) {
     // Get all files matching the prefix.
     /////////////////////////////////////////////
 
+    cz::Allocator path_allocator = prompt->completion.results_arena.allocator();
+
+    // Put a dummy element at index 0 so we can tab through back to no completion as a form of undo.
+    prompt->completion.results.reserve(cz::heap_allocator(), 1);
+    prompt->completion.results.push(prefix.clone(path_allocator));
+
     cz::Directory_Iterator iterator;
     int result = iterator.init(path.clone_null_terminate(temp_allocator).buffer);
     if (result <= 0)
         return;
 
-    cz::Allocator path_allocator = prompt->completion.results_arena.allocator();
     while (1) {
         cz::Str name = iterator.str_name();
         if (name.starts_with(prefix)) {
@@ -1151,37 +1156,35 @@ static bool handle_prompt_manipulation_commands(Shell_State* shell,
         doing_completion = true;
 
         if (prompt->completion.is) {
-            if (prompt->completion.results.len > 0) {
-                // Delete previous completion and go to next.
-                size_t prefix = prompt->completion.prefix_length;
-                cz::Str prev = prompt->completion.results[prompt->completion.current];
-                size_t del = prev.len - prefix;
-                prompt->cursor -= del;
-                prompt->text.remove_many(prompt->cursor, del);
-
-                if (mod & KMOD_SHIFT) {
-                    if (prompt->completion.current == 0)
-                        prompt->completion.current = prompt->completion.results.len;
-                    prompt->completion.current--;
-                } else {
-                    prompt->completion.current++;
-                    if (prompt->completion.current == prompt->completion.results.len)
-                        prompt->completion.current = 0;
-                }
-            }
+            // Delete previous completion.
+            size_t prefix = prompt->completion.prefix_length;
+            cz::Str prev = prompt->completion.results[prompt->completion.current];
+            size_t del = prev.len - prefix;
+            prompt->cursor -= del;
+            prompt->text.remove_many(prompt->cursor, del);
         } else {
             start_completing(prompt);
         }
 
-        if (prompt->completion.results.len > 0) {
-            // Insert the result.
-            cz::Str curr = prompt->completion.results[prompt->completion.current];
-            size_t prefix = prompt->completion.prefix_length;
-            cz::Str ins = curr.slice_start(prefix);
-            prompt->text.reserve(cz::heap_allocator(), ins.len);
-            prompt->text.insert(prompt->cursor, ins);
-            prompt->cursor += ins.len;
+        // Goto next / previous result.  Note: index 0 is a
+        // dummy so this makes sense when we start completing.
+        if (mod & KMOD_SHIFT) {
+            if (prompt->completion.current == 0)
+                prompt->completion.current = prompt->completion.results.len;
+            prompt->completion.current--;
+        } else {
+            prompt->completion.current++;
+            if (prompt->completion.current == prompt->completion.results.len)
+                prompt->completion.current = 0;
         }
+
+        // Insert the result.
+        cz::Str curr = prompt->completion.results[prompt->completion.current];
+        size_t prefix = prompt->completion.prefix_length;
+        cz::Str ins = curr.slice_start(prefix);
+        prompt->text.reserve(cz::heap_allocator(), ins.len);
+        prompt->text.insert(prompt->cursor, ins);
+        prompt->cursor += ins.len;
     } else if ((mod == 0 && key == SDLK_LEFT) || (mod == KMOD_CTRL && key == SDLK_b)) {
         if (prompt->cursor > 0) {
             --prompt->cursor;
