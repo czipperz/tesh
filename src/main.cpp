@@ -801,8 +801,7 @@ static void scroll_up(Render_State* rend, cz::Slice<Backlog_State*> backlogs, in
             cursor--;
             lines--;
         }
-        if (cursor >= end && end > 0 &&
-            backlog->get(end - 1) != '\n') {
+        if (cursor >= end && end > 0 && backlog->get(end - 1) != '\n') {
             cursor--;
             lines--;
         }
@@ -1047,8 +1046,6 @@ static void run_paste(Prompt_State* prompt) {
 }
 
 static void start_completing(Prompt_State* prompt) {
-    prompt->completion.is = true;
-
     /////////////////////////////////////////////
     // Get the query
     /////////////////////////////////////////////
@@ -1061,7 +1058,12 @@ static void start_completing(Prompt_State* prompt) {
             break;
         --start;
     }
+    if (start == end)
+        return;
+
     cz::Str query = prompt->text.slice(start, end);
+
+    prompt->completion.is = true;
 
     /////////////////////////////////////////////
     // Split by last slash
@@ -1168,6 +1170,10 @@ static bool handle_prompt_manipulation_commands(Shell_State* shell,
             prompt->text.remove_many(prompt->cursor, del);
         } else {
             start_completing(prompt);
+            // Completion won't start if the user isn't at a thing that could conceivably be
+            // completed.  Ex. at a blank prompt.  Allow other TAB bindings to take precedence.
+            if (!prompt->completion.is)
+                return false;
         }
 
         // Goto next / previous result.  Note: index 0 is a
