@@ -257,7 +257,7 @@ static bool render_backlog(SDL_Surface* window_surface,
                 fg_color = cfg.info_fg_color;
             } else if (event->type == BACKLOG_EVENT_SET_GRAPHIC_RENDITION) {
                 uint64_t gr = event->payload;
-                fg_color = ((gr & GR_FOREGROUND_MASK) >> GR_FOREGROUND_SHIFT);
+                fg_color = (uint8_t)((gr & GR_FOREGROUND_MASK) >> GR_FOREGROUND_SHIFT);
             } else {
                 CZ_PANIC("unreachable");
             }
@@ -812,7 +812,7 @@ static void scroll_up(Render_State* rend, cz::Slice<Backlog_State*> backlogs, in
             uint64_t line_start = (line_index == 0 ? 0 : backlog->lines[line_index - 1]);
 
             size_t vlsi = 0;
-            size_t visual_line_count = 0;
+            int visual_line_count = 0;
             {
                 // First visual line start is at the physical line start.
                 visual_line_starts[vlsi++] = line_start;
