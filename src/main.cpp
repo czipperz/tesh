@@ -1382,6 +1382,8 @@ static bool handle_scroll_commands(Shell_State* shell,
         Backlog_State* backlog = backlogs[shell->selected_process];
         backlog->render_collapsed = !backlog->render_collapsed;
         ensure_selected_process_on_screen(rend, backlogs, shell->selected_process);
+        if (shell->attached_process == backlog->id)
+            shell->attached_process = -1;
     } else {
         return false;
     }
