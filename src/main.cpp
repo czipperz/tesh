@@ -1059,6 +1059,10 @@ static bool handle_prompt_manipulation_commands(Shell_State* shell,
         size_t end = prompt->cursor;
         prompt->cursor = 0;
         prompt->text.remove_range(prompt->cursor, end);
+    } else if (mod == KMOD_ALT && key == SDLK_CARET) {
+        const char* ptr = prompt->text.slice_start(prompt->cursor).find('\n');
+        if (ptr)
+            *(char*)ptr = ' ';
     } else if (mod == KMOD_CTRL && key == SDLK_t) {
         if (prompt->cursor < prompt->text.len && prompt->cursor > 0) {
             char ch1 = prompt->text[prompt->cursor - 1];
@@ -1131,7 +1135,7 @@ static bool handle_prompt_manipulation_commands(Shell_State* shell,
     } else if (mod == KMOD_CTRL && key == SDLK_e) {
         prompt->cursor = prompt->text.len;
     } else if ((mod == 0 && key == SDLK_HOME) || (mod == KMOD_ALT && key == SDLK_a)) {
-        const char * nl = prompt->text.slice_end(prompt->cursor).rfind('\n');
+        const char* nl = prompt->text.slice_end(prompt->cursor).rfind('\n');
         if (nl)
             prompt->cursor = nl + 1 - prompt->text.buffer;
         else
