@@ -626,3 +626,15 @@ TEST_CASE("parse_script expand ${x}") {
     CHECK(pipeline.pipeline[0].args[0] == "bb");
     CHECK(pipeline.pipeline[0].args[1] == "cc");
 }
+
+TEST_CASE("parse_script evaluate var expand before var set") {
+    Shell_State shell = {};
+    set_var(&shell, "aa", "cc");
+    Parse_Script script = {};
+    Error error = parse_script(&shell, cz::heap_allocator(), &script, {}, "aa=bb x${aa}y");
+    REQUIRE(error == Error_Success);
+    Parse_Pipeline pipeline = script.first.pipeline;
+    REQUIRE(pipeline.pipeline.len == 1);
+    REQUIRE(pipeline.pipeline[0].args.len == 1);
+    CHECK(pipeline.pipeline[0].args[0] == "xccy");
+}
