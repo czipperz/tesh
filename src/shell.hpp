@@ -80,6 +80,7 @@ struct Process_Output {
 
 struct Process_Input {
     bool polling;
+    bool done;
     cz::Input_File file;
 
     int64_t read(void* buffer, size_t len);
