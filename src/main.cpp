@@ -7,6 +7,7 @@
 #include <Tracy.hpp>
 #include <cz/binary_search.hpp>
 #include <cz/defer.hpp>
+#include <cz/directory.hpp>
 #include <cz/env.hpp>
 #include <cz/format.hpp>
 #include <cz/heap.hpp>
@@ -49,6 +50,14 @@ struct Prompt_State {
     cz::Vector<cz::Str> stdin_history;
     cz::Buffer_Array history_arena;
     bool history_searching;
+
+    struct {
+        bool is;
+        size_t prefix_length;
+        cz::Buffer_Array results_arena;
+        cz::Vector<cz::Str> results;
+        size_t current;
+    } completion;
 };
 
 static cz::Vector<cz::Str>* prompt_history(Prompt_State* prompt, bool script);
@@ -1004,12 +1013,21 @@ static void forward_word(cz::Str text, size_t* cursor) {
 
 static void finish_prompt_manipulation(Shell_State* shell,
                                        Render_State* rend,
-                                       cz::Slice<Backlog_State*> backlogs) {
+                                       cz::Slice<Backlog_State*> backlogs,
+                                       Prompt_State* prompt,
+                                       bool doing_completion) {
     shell->selected_process = shell->attached_process;
     ensure_prompt_on_screen(rend, backlogs);
     rend->auto_page = false;
     rend->auto_scroll = true;
     stop_selecting(rend);
+    if (!doing_completion && prompt->completion.is) {
+        prompt->completion.is = false;
+        prompt->completion.prefix_length = 0;
+        prompt->completion.results_arena.clear();
+        prompt->completion.results.len = 0;
+        prompt->completion.current = 0;
+    }
 }
 
 static void run_paste(Prompt_State* prompt) {
@@ -1025,12 +1043,70 @@ static void run_paste(Prompt_State* prompt) {
     }
 }
 
+static void start_completing(Prompt_State* prompt) {
+    prompt->completion.is = true;
+
+    /////////////////////////////////////////////
+    // Get the query
+    /////////////////////////////////////////////
+
+    size_t end = prompt->cursor;
+    size_t start = end;
+    while (start > 0) {
+        // TODO break on semicolons and handle strings???
+        if (cz::is_space(prompt->text[start - 1]))
+            break;
+        --start;
+    }
+    cz::Str query = prompt->text.slice(start, end);
+
+    /////////////////////////////////////////////
+    // Split by last slash
+    /////////////////////////////////////////////
+
+    size_t slash = query.rfind_index('/');
+#ifdef _WIN32
+    size_t backslash = query.rfind_index('\\');
+    if (slash > backslash)
+        slash = backslash;
+#endif
+
+    cz::Str path = (slash == query.len ? "." : query.slice_end(slash));
+    cz::Str prefix = (slash == query.len ? query : query.slice_start(slash + 1));
+    prompt->completion.prefix_length = prefix.len;
+
+    /////////////////////////////////////////////
+    // Get all files matching the prefix.
+    /////////////////////////////////////////////
+
+    cz::Directory_Iterator iterator;
+    int result = iterator.init(path.clone_null_terminate(temp_allocator).buffer);
+    if (result <= 0)
+        return;
+
+    cz::Allocator path_allocator = prompt->completion.results_arena.allocator();
+    while (1) {
+        cz::Str name = iterator.str_name();
+        if (name.starts_with(prefix)) {
+            cz::String file = name.clone_null_terminate(path_allocator);
+            prompt->completion.results.reserve(cz::heap_allocator(), 1);
+            prompt->completion.results.push(file);
+        }
+
+        result = iterator.advance();
+        if (result <= 0)
+            break;
+    }
+    iterator.drop();
+}
+
 static bool handle_prompt_manipulation_commands(Shell_State* shell,
                                                 Prompt_State* prompt,
                                                 cz::Vector<Backlog_State*>* backlogs,
                                                 Render_State* rend,
                                                 uint16_t mod,
                                                 SDL_Keycode key) {
+    bool doing_completion = false;
     cz::Vector<cz::Str>* history = prompt_history(prompt, shell->attached_process != -1);
     if ((mod & ~KMOD_SHIFT) == 0 && key == SDLK_BACKSPACE) {
         if (prompt->cursor > 0) {
@@ -1070,6 +1146,41 @@ static bool handle_prompt_manipulation_commands(Shell_State* shell,
             prompt->text[prompt->cursor - 1] = ch2;
             prompt->text[prompt->cursor] = ch1;
             prompt->cursor++;
+        }
+    } else if ((mod & ~KMOD_SHIFT) == 0 && key == SDLK_TAB) {
+        doing_completion = true;
+
+        if (prompt->completion.is) {
+            if (prompt->completion.results.len > 0) {
+                // Delete previous completion and go to next.
+                size_t prefix = prompt->completion.prefix_length;
+                cz::Str prev = prompt->completion.results[prompt->completion.current];
+                size_t del = prev.len - prefix;
+                prompt->cursor -= del;
+                prompt->text.remove_many(prompt->cursor, del);
+
+                if (mod & KMOD_SHIFT) {
+                    if (prompt->completion.current == 0)
+                        prompt->completion.current = prompt->completion.results.len;
+                    prompt->completion.current--;
+                } else {
+                    prompt->completion.current++;
+                    if (prompt->completion.current == prompt->completion.results.len)
+                        prompt->completion.current = 0;
+                }
+            }
+        } else {
+            start_completing(prompt);
+        }
+
+        if (prompt->completion.results.len > 0) {
+            // Insert the result.
+            cz::Str curr = prompt->completion.results[prompt->completion.current];
+            size_t prefix = prompt->completion.prefix_length;
+            cz::Str ins = curr.slice_start(prefix);
+            prompt->text.reserve(cz::heap_allocator(), ins.len);
+            prompt->text.insert(prompt->cursor, ins);
+            prompt->cursor += ins.len;
         }
     } else if ((mod == 0 && key == SDLK_LEFT) || (mod == KMOD_CTRL && key == SDLK_b)) {
         if (prompt->cursor > 0) {
@@ -1155,7 +1266,7 @@ static bool handle_prompt_manipulation_commands(Shell_State* shell,
         return false;
     }
 
-    finish_prompt_manipulation(shell, rend, *backlogs);
+    finish_prompt_manipulation(shell, rend, *backlogs, prompt, doing_completion);
     return true;
 }
 
@@ -1737,7 +1848,7 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
             prompt->text.reserve(cz::heap_allocator(), text.len);
             prompt->text.insert(prompt->cursor, text);
             prompt->cursor += text.len;
-            finish_prompt_manipulation(shell, rend, *backlogs);
+            finish_prompt_manipulation(shell, rend, *backlogs, prompt, false);
             ++num_events;
         } break;
 
@@ -1825,7 +1936,7 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
                 ++num_events;
             } else if (event.button.button == SDL_BUTTON_MIDDLE) {
                 run_paste(prompt);
-                finish_prompt_manipulation(shell, rend, *backlogs);
+                finish_prompt_manipulation(shell, rend, *backlogs, prompt, false);
                 ++num_events;
             }
         } break;
@@ -2079,6 +2190,7 @@ int actual_main(int argc, char** argv) {
     load_default_configuration();
 
     prompt.history_arena.init();
+    prompt.completion.results_arena.init();
     prompt.process_id = 1;  // rc = 0
 
     cz::Buffer_Array permanent_arena;
