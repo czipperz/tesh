@@ -787,20 +787,22 @@ static void scroll_up(Render_State* rend, cz::Slice<Backlog_State*> backlogs, in
             return;
         point->outer--;
         Backlog_State* backlog = backlogs[point->outer];
-        point->inner = backlog->length + 1;
-        if (backlog->length > 0 && backlog->get(backlog->length - 1) != '\n')
+        uint64_t end = render_length(backlog);
+        point->inner = end + 1;
+        if (end > 0 && backlog->get(end - 1) != '\n')
             point->inner++;
     }
 
     while (1) {
         Backlog_State* backlog = backlogs[point->outer];
+        uint64_t end = render_length(backlog);
         uint64_t cursor = point->inner;
-        if (cursor >= backlog->length + 1) {
+        if (cursor >= end + 1) {
             cursor--;
             lines--;
         }
-        if (cursor >= backlog->length && backlog->length > 0 &&
-            backlog->get(backlog->length - 1) != '\n') {
+        if (cursor >= end && end > 0 &&
+            backlog->get(end - 1) != '\n') {
             cursor--;
             lines--;
         }
@@ -871,8 +873,9 @@ static void scroll_up(Render_State* rend, cz::Slice<Backlog_State*> backlogs, in
             break;
         point->outer--;
         backlog = backlogs[point->outer];
-        point->inner = backlog->length + 1;
-        if (backlog->length > 0 && backlog->get(backlog->length - 1) != '\n')
+        end = render_length(backlog);
+        point->inner = end + 1;
+        if (end > 0 && backlog->get(end - 1) != '\n')
             point->inner++;
     }
 
