@@ -93,7 +93,7 @@ static Error finish_program(Parse_Pipeline* out,
                             Parse_Program* program,
                             Parse_State* state);
 static Error handle_file_indirection(Parse_Program* program, Parse_State* state);
-static bool get_var_at_point(Text_Iter* it, cz::Str* key);
+static Error get_var_at_point(Text_Iter* it, cz::Str* key, bool* found);
 
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -250,7 +250,11 @@ static Error parse_pipeline(const Shell_State* shell,
                         break;
                     if (c == '$') {
                         cz::Str key;
-                        if (get_var_at_point(it, &key)) {
+                        bool found = false;
+                        Error error = get_var_at_point(it, &key, &found);
+                        if (error != Error_Success)
+                            return error;
+                        if (found) {
                             cz::Str value;
                             if (get_var(shell, key, &value)) {
                                 word.reserve(allocator, value.len);
@@ -300,7 +304,11 @@ static Error parse_pipeline(const Shell_State* shell,
                 any_special = true;
 
                 cz::Str var;
-                if (!get_var_at_point(it, &var)) {
+                bool found = false;
+                Error error = get_var_at_point(it, &var, &found);
+                if (error != Error_Success)
+                    return error;  // TODO log the error but ignore
+                if (!found) {
                     it->retreat();  // '$'
                     goto def;
                 }
@@ -543,11 +551,18 @@ static Error handle_file_indirection(Parse_Program* program, Parse_State* state)
     return Error_Success;
 }
 
-static bool get_var_at_point(Text_Iter* it, cz::Str* key) {
+static Error get_var_at_point(Text_Iter* it, cz::Str* key, bool* found) {
     if (it->at_eob())
-        return false;
+        return Error_Success;
 
     Text_Item* item = &it->stack.last();
+
+    // '${'
+    bool expect_curly = false;
+    if (item->index < item->text.len && item->text[item->index] == '{') {
+        ++item->index;
+        expect_curly = true;
+    }
 
     size_t start = item->index;
     for (; item->index < item->text.len; ++item->index) {
@@ -563,10 +578,15 @@ static bool get_var_at_point(Text_Iter* it, cz::Str* key) {
         }
     }
 
-    if (start == item->index) {
-        return false;
+    *found = (start != item->index);
+    *key = item->text.slice(start, item->index);
+
+    if (expect_curly) {
+        if (item->index >= item->text.len || item->text[item->index] != '}') {
+            return Error_Parse;
+        }
+        ++item->index;
     }
 
-    *key = item->text.slice(start, item->index);
-    return true;
+    return Error_Success;
 }
