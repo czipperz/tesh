@@ -5,6 +5,8 @@
 #include <unistd.h>
 #endif
 
+#include <Tracy.hpp>
+
 ///////////////////////////////////////////////////////////////////////////////
 
 #ifdef _WIN32
@@ -34,6 +36,8 @@ bool find_in_path(Shell_State* shell,
                   cz::Str abbreviation,
                   cz::Allocator allocator,
                   cz::String* full_path) {
+    ZoneScoped;
+
 #ifdef _WIN32
     cz::Str path_ext = ".EXE";
     (void)get_var(shell, "PATHEXT", &path_ext);
