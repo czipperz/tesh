@@ -11,6 +11,7 @@
 #include <cz/env.hpp>
 #include <cz/format.hpp>
 #include <cz/heap.hpp>
+#include <cz/path.hpp>
 #include <cz/process.hpp>
 #include <cz/string.hpp>
 #include <cz/util.hpp>
@@ -1046,7 +1047,7 @@ static void run_paste(Prompt_State* prompt) {
     }
 }
 
-static void start_completing(Prompt_State* prompt) {
+static void start_completing(Prompt_State* prompt, Shell_State* shell) {
     /////////////////////////////////////////////
     // Get the query
     /////////////////////////////////////////////
@@ -1077,7 +1078,7 @@ static void start_completing(Prompt_State* prompt) {
         slash = backslash;
 #endif
 
-    cz::Str path = (slash == query.len ? "." : query.slice_end(slash));
+    cz::Str query_path = (slash == query.len ? "." : query.slice_end(slash));
     cz::Str prefix = (slash == query.len ? query : query.slice_start(slash + 1));
     prompt->completion.prefix_length = prefix.len;
 
@@ -1091,8 +1092,11 @@ static void start_completing(Prompt_State* prompt) {
     prompt->completion.results.reserve(cz::heap_allocator(), 1);
     prompt->completion.results.push(prefix.clone(path_allocator));
 
+    cz::String path = {};
+    cz::path::make_absolute(query_path, shell->working_directory, temp_allocator, &path);
+
     cz::Directory_Iterator iterator;
-    int result = iterator.init(path.clone_null_terminate(temp_allocator).buffer);
+    int result = iterator.init(path.buffer);
     if (result <= 0)
         return;
 
@@ -1170,7 +1174,7 @@ static bool handle_prompt_manipulation_commands(Shell_State* shell,
             prompt->cursor -= del;
             prompt->text.remove_many(prompt->cursor, del);
         } else {
-            start_completing(prompt);
+            start_completing(prompt, shell);
             // Completion won't start if the user isn't at a thing that could conceivably be
             // completed.  Ex. at a blank prompt.  Allow other TAB bindings to take precedence.
             if (!prompt->completion.is)
