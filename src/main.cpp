@@ -34,6 +34,7 @@
 #include "unicode.hpp"
 
 static Backlog_State* push_backlog(cz::Vector<Backlog_State*>* backlogs, uint64_t id);
+static float get_dpi_scale(SDL_Window* window);
 static void scroll_down1(Render_State* rend, cz::Slice<Backlog_State*> backlogs, int lines);
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -1627,7 +1628,8 @@ static void expand_selection(Selection* selection,
 static int process_events(cz::Vector<Backlog_State*>* backlogs,
                           Prompt_State* prompt,
                           Render_State* rend,
-                          Shell_State* shell) {
+                          Shell_State* shell,
+                          SDL_Window* window) {
     static uint32_t ignore_key_events_until = 0;
 
     int num_events = 0;
@@ -1649,6 +1651,22 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
                 // key combo (ex C-d), then we are selected, then all the depressed keys will
                 // be sent to our process.  But the user didn't press them in our process.
                 ignore_key_events_until = event.window.timestamp + 10;
+            }
+            if (event.window.event == SDL_WINDOWEVENT_MOVED ||
+                event.window.event == SDL_WINDOWEVENT_SIZE_CHANGED) {
+                // Process dpi changes.
+                float new_dpi_scale = get_dpi_scale(window);
+                bool dpi_changed = (rend->dpi_scale + 0.01f < new_dpi_scale ||  //
+                                    rend->dpi_scale - 0.01f > new_dpi_scale);
+                if (dpi_changed) {
+                    int w, h;
+                    SDL_GetWindowSize(window, &w, &h);
+                    w = (int)(w * (new_dpi_scale / rend->dpi_scale));
+                    h = (int)(h * (new_dpi_scale / rend->dpi_scale));
+                    SDL_SetWindowSize(window, w, h);
+                    rend->dpi_scale = new_dpi_scale;
+                    resize_font(rend->font_size, rend);
+                }
             }
 
             rend->grid_is_valid = false;
@@ -2237,7 +2255,7 @@ int actual_main(int argc, char** argv) {
     CZ_DEFER(save_history(&prompt, &shell));
 
 #ifdef _WIN32
-    SetProcessDpiAwareness(PROCESS_SYSTEM_DPI_AWARE);
+    SetProcessDpiAwareness(PROCESS_PER_MONITOR_DPI_AWARE);
 #endif
 
     if (SDL_Init(SDL_INIT_VIDEO) != 0) {
@@ -2259,13 +2277,7 @@ int actual_main(int argc, char** argv) {
     }
     CZ_DEFER(IMG_Quit());
 
-    rend.dpi_scale = 1.0f;
-    {
-        const float dpi_default = 96.0f;
-        float dpi = 0;
-        if (SDL_GetDisplayDPI(0, &dpi, NULL, NULL) == 0)
-            rend.dpi_scale = dpi / dpi_default;
-    }
+    rend.dpi_scale = get_dpi_scale(NULL);
 
     SDL_Window* window =
         SDL_CreateWindow("Tesh", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
@@ -2305,7 +2317,7 @@ int actual_main(int argc, char** argv) {
         temp_arena.clear();
 
         try {
-            int status = process_events(&backlogs, &prompt, &rend, &shell);
+            int status = process_events(&backlogs, &prompt, &rend, &shell, window);
             if (status < 0)
                 break;
 
@@ -2370,4 +2382,16 @@ static Backlog_State* push_backlog(cz::Vector<Backlog_State*>* backlogs, uint64_
     backlogs->push(backlog);
 
     return backlog;
+}
+
+static float get_dpi_scale(SDL_Window* window) {
+    int display = SDL_GetWindowDisplayIndex(window);
+    if (display == -1)
+        display = 0;
+
+    const float dpi_default = 96.0f;
+    float dpi = 0;
+    if (SDL_GetDisplayDPI(display, &dpi, NULL, NULL) != 0)
+        return 1.0f;  // failure so assume no scaling
+    return dpi / dpi_default;
 }
