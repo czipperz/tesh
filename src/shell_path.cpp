@@ -21,6 +21,7 @@
 
 ///////////////////////////////////////////////////////////////////////////////
 
+static bool is_absolute(cz::Str path);
 static bool is_relative(cz::Str path);
 static bool is_executable(const char* path);
 #ifdef _WIN32
@@ -39,7 +40,7 @@ bool find_in_path(Shell_State* shell,
 #endif
 
     // Absolute paths are only looked up verbatim.
-    if (cz::path::is_absolute(abbreviation)) {
+    if (is_absolute(abbreviation)) {
         full_path->len = 0;
         full_path->reserve(allocator, abbreviation.len + 1);
         full_path->append(abbreviation);
@@ -106,8 +107,10 @@ static bool has_valid_extension(cz::Str full_path, cz::Str path_ext);
 
 static bool is_executable_ext(cz::Str path_ext, cz::Allocator allocator, cz::String* full_path) {
     // If it already has an extension then use it.
-    if (has_valid_extension(*full_path, path_ext))
+    if (has_valid_extension(*full_path, path_ext)) {
+        full_path->null_terminate();
         return is_executable(full_path->buffer);
+    }
 
     size_t len = full_path->len;
     cz::Str path_ext_rest = path_ext;
@@ -145,9 +148,9 @@ static bool has_valid_extension(cz::Str full_path, cz::Str path_ext) {
     const char* dot = full_path.rfind('.');
     if (!dot)
         return false;
-    
+
     cz::Str ext = full_path.slice_start(dot);
-    const char* point = path_ext.find(ext);
+    const char* point = path_ext.find_case_insensitive(ext);
     if (!point)
         return false;
 
@@ -170,6 +173,14 @@ static bool is_path_sep(char ch) {
     return ch == PATHSEP || ch == '/';
 #else
     return ch == PATHSEP;
+#endif
+}
+
+static bool is_absolute(cz::Str file) {
+#ifdef _WIN32
+    return file.len >= 3 && cz::is_alpha(file[0]) && file[1] == ':' && is_path_sep(file[2]);
+#else
+    return file.len >= 1 && file[0] == '/';
 #endif
 }
 
