@@ -63,6 +63,7 @@ struct Prompt_State {
 };
 
 static cz::Vector<cz::Str>* prompt_history(Prompt_State* prompt, bool script);
+static void stop_completing(Prompt_State* prompt);
 
 ///////////////////////////////////////////////////////////////////////////////
 // Renderer methods
@@ -975,6 +976,7 @@ static void transform_shift_numbers(SDL_Keysym* keysym) {
 static void resolve_history_searching(Prompt_State* prompt, cz::Vector<cz::Str>* history) {
     if (prompt->history_searching) {
         prompt->history_searching = false;
+        stop_completing(prompt);
         prompt->text.len = 0;
         if (prompt->history_counter < history->len) {
             cz::Str hist = history->get(prompt->history_counter);
@@ -1025,12 +1027,8 @@ static void finish_prompt_manipulation(Shell_State* shell,
     rend->auto_page = false;
     rend->auto_scroll = true;
     stop_selecting(rend);
-    if (!doing_completion && prompt->completion.is) {
-        prompt->completion.is = false;
-        prompt->completion.prefix_length = 0;
-        prompt->completion.results_arena.clear();
-        prompt->completion.results.len = 0;
-        prompt->completion.current = 0;
+    if (!doing_completion) {
+        stop_completing(prompt);
     }
 }
 
@@ -1041,6 +1039,7 @@ static void run_paste(Prompt_State* prompt) {
         size_t len = strlen(clip);
         cz::String str = {clip, len, len};
         cz::strip_carriage_returns(&str);
+        stop_completing(prompt);
         prompt->text.reserve(cz::heap_allocator(), str.len);
         prompt->text.insert(prompt->cursor, str);
         prompt->cursor += str.len;
@@ -1113,6 +1112,17 @@ static void start_completing(Prompt_State* prompt, Shell_State* shell) {
             break;
     }
     iterator.drop();
+}
+
+static void stop_completing(Prompt_State* prompt) {
+    if (!prompt->completion.is)
+        return;
+
+    prompt->completion.is = false;
+    prompt->completion.prefix_length = 0;
+    prompt->completion.results_arena.clear();
+    prompt->completion.results.len = 0;
+    prompt->completion.current = 0;
 }
 
 static bool handle_prompt_manipulation_commands(Shell_State* shell,
@@ -1773,6 +1783,7 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
                     }
                 }
 
+                stop_completing(prompt);
                 prompt->text.len = 0;
                 prompt->cursor = 0;
                 if (!script)
@@ -1814,6 +1825,7 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
 
             if (mod == KMOD_CTRL && key == SDLK_d) {
                 if (prompt->cursor < prompt->text.len) {
+                    stop_completing(prompt);
                     prompt->text.remove(prompt->cursor);
                     ++num_events;
                 } else if (shell->attached_process != -1) {
