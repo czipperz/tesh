@@ -34,6 +34,10 @@
 #include "solarized_dark.hpp"
 #include "unicode.hpp"
 
+///////////////////////////////////////////////////////////////////////////////
+// Forward declarations
+///////////////////////////////////////////////////////////////////////////////
+
 static Backlog_State* push_backlog(cz::Vector<Backlog_State*>* backlogs, uint64_t id);
 static float get_dpi_scale(SDL_Window* window);
 static void scroll_down1(Render_State* rend, cz::Slice<Backlog_State*> backlogs, int lines);
