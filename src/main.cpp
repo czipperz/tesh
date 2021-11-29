@@ -655,11 +655,40 @@ static void finish_script(Shell_State* shell,
     recycle_process(shell, script);
 }
 
+static void read_tty_output(Backlog_State* backlog, Running_Script* script, bool cap_read_calls) {
+    static char buffer[4096];
+
+#ifdef _WIN32
+    cz::Input_File parent_out = script->tty.out;
+#else
+    cz::Input_File parent_out;
+    parent_out.handle = script->tty.parent_bi;
+#endif
+    if (parent_out.is_open()) {
+        int64_t result = 0;
+        for (int rounds = 0;; ++rounds) {
+            if (cap_read_calls && rounds == 1024)
+                break;
+
+            // Even strip carriage returns on linux because
+            // some programs (ex. 'git status') use CRLF.
+            result = parent_out.read_strip_carriage_returns(buffer, sizeof(buffer),
+                                                            &script->tty.out_carry);
+            if (result <= 0)
+                break;
+
+            // TODO: allow expanding max dynamically (don't close script->out here)
+            result = append_text(backlog, {buffer, (size_t)result});
+            if (result <= 0)
+                break;
+        }
+    }
+}
+
 static bool read_process_data(Shell_State* shell,
                               cz::Slice<Backlog_State*> backlogs,
                               Render_State* rend,
                               bool* force_quit) {
-    static char buffer[4096];
     bool changes = false;
     for (size_t i = 0; i < shell->scripts.len; ++i) {
         Running_Script* script = &shell->scripts[i];
@@ -680,28 +709,7 @@ static bool read_process_data(Shell_State* shell,
         if (*force_quit)
             return true;
 
-#ifdef _WIN32
-        cz::Input_File parent_out = script->tty.out;
-#else
-        cz::Input_File parent_out;
-        parent_out.handle = script->tty.parent_bi;
-#endif
-        if (parent_out.is_open()) {
-            int64_t result = 0;
-            for (int rounds = 0; rounds < 1024; ++rounds) {
-                // Even strip carriage returns on linux because
-                // some programs (ex. 'git status') use CRLF.
-                result = parent_out.read_strip_carriage_returns(buffer, sizeof(buffer),
-                                                                &script->tty.out_carry);
-                if (result <= 0)
-                    break;
-
-                // TODO: allow expanding max dynamically (don't close script->out here)
-                result = append_text(backlog, {buffer, (size_t)result});
-                if (result <= 0)
-                    break;
-            }
-        }
+        read_tty_output(backlog, script, /*cap_read_calls=*/true);
 
         if (script->fg.pipeline.pipeline.len == 0) {
             bool started = finish_line(shell, backlog, script, &script->fg, /*background=*/false);
