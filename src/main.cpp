@@ -13,6 +13,7 @@
 #include <cz/heap.hpp>
 #include <cz/path.hpp>
 #include <cz/process.hpp>
+#include <cz/sort.hpp>
 #include <cz/string.hpp>
 #include <cz/util.hpp>
 #include <cz/vector.hpp>
@@ -1154,6 +1155,8 @@ skip_absolute:
             break;
     }
     iterator.drop();
+
+    cz::sort(prompt->completion.results);
 }
 
 static void stop_completing(Prompt_State* prompt) {
