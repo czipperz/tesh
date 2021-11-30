@@ -1707,6 +1707,8 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
             transform_shift_numbers(&event.key.keysym);
 
             int mod = (event.key.keysym.mod & ~(KMOD_CAPS | KMOD_NUM));
+            // KMOD_ALT = KMOD_LALT | KMOD_RALT so if only one is pressed then mod == KMOD_ALT
+            // will be false.  So if one is pressed then pretend all ALT buttons are.
             if (mod & KMOD_ALT)
                 mod |= KMOD_ALT;
             if (mod & KMOD_CTRL)
@@ -1931,8 +1933,8 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
             event.wheel.y *= 4;
             event.wheel.x *= 10;
 
-            const Uint8* state = SDL_GetKeyboardState(NULL);
-            if (state[SDL_SCANCODE_LCTRL] || state[SDL_SCANCODE_RCTRL]) {
+            SDL_Keymod mods = SDL_GetModState();
+            if (mods & KMOD_CTRL) {
                 int new_font_size = rend->font_size;
                 if (event.wheel.y > 0) {
                     new_font_size += 2;
