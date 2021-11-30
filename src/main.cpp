@@ -639,19 +639,6 @@ static bool finish_line(Shell_State* shell,
     return true;
 }
 
-static void finish_script(Shell_State* shell,
-                          Backlog_State* backlog,
-                          Render_State* rend,
-                          Running_Script* script) {
-    // If we're attached then we auto scroll but we can hit an edge case where the
-    // final output isn't scrolled to.  So we stop halfway through the output.  I
-    // think it would be better if this just called `ensure_prompt_on_screen`.
-    if (shell->attached_process == script->id)
-        rend->auto_scroll = true;
-
-    recycle_process(shell, script);
-}
-
 static void read_tty_output(Backlog_State* backlog, Running_Script* script, bool cap_read_calls) {
     static char buffer[4096];
 
@@ -725,7 +712,14 @@ static bool read_process_data(Shell_State* shell,
             using namespace std::chrono;
             high_resolution_clock::duration elapsed = (high_resolution_clock::now() - backlog->end);
             if (duration_cast<milliseconds>(elapsed).count() >= 1000) {
-                finish_script(shell, backlog, rend, script);
+                // If we're attached then we auto scroll but we can hit an edge case where the
+                // final output isn't scrolled to.  So we stop halfway through the output.  I
+                // think it would be better if this just called `ensure_prompt_on_screen`.
+                if (shell->attached_process == script->id)
+                    rend->auto_scroll = true;
+
+                recycle_process(shell, script);
+
                 changes = true;
                 --i;
             } else {
