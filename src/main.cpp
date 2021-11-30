@@ -84,13 +84,8 @@ static void make_info(cz::String* info,
         return;
 
     std::chrono::high_resolution_clock::time_point end = backlog->end;
-    if (!backlog->done) {
-        if (!lookup_process(shell, backlog->id)) {
-            backlog->done = true;
-            backlog->end = now;
-        }
+    if (!backlog->done)
         end = now;
-    }
 
     // Find the line number.
     size_t first_line_number = 0;
@@ -591,6 +586,7 @@ static void tick_pipeline(Shell_State* shell,
                          force_quit)) {
             if (p + 1 == pipeline->length)
                 pipeline->last_exit_code = exit_code;
+            backlog->end = std::chrono::high_resolution_clock::now();
             pipeline->pipeline.remove(p);
             --p;
             if (pipeline->pipeline.len == 0)
@@ -712,7 +708,7 @@ static bool read_process_data(Shell_State* shell,
 
         read_tty_output(backlog, script, /*cap_read_calls=*/true);
 
-        if (script->fg.pipeline.pipeline.len == 0) {
+        if (script->fg.pipeline.pipeline.len == 0 && !script->fg_finished) {
             bool started = finish_line(shell, backlog, script, &script->fg, /*background=*/false);
             if (started) {
                 // Rerun to prevent long scripts from only doing one command per frame.
@@ -725,9 +721,16 @@ static bool read_process_data(Shell_State* shell,
         }
 
         if (script->fg_finished && script->bg.len == 0) {
-            finish_script(shell, backlog, rend, script);
-            changes = true;
-            --i;
+            // Wait for one second after the process ends so the pipes flush.
+            using namespace std::chrono;
+            high_resolution_clock::duration elapsed = (high_resolution_clock::now() - backlog->end);
+            if (duration_cast<milliseconds>(elapsed).count() >= 1000) {
+                finish_script(shell, backlog, rend, script);
+                changes = true;
+                --i;
+            } else {
+                backlog->done = true;
+            }
         }
 
         if (backlog->length != starting_length)
