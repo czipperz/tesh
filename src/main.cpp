@@ -909,6 +909,8 @@ void clear_screen(Render_State* rend, Shell_State* shell, cz::Slice<Backlog_Stat
     rend->complete_redraw = true;
     rend->auto_page = false;
     rend->auto_scroll = false;
+    shell->attached_process = -1;
+    shell->selected_process = shell->attached_process;
 }
 
 static void ensure_prompt_on_screen(Render_State* rend, cz::Slice<Backlog_State*> backlogs) {
