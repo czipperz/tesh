@@ -1058,6 +1058,14 @@ static void run_paste(Prompt_State* prompt) {
     }
 }
 
+static bool is_path_sep(char ch) {
+#ifdef _WIN32
+    return ch == '\\' || ch == '/';
+#else
+    return ch == '/';
+#endif
+}
+
 static void start_completing(Prompt_State* prompt, Shell_State* shell) {
     /////////////////////////////////////////////
     // Get the query
@@ -1109,8 +1117,24 @@ static void start_completing(Prompt_State* prompt, Shell_State* shell) {
     prompt->completion.results.reserve(cz::heap_allocator(), 1);
     prompt->completion.results.push(prefix.clone(path_allocator));
 
+    // Expand '~/*' to '$HOME/*'.
     cz::String path = {};
+    if (query_path == "~" ||
+        (query_path.len >= 2 && query_path[0] == '~' && is_path_sep(query_path[1]))) {
+        cz::Str home;
+        if (get_var(shell, "HOME", &home)) {
+            if (home.len > 0 && is_path_sep(home.last()))
+                home.len--;
+            path.reserve(cz::heap_allocator(), home.len + query_path.len - 1 + 1);
+            path.append(home);
+            path.append(query_path.slice_start(1));
+            path.null_terminate();
+            goto skip_absolute;
+        }
+    }
+
     cz::path::make_absolute(query_path, shell->working_directory, temp_allocator, &path);
+skip_absolute:
 
     cz::Directory_Iterator iterator;
     int result = iterator.init(path.buffer);
