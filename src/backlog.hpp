@@ -31,7 +31,7 @@ struct Backlog_State {
     char get(size_t index);
 };
 
-int64_t append_text(Backlog_State* backlog, cz::Str text);
+uint64_t append_text(Backlog_State* backlog, cz::Str text);
 void backlog_flush(Backlog_State* backlog);
 
 ///////////////////////////////////////////////////////////////////////////////

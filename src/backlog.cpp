@@ -508,14 +508,16 @@ static void truncate_to(Backlog_State* backlog, uint64_t new_length) {
     }
 }
 
-int64_t append_text(Backlog_State* backlog, cz::Str text) {
+uint64_t append_text(Backlog_State* backlog, cz::Str text) {
     const char escape = 0x1b;
     const char del = 0x08;
-    int64_t done = 0;
+    uint64_t done = 0;
 
+    // If we are inside an escape sequence then pump the text into that first.
     if (backlog->escape_backlog.len != 0) {
         uint64_t skip = 0;
         if (!process_escape_sequence(backlog, text, &skip)) {
+            // All of the text was consumed.
             return text.len;
         }
 
@@ -524,7 +526,7 @@ int64_t append_text(Backlog_State* backlog, cz::Str text) {
         done += skip;
     }
 
-    while (1) {
+    while (text.len > 0) {
         // Find the first special character.
         size_t chunk_len = text.len;
         chunk_len = text.slice_end(chunk_len).find_index('\r');
@@ -533,11 +535,14 @@ int64_t append_text(Backlog_State* backlog, cz::Str text) {
         chunk_len = text.slice_end(chunk_len).find_index('\a');
 
         // Append the normal text before it.
-        int64_t result = append_chunk(backlog, text.slice_end(chunk_len));
-        if (result != chunk_len)
-            return done + result;
+        uint64_t result = append_chunk(backlog, text.slice_end(chunk_len));
         done += result;
 
+        // Output is truncated so just stop here.
+        if (result != chunk_len)
+            break;
+
+        // No special character so stop.
         if (chunk_len == text.len)
             break;
 
@@ -563,6 +568,7 @@ int64_t append_text(Backlog_State* backlog, cz::Str text) {
         } break;
 
         case escape: {
+            // Start processing an escape sequence.
             cz::Str remaining = text.slice_start(chunk_len);
             uint64_t skip = 0;
             if (!process_escape_sequence(backlog, remaining, &skip)) {
@@ -581,5 +587,6 @@ int64_t append_text(Backlog_State* backlog, cz::Str text) {
         } break;
         }
     }
-    return text.len;
+
+    return done;
 }
