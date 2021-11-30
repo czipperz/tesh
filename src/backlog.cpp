@@ -289,6 +289,31 @@ static bool parse_hyperlink(Backlog_State* backlog, cz::Str fresh, size_t* skip)
     return true;
 }
 
+static bool parse_set_window_title(Backlog_State* backlog, cz::Str fresh, size_t* skip) {
+    // ESC]0; <TITLE> BEL
+    cz::String* text = &backlog->escape_backlog;
+    if (!ensure_char(backlog, 3, fresh, skip))
+        return false;
+    if ((*text)[3] != ';')
+        CZ_PANIC("todo");
+
+    size_t it = 4;
+    while (1) {
+        if (!ensure_char(backlog, it, fresh, skip))
+            return false;
+        char ch = (*text)[it];
+        if (ch == '\a') {
+            // Alarm is the end of this sequence.
+            text->remove(it);
+            break;
+        }
+        ++it;
+    }
+
+    // Ignore the event.
+    return true;
+}
+
 /// Attempt to process an escape sequence.  Returns `true` if it
 /// was processed, `false` if we need more input to process it.
 static bool process_escape_sequence(Backlog_State* backlog, cz::Str fresh, size_t* skip) {
@@ -460,6 +485,8 @@ static bool process_escape_sequence(Backlog_State* backlog, cz::Str fresh, size_
 
         if ((*text)[2] == '8') {
             return parse_hyperlink(backlog, fresh, skip);
+        } else if ((*text)[2] == '0') {
+            return parse_set_window_title(backlog, fresh, skip);
         } else {
             CZ_PANIC("todo");
         }
