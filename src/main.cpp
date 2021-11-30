@@ -1805,6 +1805,8 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
                         rend->auto_scroll = cfg.on_spawn_auto_scroll;
                         if (!run_script(shell, backlog, prompt->text)) {
                             append_text(backlog, "Error: failed to execute\n");
+                            backlog->done = true;
+                            backlog->end = std::chrono::high_resolution_clock::now();
                         }
                         shell->selected_process = backlog->id;
                     }
