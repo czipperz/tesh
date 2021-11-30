@@ -708,6 +708,11 @@ static bool read_process_data(Shell_State* shell,
         }
 
         if (script->fg_finished && script->bg.len == 0) {
+            if (!backlog->done) {
+                backlog->done = true;
+                backlog->end = std::chrono::high_resolution_clock::now();
+            }
+
             // Wait for one second after the process ends so the pipes flush.
             using namespace std::chrono;
             high_resolution_clock::duration elapsed = (high_resolution_clock::now() - backlog->end);
@@ -722,8 +727,6 @@ static bool read_process_data(Shell_State* shell,
 
                 changes = true;
                 --i;
-            } else {
-                backlog->done = true;
             }
         }
 
