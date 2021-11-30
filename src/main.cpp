@@ -1820,6 +1820,8 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
 #endif
 
                         backlog->exit_code = -1;
+                        backlog->done = true;
+                        backlog->end = std::chrono::high_resolution_clock::now();
                         recycle_process(shell, script);
                     } else {
                         backlog->done = true;
