@@ -1093,6 +1093,12 @@ static void start_completing(Prompt_State* prompt, Shell_State* shell) {
     cz::Str prefix = (slash == query.len ? query : query.slice_start(slash + 1));
     prompt->completion.prefix_length = prefix.len;
 
+#ifndef _WIN32
+    // Deal with absolute paths.
+    if (query_path.len == 0)
+        query_path = "/";
+#endif
+
     /////////////////////////////////////////////
     // Get all files matching the prefix.
     /////////////////////////////////////////////
