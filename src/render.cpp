@@ -85,7 +85,13 @@ static SDL_Surface* rasterize_code_point_cached(Render_State* rend,
 
     // Cache miss.  Rasterize and add to the cache.
     SDL_Surface* surface = rasterize_code_point(seq, rend->font, 0, cfg.theme[color256]);
-    CZ_ASSERT(surface);
+
+    // I've seen this case actually come up before so re-render as an invalid character.
+    if (!surface) {
+        if (!strcmp(seq, "\1"))
+            CZ_PANIC("Failed to render");
+        return rasterize_code_point_cached(rend, "\1", color256);
+    }
 
     cache->code_points.reserve(cz::heap_allocator(), 1);
     cache->code_points.insert(index, code_point);
