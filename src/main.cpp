@@ -1053,7 +1053,11 @@ static void run_paste(Prompt_State* prompt) {
         CZ_DEFER(SDL_free(clip));
         size_t len = strlen(clip);
         cz::String str = {clip, len, len};
+
         cz::strip_carriage_returns(&str);
+        while (str.ends_with('\n'))
+            str.pop();
+
         stop_completing(prompt);
         prompt->text.reserve(cz::heap_allocator(), str.len);
         prompt->text.insert(prompt->cursor, str);
