@@ -8,6 +8,8 @@
 #define OUTER_INDEX(index) ((index) >> 12)
 #define INNER_INDEX(index) ((index)&0xfff)
 
+static void truncate_to(Backlog_State* backlog, uint64_t new_length);
+
 char Backlog_State::get(size_t i) {
     CZ_DEBUG_ASSERT(i < length);
     return buffers[OUTER_INDEX(i)][INNER_INDEX(i)];
@@ -430,8 +432,6 @@ static bool process_escape_sequence(Backlog_State* backlog, cz::Str fresh, size_
             // ESC [ 0 g            Clear Tab Stop at Column
             // ESC [ 3 g            Clear All Tab Stops
             //
-            // ESC [ <y> ; <x> H    Cursor Set Position
-            // ESC [ <y> ; <x> f    Cursor Set Position
             // ESC [ <n> ; <b> r    Set Scrolling Region between n and b (row numbers).
             if ((*text)[it] == 's' || (*text)[it] == 'u' || (*text)[it] == 'A' ||
                 (*text)[it] == 'B' || (*text)[it] == 'C' || (*text)[it] == 'D' ||
@@ -440,8 +440,7 @@ static bool process_escape_sequence(Backlog_State* backlog, cz::Str fresh, size_
                 (*text)[it] == 'S' || (*text)[it] == 'T' || (*text)[it] == '@' ||
                 (*text)[it] == 'P' || (*text)[it] == 'X' || (*text)[it] == 'L' ||
                 (*text)[it] == 'M' || (*text)[it] == 'J' || (*text)[it] == 'K' ||
-                (*text)[it] == 'g' || (*text)[it] == 'H' || (*text)[it] == 'f' ||
-                (*text)[it] == 'r') {
+                (*text)[it] == 'g' || (*text)[it] == 'r') {
                 return true;
             }
 
@@ -459,6 +458,19 @@ static bool process_escape_sequence(Backlog_State* backlog, cz::Str fresh, size_
                 uint64_t graphics_rendition = backlog->graphics_rendition;
                 graphics_rendition = parse_graphics_rendition(args, graphics_rendition);
                 set_graphics_rendition(backlog, graphics_rendition);
+                return true;
+            }
+
+            // ESC [ <y> ; <x> H    Cursor Set Position
+            // ESC [ <y> ; <x> f    Cursor Set Position
+            else if ((*text)[it] == 'H' || (*text)[it] == 'f') {
+                // Windows sends ESC [ H instead of CR so handle that.
+                if (args.len > 0) {
+                    // CZ_PANIC("todo");
+                    return true;
+                }
+                uint64_t line_start = backlog->lines.len > 0 ? backlog->lines.last() : 0;
+                truncate_to(backlog, line_start);
                 return true;
             }
 
