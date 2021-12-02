@@ -1409,7 +1409,8 @@ static bool handle_scroll_commands(Shell_State* shell,
         int lines = cz::max(rend->window_rows, 6) - 3;
         scroll_up(rend, backlogs, lines);
     } else if ((mod == KMOD_CTRL && key == SDLK_d) &&
-               (shell->attached_process == -1 && prompt->text.len == 0)) {
+               ((shell->attached_process == -1 && prompt->text.len == 0) ||
+                !(rend->auto_scroll || rend->auto_page))) {
         int lines = rend->window_rows / 2;
         scroll_down(rend, backlogs, lines);
     } else if (mod == KMOD_CTRL && key == SDLK_u) {
@@ -1880,7 +1881,7 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
                 ++num_events;
             }
 
-            if (mod == KMOD_CTRL && key == SDLK_d) {
+            if (mod == KMOD_CTRL && key == SDLK_d && (rend->auto_scroll || rend->auto_page)) {
                 if (prompt->cursor < prompt->text.len) {
                     stop_completing(prompt);
                     prompt->text.remove(prompt->cursor);
