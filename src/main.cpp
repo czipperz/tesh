@@ -1530,8 +1530,8 @@ static void set_clipboard_contents_to_selection(Render_State* rend,
 }
 
 static int word_char_category(char ch) {
-    if (cz::is_alnum(ch))
-        return 1;
+    if (cz::is_alnum(ch) || ch == '/' || ch == '-' || ch == '_' || ch == '.')
+        return 1; // Path character.
     else if (cz::is_space(ch))
         return 2;
     else
