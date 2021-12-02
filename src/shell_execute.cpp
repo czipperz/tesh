@@ -79,16 +79,6 @@ Error start_execute_script(Shell_State* shell,
     }
 
     return Error_Success;
-
-#if 0
-cleanup2:
-    running.script_out.close();
-    running.out.close();
-cleanup1:
-    running.script_in.close();
-    running.in.close();
-    return error;
-#endif
 }
 
 ///////////////////////////////////////////////////////////////////////////////
