@@ -813,16 +813,25 @@ static void scroll_up(Render_State* rend, cz::Slice<Backlog_State*> backlogs, in
         Backlog_State* backlog = backlogs[point->outer];
         uint64_t end = render_length(backlog);
         uint64_t cursor = point->inner;
-        if (cursor >= end + 1) {
-            cursor--;
-            lines--;
-        }
-        if (cursor >= end && end > 0 && backlog->get(end - 1) != '\n') {
-            cursor--;
-            lines--;
+
+        // Deal with fake newline and spacer newline.
+        if (lines > 0 && cursor >= end && end > 0) {
+            if (cursor > 0)
+                --cursor;
+            while (lines > 0 && cursor >= end && end > 0) {
+                cursor--;
+                lines--;
+            }
+            cursor++;
+
+            // Fake newlines get double counted above so undo that.
+            if (cursor == end && end > 0 && backlog->get(end - 1) != '\n')
+                lines++;
         }
 
-        while (lines > 0 && cursor > 0) {
+        // Deal with actual buffer contents.
+        while (lines > 0 && cursor > 0 && end > 0) {
+            // Find start of physical line.
             size_t line_index;
             if (cz::binary_search(backlog->lines.as_slice(), cursor - 1, &line_index))
                 ++line_index;  // Go after the match.
