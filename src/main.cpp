@@ -838,6 +838,11 @@ static void scroll_up(Render_State* rend, cz::Slice<Backlog_State*> backlogs, in
                 visual_line_count++;
             }
 
+            // The following algorithm has an off by one error
+            // if we start in the middle of a physical line.
+            if (cursor > line_start)
+                --cursor;
+
             uint64_t visual_column = 0;
             uint64_t actual_column = 0;
             for (uint64_t iter = line_start;;) {
