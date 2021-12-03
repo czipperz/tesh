@@ -442,7 +442,7 @@ static void auto_scroll_start_paging(Render_State* rend, cz::Slice<Backlog_State
         // More than one page of content so stop auto paging.
         rend->backlog_start = top_prompt;
         rend->complete_redraw = true;
-        rend->auto_page = false;
+        rend->scroll_mode = PROMPT_SCROLL;
     } else {
         rend->backlog_start = backup;
         ensure_prompt_on_screen(rend, backlogs);
@@ -479,9 +479,9 @@ static void render_frame(SDL_Window* window,
         }
     }
 
-    if (rend->auto_page)
+    if (rend->scroll_mode == AUTO_PAGE)
         auto_scroll_start_paging(rend, backlogs);
-    if (rend->auto_scroll)
+    if (rend->scroll_mode == AUTO_SCROLL)
         ensure_end_of_selected_process_on_screen(rend, backlogs, shell->selected_process, false);
     if (shell->attached_process != -1)
         ensure_prompt_on_screen(rend, backlogs);
@@ -721,7 +721,7 @@ static bool read_process_data(Shell_State* shell,
                 // final output isn't scrolled to.  So we stop halfway through the output.  I
                 // think it would be better if this just called `ensure_prompt_on_screen`.
                 if (shell->attached_process == script->id)
-                    rend->auto_scroll = true;
+                    rend->scroll_mode = AUTO_SCROLL;
 
                 recycle_process(shell, script);
 
@@ -918,8 +918,7 @@ void clear_screen(Render_State* rend, Shell_State* shell, cz::Slice<Backlog_Stat
     if (shell->scripts.len > 0)
         scroll_up(rend, backlogs, 2);
     rend->complete_redraw = true;
-    rend->auto_page = false;
-    rend->auto_scroll = false;
+    rend->scroll_mode = PROMPT_SCROLL;
     shell->attached_process = -1;
     shell->selected_process = shell->attached_process;
 }
@@ -1053,8 +1052,7 @@ static void finish_prompt_manipulation(Shell_State* shell,
                                        bool doing_completion) {
     shell->selected_process = shell->attached_process;
     ensure_prompt_on_screen(rend, backlogs);
-    rend->auto_page = false;
-    rend->auto_scroll = true;
+    rend->scroll_mode = AUTO_SCROLL;
     stop_selecting(rend);
     if (!doing_completion) {
         stop_completing(prompt);
@@ -1415,7 +1413,7 @@ static bool handle_scroll_commands(Shell_State* shell,
                                    Render_State* rend,
                                    uint16_t mod,
                                    SDL_Keycode key) {
-    bool auto_scroll = false;
+    Scroll_Mode scroll_mode = MANUAL_SCROLL;
     if ((mod == 0 && key == SDLK_PAGEDOWN) || (mod == KMOD_CTRL && key == SDLK_v)) {
         int lines = cz::max(rend->window_rows, 6) - 3;
         scroll_down(rend, backlogs, lines);
@@ -1424,7 +1422,7 @@ static bool handle_scroll_commands(Shell_State* shell,
         scroll_up(rend, backlogs, lines);
     } else if ((mod == KMOD_CTRL && key == SDLK_d) &&
                ((shell->attached_process == -1 && prompt->text.len == 0) ||
-                !(rend->auto_scroll || rend->auto_page))) {
+                (rend->scroll_mode == MANUAL_SCROLL || rend->scroll_mode == PROMPT_SCROLL))) {
         int lines = rend->window_rows / 2;
         scroll_down(rend, backlogs, lines);
     } else if (mod == KMOD_CTRL && key == SDLK_u) {
@@ -1439,10 +1437,11 @@ static bool handle_scroll_commands(Shell_State* shell,
         rend->backlog_start = {};
         rend->backlog_start.outer =
             (shell->selected_process == -1 ? backlogs.len : shell->selected_process);
+        scroll_mode = PROMPT_SCROLL;
     } else if (mod == KMOD_ALT && key == SDLK_GREATER) {
         // Goto end of selected process.
         scroll_to_end_of_selected_process(rend, backlogs, shell->selected_process);
-        auto_scroll = true;
+        scroll_mode = AUTO_SCROLL;
     } else if (mod == (KMOD_CTRL | KMOD_ALT) && key == SDLK_b) {
         // Select the process before the currently selected
         // process, or the last process if this is the prompt.
@@ -1452,6 +1451,7 @@ static bool handle_scroll_commands(Shell_State* shell,
             --shell->selected_process;
         }
         ensure_selected_process_on_screen(rend, backlogs, shell->selected_process);
+        scroll_mode = PROMPT_SCROLL;
     } else if (mod == (KMOD_CTRL | KMOD_ALT) && key == SDLK_f) {
         // Select the next process, or the prompt if this is the last process.
         if (shell->selected_process != -1 && shell->selected_process + 1 < backlogs.len)
@@ -1459,6 +1459,7 @@ static bool handle_scroll_commands(Shell_State* shell,
         else
             shell->selected_process = -1;
         ensure_selected_process_on_screen(rend, backlogs, shell->selected_process);
+        scroll_mode = PROMPT_SCROLL;
     } else if (mod == 0 && key == SDLK_TAB && shell->selected_process != -1) {
         Backlog_State* backlog = backlogs[shell->selected_process];
         backlog->render_collapsed = !backlog->render_collapsed;
@@ -1469,8 +1470,7 @@ static bool handle_scroll_commands(Shell_State* shell,
         return false;
     }
 
-    rend->auto_page = false;
-    rend->auto_scroll = auto_scroll;
+    rend->scroll_mode = scroll_mode;
     rend->complete_redraw = true;
     return true;
 }
@@ -1789,8 +1789,7 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
 
             if ((mod == KMOD_CTRL && event.key.keysym.sym == SDLK_c) ||
                 event.key.keysym.sym == SDLK_RETURN) {
-                rend->auto_page = false;
-                rend->auto_scroll = true;
+                rend->scroll_mode = AUTO_SCROLL;
 
                 {
                     cz::Vector<cz::Str>* history =
@@ -1820,8 +1819,7 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
                         cz::Str message = cz::format(temp_allocator, prompt->text, '\n');
                         (void)tty_write(&script->tty, message);
                     } else {
-                        rend->auto_page = cfg.on_spawn_auto_page;
-                        rend->auto_scroll = cfg.on_spawn_auto_scroll;
+                        rend->scroll_mode = cfg.on_spawn_scroll_mode;
                         if (!run_script(shell, backlog, prompt->text)) {
                             append_text(backlog, "Error: failed to execute\n");
                             backlog->done = true;
@@ -1871,8 +1869,7 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
             }
 
             if (mod == KMOD_CTRL && key == SDLK_z) {
-                rend->auto_page = false;
-                rend->auto_scroll = true;
+                rend->scroll_mode = AUTO_SCROLL;
                 if (shell->attached_process == -1) {
                     // If the selected process is still running then attach to it.
                     // Otherwise, attach to the most recently launched process.
@@ -1895,7 +1892,8 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
                 ++num_events;
             }
 
-            if (mod == KMOD_CTRL && key == SDLK_d && (rend->auto_scroll || rend->auto_page)) {
+            if (mod == KMOD_CTRL && key == SDLK_d &&
+                (rend->scroll_mode == AUTO_SCROLL || rend->scroll_mode == AUTO_PAGE)) {
                 if (prompt->cursor < prompt->text.len) {
                     stop_completing(prompt);
                     prompt->text.remove(prompt->cursor);
@@ -1924,8 +1922,7 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
                 ++num_events;
 
                 shell->selected_process = shell->attached_process;
-                rend->auto_page = false;
-                rend->auto_scroll = true;
+                rend->scroll_mode = AUTO_SCROLL;
                 int lines = cz::max(rend->window_rows, 3) - 3;
                 scroll_up(rend, *backlogs, lines);
             }
@@ -1974,8 +1971,7 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
         } break;
 
         case SDL_MOUSEWHEEL: {
-            rend->auto_page = false;
-            rend->auto_scroll = false;
+            rend->scroll_mode == MANUAL_SCROLL;
             shell->attached_process = -1;
 
             if (event.wheel.direction == SDL_MOUSEWHEEL_FLIPPED) {
@@ -2015,8 +2011,7 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
         case SDL_MOUSEBUTTONDOWN: {
             if (event.button.button == SDL_BUTTON_LEFT) {
                 shell->selected_process = -1;
-                rend->auto_page = false;
-                rend->auto_scroll = false;
+                rend->scroll_mode = MANUAL_SCROLL;
                 rend->selection.type = SELECT_DISABLED;
 
                 if (!rend->grid_is_valid)
@@ -2210,8 +2205,7 @@ static void save_history(Prompt_State* prompt, Shell_State* shell) {
 
 static void load_default_configuration() {
     cfg.on_spawn_attach = false;
-    cfg.on_spawn_auto_page = true;
-    cfg.on_spawn_auto_scroll = false;
+    cfg.on_spawn_scroll_mode = AUTO_PAGE;
 
     cfg.on_select_auto_copy = true;
 

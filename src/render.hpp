@@ -39,6 +39,13 @@ struct Surface_Cache {
     cz::Vector<SDL_Surface*> surfaces;
 };
 
+enum Scroll_Mode {
+    AUTO_PAGE,
+    AUTO_SCROLL,
+    MANUAL_SCROLL,
+    PROMPT_SCROLL,
+};
+
 struct Render_State {
     TTF_Font* font;
     int font_size;
@@ -59,8 +66,7 @@ struct Render_State {
     Visual_Point backlog_start;  // First point that was drawn
     Visual_Point backlog_end;    // Last point that was drawn
 
-    bool auto_page;
-    bool auto_scroll;
+    Scroll_Mode scroll_mode;
 
     Selection selection;
 };

@@ -2,11 +2,11 @@
 
 #include <SDL.h>
 #include <cz/slice.hpp>
+#include "render.hpp"
 
 struct Config_State {
     bool on_spawn_attach;
-    bool on_spawn_auto_page;
-    bool on_spawn_auto_scroll;
+    Scroll_Mode on_spawn_scroll_mode;
     bool on_select_auto_copy;
     const char* font_path;
     int default_font_size;
