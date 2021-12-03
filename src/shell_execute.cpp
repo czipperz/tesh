@@ -24,6 +24,9 @@ struct Stdio_State {
     cz::Input_File in;
     cz::Output_File out;
     cz::Output_File err;
+    size_t* in_count;
+    size_t* out_count;
+    size_t* err_count;
 };
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -138,24 +141,17 @@ static Error start_execute_pipeline(Shell_State* shell,
     running->length = parse.pipeline.len;
     running->arena = arena;
     // running->command_line = command_line.clone(arena.allocator());
+    cz::Allocator allocator = arena.allocator();
 
     cz::Vector<Running_Program> pipeline = {};
     CZ_DEFER(pipeline.drop(cz::heap_allocator()));
-    cz::Vector<cz::File_Descriptor> files = {};
-    CZ_DEFER({
-        for (size_t i = 0; i < files.len; ++i) {
-            files[i].close();
-        }
-        files.drop(cz::heap_allocator());
-    });
-
     cz::Input_File pipe_in;
 
     for (size_t p = 0; p < parse.pipeline.len; ++p) {
         Parse_Program parse_program = parse.pipeline[p];
 
         Running_Program running_program = {};
-        recognize_builtins(&running_program, parse_program, arena.allocator());
+        recognize_builtins(&running_program, parse_program, allocator);
 
         Stdio_State stdio = {};
 
@@ -163,11 +159,13 @@ static Error start_execute_pipeline(Shell_State* shell,
             stdio.in_type = File_Type_File;
             if (!stdio.in.open(parse_program.in_file.buffer))
                 return Error_InvalidPath;
-            files.reserve(cz::heap_allocator(), 1);
-            files.push(stdio.in);
+            stdio.in_count = allocator.alloc<size_t>();
+            *stdio.in_count = 1;
         } else if (p > 0) {
             stdio.in_type = File_Type_Pipe;
             stdio.in = pipe_in;
+            stdio.in_count = allocator.alloc<size_t>();
+            *stdio.in_count = 1;
         } else if (!bind_stdin) {
             stdio.in_type = File_Type_None;
         }
@@ -177,8 +175,8 @@ static Error start_execute_pipeline(Shell_State* shell,
             stdio.out_type = File_Type_File;
             if (!stdio.out.open(parse_program.out_file.buffer))
                 return Error_InvalidPath;
-            files.reserve(cz::heap_allocator(), 1);
-            files.push(stdio.out);
+            stdio.out_count = allocator.alloc<size_t>();
+            *stdio.out_count = 1;
         } else if (p + 1 < parse.pipeline.len) {
             stdio.out_type = File_Type_Pipe;
         }
@@ -187,23 +185,29 @@ static Error start_execute_pipeline(Shell_State* shell,
             stdio.err_type = File_Type_File;
             if (!stdio.err.open(parse_program.err_file.buffer))
                 return Error_InvalidPath;
-            files.reserve(cz::heap_allocator(), 1);
-            files.push(stdio.err);
+            stdio.err_count = allocator.alloc<size_t>();
+            *stdio.err_count = 1;
         }
 
         // Make pipes for the next iteration.
-        if (stdio.out_type == File_Type_Pipe || stdio.err_type == File_Type_Pipe) {
+        if ((stdio.out_type == File_Type_Pipe || stdio.err_type == File_Type_Pipe) &&
+            (p + 1 < parse.pipeline.len && !parse.pipeline[p + 1].in_file.buffer)) {
             cz::Output_File pipe_out;
             if (!cz::create_pipe(&pipe_in, &pipe_out))
                 return Error_IO;
-            files.reserve(cz::heap_allocator(), 2);
-            files.push(pipe_in);
-            files.push(pipe_out);
 
-            if (stdio.out_type == File_Type_Pipe)
+            size_t* count = allocator.alloc<size_t>();
+            *count = 0;
+            if (stdio.out_type == File_Type_Pipe) {
                 stdio.out = pipe_out;
-            if (stdio.err_type == File_Type_Pipe)
+                stdio.out_count = count;
+                ++*count;
+            }
+            if (stdio.err_type == File_Type_Pipe) {
                 stdio.err = pipe_out;
+                stdio.err_count = count;
+                ++*count;
+            }
         }
 
         Error error = run_program(shell, arena.allocator(), &running_program, parse_program, stdio,
@@ -216,9 +220,7 @@ static Error start_execute_pipeline(Shell_State* shell,
     }
 
     running->pipeline = pipeline.clone(arena.allocator());
-    running->files = files.clone(arena.allocator());
     pipeline.len = 0;
-    files.len = 0;
 
     return Error_Success;
 }
@@ -256,6 +258,7 @@ static Error run_program(Shell_State* shell,
         } else {
             program->v.builtin.in.polling = false;
             program->v.builtin.in.file = stdio.in;
+            program->v.builtin.in_count = stdio.in_count;
         }
         if (stdio.out_type == File_Type_Terminal) {
             program->v.builtin.out.type = Process_Output::BACKLOG;
@@ -263,6 +266,7 @@ static Error run_program(Shell_State* shell,
         } else {
             program->v.builtin.out.type = Process_Output::FILE;
             program->v.builtin.out.v.file = stdio.out;
+            program->v.builtin.out_count = stdio.out_count;
         }
         if (stdio.err_type == File_Type_Terminal) {
             program->v.builtin.err.type = Process_Output::BACKLOG;
@@ -270,6 +274,7 @@ static Error run_program(Shell_State* shell,
         } else {
             program->v.builtin.err.type = Process_Output::FILE;
             program->v.builtin.err.v.file = stdio.err;
+            program->v.builtin.err_count = stdio.err_count;
         }
 
         program->v.builtin.args = parse.args;
@@ -338,9 +343,14 @@ static Error run_program(Shell_State* shell,
     generate_environment(&options.environment, shell, parse.variable_names, parse.variable_values);
 
     program->v.process = {};
-    if (!program->v.process.launch_program(args, options))
-        return Error_IO;
+    bool result = program->v.process.launch_program(args, options);
 
+    close_rc_file(stdio.in_count, stdio.in);
+    close_rc_file(stdio.out_count, stdio.out);
+    close_rc_file(stdio.err_count, stdio.err);
+
+    if (!result)
+        return Error_IO;
     return Error_Success;
 }
 

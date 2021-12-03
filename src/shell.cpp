@@ -78,12 +78,32 @@ void set_alias(Shell_State* shell, cz::Str key, cz::Str value) {
     shell->alias_values.push(value.clone(cz::heap_allocator()));
 }
 
+void close_rc_file(size_t* count, cz::File_Descriptor file) {
+    if (count) {
+        --*count;
+        if (*count == 0) {
+            file.close();
+        }
+    }
+}
+
+void cleanup_builtin(Running_Program* program) {
+    auto& builtin = program->v.builtin;
+    close_rc_file(builtin.in_count, builtin.in.file);
+    if (builtin.out.type == Process_Output::FILE)
+        close_rc_file(builtin.out_count, builtin.out.v.file);
+    if (builtin.err.type == Process_Output::FILE)
+        close_rc_file(builtin.err_count, builtin.err.v.file);
+}
+
 static void kill_program(Running_Program* program) {
     switch (program->type) {
     case Running_Program::PROCESS:
         program->v.process.kill();
         break;
     default:
+        // TODO: close CAT's file.
+        cleanup_builtin(program);
         break;
     }
 }
@@ -91,9 +111,6 @@ static void kill_program(Running_Program* program) {
 void cleanup_pipeline(Running_Pipeline* pipeline) {
     for (size_t p = 0; p < pipeline->pipeline.len; ++p) {
         kill_program(&pipeline->pipeline[p]);
-    }
-    for (size_t f = 0; f < pipeline->files.len; ++f) {
-        pipeline->files[f].close();
     }
 }
 

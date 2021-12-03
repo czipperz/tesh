@@ -10,6 +10,7 @@
 #include "error.hpp"
 #include "render.hpp"
 
+struct Running_Program;
 struct Running_Pipeline;
 struct Running_Script;
 struct Parse_Line;
@@ -61,6 +62,9 @@ bool find_in_path(Shell_State* shell,
                   cz::Str abbreviation,
                   cz::Allocator allocator,
                   cz::String* full_path);
+
+void cleanup_builtin(Running_Program* program);
+void close_rc_file(size_t* count, cz::File_Descriptor file);
 
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -143,6 +147,9 @@ struct Running_Program {
             Process_Input in;
             Process_Output out;
             Process_Output err;
+            size_t* in_count;
+            size_t* out_count;
+            size_t* err_count;
             cz::Str working_directory;  // null terminated
             int exit_code;
             union {
@@ -173,7 +180,6 @@ struct Running_Pipeline {
     cz::Vector<Running_Program> pipeline;
     size_t length;
     int last_exit_code;
-    cz::Vector<cz::File_Descriptor> files;
     cz::Buffer_Array arena;
 };
 

@@ -424,6 +424,7 @@ bool tick_program(Shell_State* shell,
 finish_builtin:
     auto& builtin = program->v.builtin;
     *exit_code = builtin.exit_code;
+    cleanup_builtin(program);
     return true;
 }
 
