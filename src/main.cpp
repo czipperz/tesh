@@ -1443,22 +1443,39 @@ static bool handle_scroll_commands(Shell_State* shell,
         scroll_to_end_of_selected_process(rend, backlogs, shell->selected_process);
         scroll_mode = AUTO_SCROLL;
     } else if (mod == (KMOD_CTRL | KMOD_ALT) && key == SDLK_b) {
-        // Select the process before the currently selected
-        // process, or the last process if this is the prompt.
-        if (shell->selected_process == -1 && backlogs.len > 0) {
-            shell->selected_process = backlogs.len - 1;
-        } else if (shell->selected_process > 0) {
-            --shell->selected_process;
+        if (rend->scroll_mode == MANUAL_SCROLL) {
+            // Reset the selection to the first visible window and scroll to its start.
+            shell->selected_process = rend->backlog_start.outer;
+            if (shell->selected_process == backlogs.len)
+                shell->selected_process = -1;
+            rend->backlog_start.inner = 0;
+        } else {
+            // Select the process before the currently selected
+            // process, or the last process if this is the prompt.
+            if (shell->selected_process == -1 && backlogs.len > 0) {
+                shell->selected_process = backlogs.len - 1;
+            } else if (shell->selected_process > 0) {
+                --shell->selected_process;
+            }
+            ensure_selected_process_on_screen(rend, backlogs, shell->selected_process);
         }
-        ensure_selected_process_on_screen(rend, backlogs, shell->selected_process);
         scroll_mode = PROMPT_SCROLL;
     } else if (mod == (KMOD_CTRL | KMOD_ALT) && key == SDLK_f) {
-        // Select the next process, or the prompt if this is the last process.
-        if (shell->selected_process != -1 && shell->selected_process + 1 < backlogs.len)
-            ++shell->selected_process;
-        else
-            shell->selected_process = -1;
-        ensure_selected_process_on_screen(rend, backlogs, shell->selected_process);
+        if (rend->scroll_mode == MANUAL_SCROLL) {
+            // Show the next window.
+            if (shell->selected_process < backlogs.len)
+                shell->selected_process++;
+            if (shell->selected_process == backlogs.len)
+                shell->selected_process = -1;
+            ensure_selected_process_on_screen(rend, backlogs, shell->selected_process);
+        } else {
+            // Select the next process, or the prompt if this is the last process.
+            if (shell->selected_process != -1 && shell->selected_process + 1 < backlogs.len)
+                ++shell->selected_process;
+            else
+                shell->selected_process = -1;
+            ensure_selected_process_on_screen(rend, backlogs, shell->selected_process);
+        }
         scroll_mode = PROMPT_SCROLL;
     } else if (mod == 0 && key == SDLK_TAB && shell->selected_process != -1) {
         Backlog_State* backlog = backlogs[shell->selected_process];
@@ -1971,7 +1988,7 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
         } break;
 
         case SDL_MOUSEWHEEL: {
-            rend->scroll_mode == MANUAL_SCROLL;
+            rend->scroll_mode = MANUAL_SCROLL;
             shell->attached_process = -1;
 
             if (event.wheel.direction == SDL_MOUSEWHEEL_FLIPPED) {
