@@ -355,8 +355,10 @@ bool tick_program(Shell_State* shell,
             goto finish_builtin;
         }
 
+        cz::String path = {};
+        cz::path::make_absolute(builtin.args[1], shell->working_directory, temp_allocator, &path);
         cz::Input_File file;
-        if (!file.open(builtin.args[1].buffer)) {
+        if (!file.open(path.buffer)) {
             builtin.exit_code = 1;
             (void)builtin.err.write(
                 cz::format(temp_allocator, "source: Couldn't open file ", builtin.args[1], '\n'));
