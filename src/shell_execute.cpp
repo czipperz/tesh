@@ -3,6 +3,7 @@
 #include <Tracy.hpp>
 #include <cz/defer.hpp>
 #include <cz/heap.hpp>
+#include <cz/path.hpp>
 #include <cz/process.hpp>
 
 #include "config.hpp"
@@ -155,9 +156,13 @@ static Error start_execute_pipeline(Shell_State* shell,
 
         Stdio_State stdio = {};
 
+        cz::String path = {};
         if (parse_program.in_file.buffer) {
             stdio.in_type = File_Type_File;
-            if (!stdio.in.open(parse_program.in_file.buffer))
+            path.len = 0;
+            cz::path::make_absolute(parse_program.in_file, shell->working_directory,
+                                    temp_allocator, &path);
+            if (!stdio.in.open(path.buffer))
                 return Error_InvalidPath;
             stdio.in_count = allocator.alloc<size_t>();
             *stdio.in_count = 1;
@@ -173,8 +178,12 @@ static Error start_execute_pipeline(Shell_State* shell,
 
         if (parse_program.out_file.buffer) {
             stdio.out_type = File_Type_File;
-            if (!stdio.out.open(parse_program.out_file.buffer))
+            path.len = 0;
+            cz::path::make_absolute(parse_program.out_file, shell->working_directory,
+                                    temp_allocator, &path);
+            if (!stdio.out.open(path.buffer))
                 return Error_InvalidPath;
+            path.len = 0;
             stdio.out_count = allocator.alloc<size_t>();
             *stdio.out_count = 1;
         } else if (p + 1 < parse.pipeline.len) {
@@ -183,8 +192,12 @@ static Error start_execute_pipeline(Shell_State* shell,
 
         if (parse_program.err_file.buffer) {
             stdio.err_type = File_Type_File;
-            if (!stdio.err.open(parse_program.err_file.buffer))
+            path.len = 0;
+            cz::path::make_absolute(parse_program.err_file, shell->working_directory,
+                                    temp_allocator, &path);
+            if (!stdio.err.open(path.buffer))
                 return Error_InvalidPath;
+            path.len = 0;
             stdio.err_count = allocator.alloc<size_t>();
             *stdio.err_count = 1;
         }
