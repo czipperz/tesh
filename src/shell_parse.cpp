@@ -412,10 +412,10 @@ static Error parse_program(cz::Allocator allocator,
     for (; *index < tokens.len; ++*index) {
         // TODO: var=val, <, >
         cz::Str token = tokens[*index];
+        if (get_precedence(token))
+            break; // TODO special handling for (???
         if (token[0] == '<' || token[0] == '>')
             CZ_PANIC("todo");
-        if (token[0] == '|' || token[0] == '&')
-            break;
         program->args.reserve(cz::heap_allocator(), 1);
         program->args.push(token);
     }

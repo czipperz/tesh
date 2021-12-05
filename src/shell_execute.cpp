@@ -37,16 +37,6 @@ static Error start_execute_pipeline(Shell_State* shell,
                                     Backlog_State* backlog,
                                     Running_Pipeline* pipeline);
 
-#if 0
-static Error start_execute_pipeline(Shell_State* shell,
-                                    Backlog_State* backlog,
-                                    cz::Buffer_Array arena,
-                                    const Running_Script& script,
-                                    const Parse_Pipeline& parse,
-                                    Running_Pipeline* running,
-                                    bool bind_stdin);
-#endif
-
 static Error run_program(Shell_State* shell,
                          cz::Allocator allocator,
                          Running_Program* program,
@@ -146,7 +136,7 @@ static bool walk_to_next_pipeline(cz::Vector<Shell_Node*>* path, bool success) {
         switch (parent->type) {
         case Shell_Node::SEQUENCE: {
             size_t i = 0;
-            for (; i + 1 < parent->v.sequence.len; ++i) {
+            for (; i < parent->v.sequence.len; ++i) {
                 if (child == &parent->v.sequence[i]) {
                     ++i;
                     break;
@@ -220,25 +210,34 @@ again:
 
 ///////////////////////////////////////////////////////////////////////////////
 
-#if 0
-static Error start_execute_pipeline(Shell_State* shell,
-                                    Backlog_State* backlog,
-                                    cz::Buffer_Array arena,
-                                    const Running_Script& script,
-                                    const Parse_Pipeline& parse,
-                                    Running_Pipeline* running,
-                                    bool bind_stdin)
+bool finish_line(Shell_State* shell,
+                 Running_Script* script,
+                 Backlog_State* backlog,
+                 Running_Pipeline* line,
+                 bool background) {
+#if defined(TRACY_ENABLE) && 0
+    {
+        cz::String message = cz::format(temp_allocator, "End: ", line->pipeline.command_line);
+        TracyMessage(message.buffer, message.len);
+    }
 #endif
 
-#if 0
-static bool finish_line(Shell_State* shell,
-                        Backlog_State* backlog,
-                        Running_Script* script,
-                        Running_Pipeline* line,
-                        bool background) {
-    
+    bool has_next = walk_to_next_pipeline(&line->path, line->last_exit_code == 0);
+    if (!has_next) {
+        if (!background)
+            backlog->exit_code = line->last_exit_code;
+        return false;
+    }
+
+    cleanup_pipeline(line);
+
+    Error error = start_execute_pipeline(shell, script, backlog, line);
+    if (error != Error_Success) {
+        append_text(backlog, "Error: failed to execute continuation\n");
+    }
+
+    return true;
 }
-#endif
 
 static Error start_execute_pipeline(Shell_State* shell,
                                     Running_Script* script,

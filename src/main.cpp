@@ -532,12 +532,15 @@ static bool run_script(Shell_State* shell, Backlog_State* backlog, cz::Str text)
     }
 #endif
 
-    Shell_Node root = {};
-    Error error = parse_script(shell, arena.allocator(), &root, text);
+    // Root has to be kept alive for path traversal to work.
+    Shell_Node* root = arena.allocator().alloc<Shell_Node>();
+    *root = {};
+
+    Error error = parse_script(shell, arena.allocator(), root, text);
     if (error != Error_Success)
         goto fail;
 
-    error = start_execute_script(shell, backlog, arena, &root);
+    error = start_execute_script(shell, backlog, arena, root);
     if (error != Error_Success)
         goto fail;
 
@@ -597,53 +600,6 @@ static void tick_pipeline(Shell_State* shell,
     }
 }
 
-static bool finish_line(Shell_State* shell,
-                        Backlog_State* backlog,
-                        Running_Script* script,
-                        Running_Pipeline* line,
-                        bool background) {
-#ifdef TRACY_ENABLE
-    {
-        cz::String message = cz::format(temp_allocator, "End: ", line->pipeline.command_line);
-        TracyMessage(message.buffer, message.len);
-    }
-#endif
-
-    if (!background)
-        backlog->exit_code = line->last_exit_code;
-    return false;  // TODO
-#if 0
-    Parse_Line* next = nullptr;
-    if (line->last_exit_code == 0)
-        next = line->on.success;
-    else
-        next = line->on.failure;
-
-    if (!next) {
-        if (!background)
-            backlog->exit_code = line->last_exit_code;
-        return false;
-    }
-
-    // TODO: we shouldn't throw away the arena and then immediately realloc it.
-    // It's essentially free we're not even calling `free` but still.  Bad design.
-    recycle_pipeline(shell, &line->pipeline);
-
-    if (background) {
-        script->bg.remove(line - script->bg.elems);
-    } else {
-        line->pipeline = {};
-    }
-
-    Error error = start_execute_line(shell, backlog, script, *next, background);
-    if (error != Error_Success) {
-        append_text(backlog, "Error: failed to execute continuation\n");
-    }
-
-    return true;
-#endif
-}
-
 static void read_tty_output(Backlog_State* backlog, Running_Script* script, bool cap_read_calls) {
     static char buffer[4096];
 
@@ -688,7 +644,7 @@ static bool read_process_data(Shell_State* shell,
             Running_Pipeline* line = &script->root.bg[b];
             tick_pipeline(shell, rend, backlogs, backlog, script, line, force_quit);
             if (line->programs.len == 0) {
-                finish_line(shell, backlog, script, line, /*background=*/true);
+                finish_line(shell, script, backlog, line, /*background=*/true);
                 --b;
             }
         }
@@ -702,7 +658,7 @@ static bool read_process_data(Shell_State* shell,
 
         if (script->root.fg.programs.len == 0 && !script->root.fg_finished) {
             bool started =
-                finish_line(shell, backlog, script, &script->root.fg, /*background=*/false);
+                finish_line(shell, script, backlog, &script->root.fg, /*background=*/false);
             if (started) {
                 // Rerun to prevent long scripts from only doing one command per frame.
                 // TODO: rate limit to prevent big scripts (with all builtins) from hanging.
