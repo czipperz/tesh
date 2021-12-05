@@ -50,7 +50,7 @@ static Error run_program(Shell_State* shell,
                          Parse_Program parse,
                          Stdio_State stdio,
                          Backlog_State* backlog,
-                         const Running_Script& script);
+                         const Pseudo_Terminal& tty);
 
 static void recognize_builtins(Running_Program* program,
                                const Parse_Program& parse,
@@ -377,8 +377,8 @@ static Error start_execute_pipeline(Shell_State* shell,
             // }
         }
 
-        Error error =
-            run_program(shell, allocator, &running_program, parse_program, stdio, backlog, *script);
+        Error error = run_program(shell, allocator, &running_program, parse_program, stdio, backlog,
+                                  script->tty);
         if (error != Error_Success)
             return error;
 
@@ -403,7 +403,7 @@ static Error run_program(Shell_State* shell,
                          Parse_Program parse,
                          Stdio_State stdio,
                          Backlog_State* backlog,
-                         const Running_Script& script) {
+                         const Pseudo_Terminal& tty) {
     // If command is a builtin.
     if (program->type != Running_Program::PROCESS) {
         if (stdio.in_type == File_Type_Pipe && !stdio.in.set_non_blocking())
@@ -416,9 +416,9 @@ static Error run_program(Shell_State* shell,
         if (stdio.in_type == File_Type_Terminal) {
             program->v.builtin.in.polling = true;
 #ifdef _WIN32
-            program->v.builtin.in.file = script.tty.child_in;
+            program->v.builtin.in.file = tty.child_in;
 #else
-            program->v.builtin.in.file.handle = script.tty.child_bi;
+            program->v.builtin.in.file.handle = tty.child_bi;
 #endif
         } else {
             program->v.builtin.in.polling = false;
@@ -468,37 +468,37 @@ static Error run_program(Shell_State* shell,
     if (stdio.in_type == File_Type_Terminal && stdio.out_type == File_Type_Terminal &&
         stdio.err_type == File_Type_Terminal) {
         // TODO: test pseudo console + stdio.
-        options.pseudo_console = script.tty.pseudo_console;
+        options.pseudo_console = tty.pseudo_console;
     } else {
         if (stdio.in_type == File_Type_Terminal) {
-            options.std_in = script.tty.child_in;
+            options.std_in = tty.child_in;
         } else {
             options.std_in = stdio.in;
         }
         if (stdio.out_type == File_Type_Terminal) {
-            options.std_out = script.tty.child_out;
+            options.std_out = tty.child_out;
         } else {
             options.std_out = stdio.out;
         }
         if (stdio.err_type == File_Type_Terminal) {
-            options.std_err = script.tty.child_out;  // yes, out!
+            options.std_err = tty.child_out;  // yes, out!
         } else {
             options.std_err = stdio.err;
         }
     }
 #else
     if (stdio.in_type == File_Type_Terminal) {
-        options.std_in.handle = script.tty.child_bi;
+        options.std_in.handle = tty.child_bi;
     } else {
         options.std_in = stdio.in;
     }
     if (stdio.out_type == File_Type_Terminal) {
-        options.std_out.handle = script.tty.child_bi;
+        options.std_out.handle = tty.child_bi;
     } else {
         options.std_out = stdio.out;
     }
     if (stdio.err_type == File_Type_Terminal) {
-        options.std_err.handle = script.tty.child_bi;
+        options.std_err.handle = tty.child_bi;
     } else {
         options.std_err = stdio.err;
     }
