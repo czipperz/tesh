@@ -32,10 +32,17 @@ struct Stdio_State {
 
 ///////////////////////////////////////////////////////////////////////////////
 
+static Error start_execute_line(Shell_State* shell,
+                                Running_Script* script,
+                                Backlog_State* backlog,
+                                Running_Pipeline* pipeline,
+                                bool background);
+
 static Error start_execute_pipeline(Shell_State* shell,
                                     Running_Script* script,
                                     Backlog_State* backlog,
-                                    Running_Pipeline* pipeline);
+                                    Running_Pipeline* pipeline,
+                                    bool bind_stdin);
 
 static Error run_program(Shell_State* shell,
                          cz::Allocator allocator,
@@ -49,9 +56,15 @@ static void recognize_builtins(Running_Program* program,
                                const Parse_Program& parse,
                                cz::Allocator allocator);
 
+enum Walk_Status {
+    WALK_FAILURE = 0,
+    WALK_SUCCESS = 1,
+    WALK_ASYNC = 2,
+};
+
 static bool descend_to_first_pipeline(cz::Vector<Shell_Node*>* path, Shell_Node* child);
 static void do_descend_to_first_pipeline(cz::Vector<Shell_Node*>* path, Shell_Node* child);
-static bool walk_to_next_pipeline(cz::Vector<Shell_Node*>* path, bool success);
+static bool walk_to_next_pipeline(cz::Vector<Shell_Node*>* path, Walk_Status status);
 
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -70,7 +83,8 @@ Error start_execute_script(Shell_State* shell,
 
     bool found_first_pipeline = descend_to_first_pipeline(&running.root.fg.path, root);
     if (found_first_pipeline) {
-        Error error = start_execute_pipeline(shell, &running, backlog, &running.root.fg);
+        const bool background = false;
+        Error error = start_execute_line(shell, &running, backlog, &running.root.fg, background);
         if (error != Error_Success) {
             recycle_arena(shell, running.root.fg.arena);
             destroy_pseudo_terminal(&running.tty);
@@ -89,13 +103,52 @@ Error start_execute_script(Shell_State* shell,
     return Error_Success;
 }
 
+///////////////////////////////////////////////////////////////////////////////
+
+bool finish_line(Shell_State* shell,
+                 Running_Script* script,
+                 Backlog_State* backlog,
+                 Running_Pipeline* line,
+                 bool background) {
+#if defined(TRACY_ENABLE) && 0
+    {
+        cz::String message = cz::format(temp_allocator, "End: ", line->pipeline.command_line);
+        TracyMessage(message.buffer, message.len);
+    }
+#endif
+
+    Walk_Status status = (line->last_exit_code == 0 ? WALK_SUCCESS : WALK_FAILURE);
+    bool has_next = walk_to_next_pipeline(&line->path, status);
+    if (!has_next) {
+        if (!background)
+            backlog->exit_code = line->last_exit_code;
+        recycle_pipeline(shell, line);
+        if (background) {
+            script->root.bg.remove(line - script->root.bg.elems);
+        } else {
+            script->root.fg_finished = true;
+        }
+        return false;
+    }
+
+    cleanup_pipeline(line);
+    Error error = start_execute_line(shell, script, backlog, line, background);
+    if (error != Error_Success) {
+        append_text(backlog, "Error: failed to execute continuation\n");
+    }
+
+    return true;
+}
+
+///////////////////////////////////////////////////////////////////////////////
+
 static bool descend_to_first_pipeline(cz::Vector<Shell_Node*>* path, Shell_Node* child) {
     do_descend_to_first_pipeline(path, child);
     if (path->last() != nullptr)
         return true;
 
     path->pop();
-    return walk_to_next_pipeline(path, true);
+    return walk_to_next_pipeline(path, WALK_SUCCESS);
 }
 
 static void do_descend_to_first_pipeline(cz::Vector<Shell_Node*>* path, Shell_Node* child) {
@@ -124,7 +177,11 @@ static void do_descend_to_first_pipeline(cz::Vector<Shell_Node*>* path, Shell_No
     }
 }
 
-static bool walk_to_next_pipeline(cz::Vector<Shell_Node*>* path, bool success) {
+static bool walk_to_next_pipeline(cz::Vector<Shell_Node*>* path, Walk_Status status) {
+    if (status == WALK_ASYNC)
+        CZ_DEBUG_ASSERT(path->len > 0 && path->last()->async);
+    bool success = (status != WALK_FAILURE);
+
     while (1) {
         if (path->len < 2) {
             path->len = 0;
@@ -132,6 +189,14 @@ static bool walk_to_next_pipeline(cz::Vector<Shell_Node*>* path, bool success) {
         }
 
         Shell_Node* child = path->pop();
+        if (child->async) {
+            if (status == WALK_ASYNC) {
+                status = WALK_SUCCESS;
+            } else {
+                return false;
+            }
+        }
+
         Shell_Node* parent = path->last();
         switch (parent->type) {
         case Shell_Node::SEQUENCE: {
@@ -165,86 +230,54 @@ static bool walk_to_next_pipeline(cz::Vector<Shell_Node*>* path, bool success) {
 
 ///////////////////////////////////////////////////////////////////////////////
 
-#if 0
-Error start_execute_line(Shell_State* shell,
-                         Backlog_State* backlog,
-                         Running_Script* running,
-                         const Parse_Line& parse_in,
-                         bool background) {
-    const Parse_Line* parse = &parse_in;
+static Error start_execute_line(Shell_State* shell,
+                                Running_Script* script,
+                                Backlog_State* backlog,
+                                Running_Pipeline* pipeline,
+                                bool background) {
+    Running_Pipeline* pipeline_orig = pipeline;
+    while (1) {
+        pipeline = pipeline_orig;
+        bool async = pipeline->path.last()->async;
+        if (async) {
+            Running_Pipeline line = {};
+            line.arena = alloc_arena(shell);
+            line.path = pipeline->path.clone(cz::heap_allocator());
+            script->root.bg.reserve(cz::heap_allocator(), 1);
+            script->root.bg.push(line);
+            pipeline = &script->root.bg.last();
+        }
 
-again:
-    Running_Line* line = &running->fg;
-    bool bind_stdin = true;
+        bool bind_stdin = !(background || async);
+        Error error = start_execute_pipeline(shell, script, backlog, pipeline, bind_stdin);
+        if (error != Error_Success)
+            return error;
 
-    // If another line starts at the start of this line, then
-    // this line is async and should be ran in the background.
-    if (parse->on.start || background) {
-        running->bg.reserve(cz::heap_allocator(), 1);
-        running->bg.push({});
-        line = &running->bg.last();
-        bind_stdin = false;
+        if (!async) {
+            return Error_Success;
+        }
+
+        // Find the next node to execute.
+        if (!walk_to_next_pipeline(&pipeline_orig->path, WALK_ASYNC)) {
+            // No node so stop.
+            recycle_pipeline(shell, pipeline_orig);
+            if (background) {
+                script->root.bg.remove(pipeline_orig - script->root.bg.elems);
+            } else {
+                script->root.fg_finished = true;
+            }
+            return Error_Success;
+        }
     }
-
-    line->on = parse->on;
-
-    // TODO: I think we should refactor this to create the
-    // Running_Script then adding a Running_Line to it.  Idk.
-    cz::Buffer_Array pipeline_arena = alloc_arena(shell);
-    Error error = start_execute_pipeline(shell, backlog, pipeline_arena, *running, parse->pipeline,
-                                         &line->pipeline, bind_stdin);
-    if (error != Error_Success) {
-        recycle_arena(shell, pipeline_arena);
-        return error;
-    }
-
-    // Recurse on the next line since this one is async.
-    if (parse->on.start) {
-        parse = parse->on.start;
-        goto again;
-    }
-
-    return Error_Success;
 }
-#endif
 
 ///////////////////////////////////////////////////////////////////////////////
-
-bool finish_line(Shell_State* shell,
-                 Running_Script* script,
-                 Backlog_State* backlog,
-                 Running_Pipeline* line,
-                 bool background) {
-#if defined(TRACY_ENABLE) && 0
-    {
-        cz::String message = cz::format(temp_allocator, "End: ", line->pipeline.command_line);
-        TracyMessage(message.buffer, message.len);
-    }
-#endif
-
-    bool has_next = walk_to_next_pipeline(&line->path, line->last_exit_code == 0);
-    if (!has_next) {
-        if (!background)
-            backlog->exit_code = line->last_exit_code;
-        return false;
-    }
-
-    cleanup_pipeline(line);
-
-    Error error = start_execute_pipeline(shell, script, backlog, line);
-    if (error != Error_Success) {
-        append_text(backlog, "Error: failed to execute continuation\n");
-    }
-
-    return true;
-}
 
 static Error start_execute_pipeline(Shell_State* shell,
                                     Running_Script* script,
                                     Backlog_State* backlog,
-                                    Running_Pipeline* pipeline) {
-    bool bind_stdin = true;
-
+                                    Running_Pipeline* pipeline,
+                                    bool bind_stdin) {
     ZoneScoped;
 
     // TODO async stuff inside our children needs to be allocated separately.

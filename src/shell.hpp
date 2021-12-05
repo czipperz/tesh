@@ -180,13 +180,13 @@ struct Running_Node;
 struct Shell_Node;
 
 struct Running_Pipeline {
+    cz::Buffer_Array arena;
     cz::Vector<Shell_Node*> path;
     cz::Vector<Running_Program> programs;
     // cz::Vector<Running_Node> sub_nodes;
     // bool sub_node_last;
     bool has_exit_code;
     int last_exit_code;
-    cz::Buffer_Array arena;
 };
 
 struct Running_Node {
@@ -222,7 +222,9 @@ struct Shell_Node {
         PIPELINE,
         AND,
         OR,
-    } type;
+    };
+    Type type : 7;
+    uint8_t async : 1;
     union {
         cz::Vector<Shell_Node> sequence;
         Parse_Program* program;

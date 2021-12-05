@@ -292,6 +292,14 @@ static Error parse_sequence(const Shell_State* shell,
             continue;
         }
 
+        if (token == "&") {
+            if (sequence.len == 0) {
+                return Error_Parse_EmptyProgram;
+            }
+            sequence.last().async = true;
+            ++*index;
+        }
+
         Shell_Node step;
         Error error = parse_binary(shell, allocator, tokens, 8, &step, index);
         if (error != Error_Success)
@@ -413,7 +421,7 @@ static Error parse_program(cz::Allocator allocator,
         // TODO: var=val, <, >
         cz::Str token = tokens[*index];
         if (get_precedence(token))
-            break; // TODO special handling for (???
+            break;  // TODO special handling for (???
         if (token[0] == '<' || token[0] == '>')
             CZ_PANIC("todo");
         program->args.reserve(cz::heap_allocator(), 1);
