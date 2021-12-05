@@ -309,8 +309,12 @@ static Error parse_sequence(const Shell_State* shell,
         sequence.push(step);
     }
 
-    node->type = Shell_Node::SEQUENCE;
-    node->v.sequence = sequence.clone(allocator);
+    if (sequence.len == 1) {
+        *node = sequence[0];
+    } else {
+        node->type = Shell_Node::SEQUENCE;
+        node->v.sequence = sequence.clone(allocator);
+    }
     return Error_Success;
 }
 
