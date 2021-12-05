@@ -30,6 +30,8 @@ static Error advance_through_token(cz::Str text,
                                    size_t* token_end,
                                    bool* any_special,
                                    bool* program_break);
+static Error advance_through_single_quote_string(cz::Str text, size_t* index);
+static Error advance_through_double_quote_string(cz::Str text, size_t* index);
 static Error advance_through_dollar_sign(cz::Str text, size_t* index);
 
 static Error parse_sequence(const Shell_State* shell,
@@ -55,6 +57,7 @@ static Error parse_program(cz::Allocator allocator,
                            cz::Slice<cz::Str> tokens,
                            Parse_Program* program,
                            size_t* index);
+static void deal_with_token(cz::Allocator allocator, Parse_Program* program, cz::Str token);
 
 ///////////////////////////////////////////////////////////////////////////////
 // Driver
@@ -185,54 +188,26 @@ static Error advance_through_token(cz::Str text,
 
             ///////////////////////////////////////////////
 
-        case '\'':
-            ++*index;
+        case '\'': {
             *any_special = true;
-            while (1) {
-                if (*index == text.len)
-                    return Error_Parse_UnterminatedString;
+            Error error = advance_through_single_quote_string(text, index);
+            if (error != Error_Success)
+                return error;
+        } break;
 
-                // Go until we hit another '\''.
-                if (text[*index] == '\'') {
-                    ++*index;
-                    break;
-                }
-                ++*index;
-            }
-            break;
-
-            ///////////////////////////////////////////////
-
-        case '"':
-            ++*index;
+        case '"': {
             *any_special = true;
-            while (1) {
-                if (*index == text.len)
-                    return Error_Parse_UnterminatedString;
+            Error error = advance_through_double_quote_string(text, index);
+            if (error != Error_Success)
+                return error;
+        } break;
 
-                // Ignore the next character indiscriminately.
-                if (text[*index] == '\\') {
-                    ++*index;
-                    if (*index == text.len)
-                        return Error_Parse_UnterminatedString;
-                    ++*index;
-                    continue;
-                }
-
-                if (text[*index] == '$') {
-                    Error error = advance_through_dollar_sign(text, index);
-                    if (error != Error_Success)
-                        return error;
-                }
-
-                // Go until we hit another '"'.
-                if (text[*index] == '"') {
-                    ++*index;
-                    break;
-                }
-                ++*index;
-            }
-            break;
+        case '$': {
+            *any_special = true;
+            Error error = advance_through_dollar_sign(text, index);
+            if (error != Error_Success)
+                return error;
+        } break;
 
             ///////////////////////////////////////////////
 
@@ -241,6 +216,53 @@ static Error advance_through_token(cz::Str text,
             break;
         }
     }
+}
+
+static Error advance_through_single_quote_string(cz::Str text, size_t* index) {
+    ++*index;
+    while (1) {
+        if (*index == text.len)
+            return Error_Parse_UnterminatedString;
+
+        // Go until we hit another '\''.
+        if (text[*index] == '\'') {
+            ++*index;
+            break;
+        }
+        ++*index;
+    }
+    return Error_Success;
+}
+
+static Error advance_through_double_quote_string(cz::Str text, size_t* index) {
+    ++*index;
+    while (1) {
+        if (*index == text.len)
+            return Error_Parse_UnterminatedString;
+
+        // Ignore the next character indiscriminately.
+        if (text[*index] == '\\') {
+            ++*index;
+            if (*index == text.len)
+                return Error_Parse_UnterminatedString;
+            ++*index;
+            continue;
+        }
+
+        if (text[*index] == '$') {
+            Error error = advance_through_dollar_sign(text, index);
+            if (error != Error_Success)
+                return error;
+        }
+
+        // Go until we hit another '"'.
+        if (text[*index] == '"') {
+            ++*index;
+            break;
+        }
+        ++*index;
+    }
+    return Error_Success;
 }
 
 static Error advance_through_dollar_sign(cz::Str text, size_t* index) {
@@ -426,10 +448,7 @@ static Error parse_program(cz::Allocator allocator,
         cz::Str token = tokens[*index];
         if (get_precedence(token))
             break;  // TODO special handling for (???
-        if (token[0] == '<' || token[0] == '>')
-            CZ_PANIC("todo");
-        program->args.reserve(cz::heap_allocator(), 1);
-        program->args.push(token);
+        deal_with_token(allocator, program, token);
     }
 
     if (program->args.len == 0 && program->variable_names.len == 0) {
@@ -440,4 +459,54 @@ static Error parse_program(cz::Allocator allocator,
     change_allocator(cz::heap_allocator(), allocator, &program->variable_names);
     change_allocator(cz::heap_allocator(), allocator, &program->variable_values);
     return Error_Success;
+}
+
+static void deal_with_token(cz::Allocator allocator, Parse_Program* program, cz::Str token) {
+    bool any_special = false;
+    for (size_t index = 0; index < token.len;) {
+        switch (token[index]) {
+        case '\'': {
+            any_special = true;
+            Error error = advance_through_single_quote_string(token, &index);
+            CZ_ASSERT(error == Error_Success);
+        } break;
+
+        case '"': {
+            any_special = true;
+            Error error = advance_through_double_quote_string(token, &index);
+            CZ_ASSERT(error == Error_Success);
+        } break;
+
+        case '$': {
+            any_special = true;
+            Error error = advance_through_dollar_sign(token, &index);
+            CZ_ASSERT(error == Error_Success);
+        } break;
+
+        case '=': {
+            if (any_special || program->args.len > 0)
+                goto def;
+
+            cz::Str key = token.slice_end(index);
+            cz::Str value = token.slice_start(index + 1);
+            program->variable_names.reserve(cz::heap_allocator(), 1);
+            program->variable_values.reserve(cz::heap_allocator(), 1);
+            program->variable_names.push(key);
+            program->variable_values.push(value);
+            return;
+        }
+
+        def:
+        default:
+            ++index;
+            break;
+        }
+    }
+
+    // Note: a token by definition has len >= 1.
+    if (token[0] == '<' || token[0] == '>')
+        CZ_PANIC("todo");
+
+    program->args.reserve(cz::heap_allocator(), 1);
+    program->args.push(token);
 }

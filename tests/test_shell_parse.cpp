@@ -12,9 +12,9 @@ static void append_node(cz::Allocator allocator,
         Parse_Program* program = node->v.program;
         append(allocator, string, cz::many(' ', depth * spd), "program:\n");
         for (size_t i = 0; i < program->variable_names.len; ++i) {
-            append(allocator, string, cz::many(' ', (depth + 1) * spd), "variable", i, ':',
+            append(allocator, string, cz::many(' ', (depth + 1) * spd), "var", i, ": ",
                    program->variable_names[i], '\n');
-            append(allocator, string, cz::many(' ', (depth + 1) * spd), "value", i, ":   ",
+            append(allocator, string, cz::many(' ', (depth + 1) * spd), "val", i, ": ",
                    program->variable_values[i], '\n');
         }
         for (size_t i = 0; i < program->args.len; ++i) {
@@ -194,45 +194,34 @@ program:\n\
     arg0: \"\\\\ \\n \\a \\$ \\` \\\"\"\n");
 }
 
-#if 0
 TEST_CASE("parse_script variable") {
     Shell_State shell = {};
-    Parse_Script script = {};
-    Error error = tokenize(&shell, cz::heap_allocator(), &script, "a=b c=d");
+    cz::String string = {};
+    Error error = parse_and_emit(&shell, &string, "a=b c=d");
     REQUIRE(error == Error_Success);
-    size_t index = 0;
-    Parse_Pipeline pipeline;
-    error = parse_pipeline(script.tokens, &index, cz::heap_allocator(), &pipeline);
-    REQUIRE(error == Error_Success);
-    REQUIRE(pipeline.pipeline.len == 1);
-    CHECK(pipeline.pipeline[0].args.len == 0);
-    REQUIRE(pipeline.pipeline[0].variable_names.len == 2);
-    REQUIRE(pipeline.pipeline[0].variable_values.len == 2);
-    CHECK(pipeline.pipeline[0].variable_names[0] == "a");
-    CHECK(pipeline.pipeline[0].variable_values[0] == "b");
-    CHECK(pipeline.pipeline[0].variable_names[1] == "c");
-    CHECK(pipeline.pipeline[0].variable_values[1] == "d");
+    CHECK(string.as_str() == "\
+program:\n\
+    var0: a\n\
+    val0: b\n\
+    var1: c\n\
+    val1: d\n");
 }
 
 TEST_CASE("parse_script variable after arg is arg") {
     Shell_State shell = {};
-    Parse_Script script = {};
-    Error error = tokenize(&shell, cz::heap_allocator(), &script, "a=b arg c=d");
+    cz::String string = {};
+    Error error = parse_and_emit(&shell, &string, "a=b arg c=d");
     REQUIRE(error == Error_Success);
-    size_t index = 0;
-    Parse_Pipeline pipeline;
-    error = parse_pipeline(script.tokens, &index, cz::heap_allocator(), &pipeline);
-    REQUIRE(error == Error_Success);
-    REQUIRE(pipeline.pipeline.len == 1);
-    REQUIRE(pipeline.pipeline[0].args.len == 2);
-    REQUIRE(pipeline.pipeline[0].variable_names.len == 1);
-    REQUIRE(pipeline.pipeline[0].variable_values.len == 1);
-    CHECK(pipeline.pipeline[0].variable_names[0] == "a");
-    CHECK(pipeline.pipeline[0].variable_values[0] == "b");
-    CHECK(pipeline.pipeline[0].args[0] == "arg");
-    CHECK(pipeline.pipeline[0].args[1] == "c=d");
+    CHECK(string.as_str() == "\
+program:\n\
+    var0: a\n\
+    val0: b\n\
+    arg0: arg\n\
+    arg1: c=d\n\
+");
 }
 
+#if 0
 TEST_CASE("parse_script variable expand simple") {
     Shell_State shell = {};
     set_var(&shell, "var", "$value");
