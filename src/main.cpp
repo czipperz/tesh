@@ -581,8 +581,7 @@ static void tick_pipeline(Shell_State* shell,
     for (size_t p = 0; p < pipeline->programs.len; ++p) {
         Running_Program* program = &pipeline->programs[p];
         int exit_code = 1;
-        if (tick_program(shell, rend, backlogs, backlog, script, program, &exit_code,
-                         force_quit)) {
+        if (tick_program(shell, rend, backlogs, backlog, script, program, &exit_code, force_quit)) {
             if (!pipeline->has_exit_code && p + 1 == pipeline->programs.len) {
                 pipeline->has_exit_code = true;
                 pipeline->last_exit_code = exit_code;
@@ -610,7 +609,9 @@ static bool finish_line(Shell_State* shell,
     }
 #endif
 
-    return true; // TODO
+    if (!background)
+        backlog->exit_code = line->last_exit_code;
+    return false;  // TODO
 #if 0
     Parse_Line* next = nullptr;
     if (line->last_exit_code == 0)
@@ -700,7 +701,8 @@ static bool read_process_data(Shell_State* shell,
         read_tty_output(backlog, script, /*cap_read_calls=*/true);
 
         if (script->root.fg.programs.len == 0 && !script->root.fg_finished) {
-            bool started = finish_line(shell, backlog, script, &script->root.fg, /*background=*/false);
+            bool started =
+                finish_line(shell, backlog, script, &script->root.fg, /*background=*/false);
             if (started) {
                 // Rerun to prevent long scripts from only doing one command per frame.
                 // TODO: rate limit to prevent big scripts (with all builtins) from hanging.
@@ -1851,8 +1853,8 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
                 } else {
                     if (script) {
 #ifdef TRACY_ENABLE
-                        cz::String message =
-                            cz::format(temp_allocator, "End: ", script->root.fg.pipeline.command_line);
+                        cz::String message = cz::format(
+                            temp_allocator, "End: ", script->root.fg.pipeline.command_line);
                         TracyMessage(message.buffer, message.len);
 #endif
 
