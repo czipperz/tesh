@@ -59,7 +59,9 @@ static void recognize_builtins(Running_Program* program,
                                const Parse_Program& parse,
                                cz::Allocator allocator);
 
-static void descend_to_first_pipeline(cz::Vector<Shell_Node*>* path, Shell_Node* child);
+static bool descend_to_first_pipeline(cz::Vector<Shell_Node*>* path, Shell_Node* child);
+static void do_descend_to_first_pipeline(cz::Vector<Shell_Node*>* path, Shell_Node* child);
+static bool walk_to_next_pipeline(cz::Vector<Shell_Node*>* path, bool success);
 
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -76,8 +78,8 @@ Error start_execute_script(Shell_State* shell,
 
     running.root.fg.arena = alloc_arena(shell);
 
-    if (root->type != Shell_Node::SEQUENCE || root->v.sequence.len > 0) {
-        descend_to_first_pipeline(&running.root.fg.path, root);
+    bool found_first_pipeline = descend_to_first_pipeline(&running.root.fg.path, root);
+    if (found_first_pipeline) {
         Error error = start_execute_pipeline(shell, &running, backlog, &running.root.fg);
         if (error != Error_Success) {
             recycle_arena(shell, running.root.fg.arena);
@@ -97,7 +99,16 @@ Error start_execute_script(Shell_State* shell,
     return Error_Success;
 }
 
-static void descend_to_first_pipeline(cz::Vector<Shell_Node*>* path, Shell_Node* child) {
+static bool descend_to_first_pipeline(cz::Vector<Shell_Node*>* path, Shell_Node* child) {
+    do_descend_to_first_pipeline(path, child);
+    if (path->last() != nullptr)
+        return true;
+
+    path->pop();
+    return walk_to_next_pipeline(path, true);
+}
+
+static void do_descend_to_first_pipeline(cz::Vector<Shell_Node*>* path, Shell_Node* child) {
     while (1) {
         path->reserve(cz::heap_allocator(), 1);
         path->push(child);
@@ -107,12 +118,57 @@ static void descend_to_first_pipeline(cz::Vector<Shell_Node*>* path, Shell_Node*
         case Shell_Node::PIPELINE:
             return;
         case Shell_Node::SEQUENCE:
-            child = &child->v.sequence[0];
+            if (child->v.sequence.len == 0) {
+                path->reserve(cz::heap_allocator(), 1);
+                path->push(nullptr);
+                return;
+            } else {
+                child = &child->v.sequence[0];
+            }
             break;
         case Shell_Node::AND:
         case Shell_Node::OR:
             child = child->v.binary.left;
             break;
+        }
+    }
+}
+
+static bool walk_to_next_pipeline(cz::Vector<Shell_Node*>* path, bool success) {
+    while (1) {
+        if (path->len < 2) {
+            path->len = 0;
+            return false;
+        }
+
+        Shell_Node* child = path->pop();
+        Shell_Node* parent = path->last();
+        switch (parent->type) {
+        case Shell_Node::SEQUENCE: {
+            size_t i = 0;
+            for (; i + 1 < parent->v.sequence.len; ++i) {
+                if (child == &parent->v.sequence[i]) {
+                    ++i;
+                    break;
+                }
+            }
+            if (i < parent->v.sequence.len)
+                return descend_to_first_pipeline(path, &parent->v.sequence[i]);
+        } break;
+
+        case Shell_Node::AND: {
+            if (child == parent->v.binary.left && success)
+                return descend_to_first_pipeline(path, parent->v.binary.right);
+        } break;
+
+        case Shell_Node::OR: {
+            if (child == parent->v.binary.left && !success)
+                return descend_to_first_pipeline(path, parent->v.binary.right);
+        } break;
+
+        case Shell_Node::PROGRAM:
+        case Shell_Node::PIPELINE:
+            CZ_PANIC("invalid");
         }
     }
 }
