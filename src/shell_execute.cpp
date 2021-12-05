@@ -75,13 +75,15 @@ Error start_execute_script(Shell_State* shell,
         return Error_IO;
 
     running.root.fg.arena = alloc_arena(shell);
-    descend_to_first_pipeline(&running.root.fg.path, root);
 
-    Error error = start_execute_pipeline(shell, &running, backlog, &running.root.fg);
-    if (error != Error_Success) {
-        recycle_arena(shell, running.root.fg.arena);
-        destroy_pseudo_terminal(&running.tty);
-        return error;
+    if (root->type != Shell_Node::SEQUENCE || root->v.sequence.len > 0) {
+        descend_to_first_pipeline(&running.root.fg.path, root);
+        Error error = start_execute_pipeline(shell, &running, backlog, &running.root.fg);
+        if (error != Error_Success) {
+            recycle_arena(shell, running.root.fg.arena);
+            destroy_pseudo_terminal(&running.tty);
+            return error;
+        }
     }
 
     shell->scripts.reserve(cz::heap_allocator(), 1);
