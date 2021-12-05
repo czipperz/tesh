@@ -175,34 +175,30 @@ struct Running_Program {
     } v;
 };
 
+struct Running_Node;
+struct Shell_Node;
+
 struct Running_Pipeline {
-    cz::Str command_line;
-    cz::Vector<Running_Program> pipeline;
-    size_t length;
+    cz::Vector<Shell_Node*> path;
+    cz::Vector<Running_Program> programs;
+    // cz::Vector<Running_Node> sub_nodes;
+    // bool sub_node_last;
+    bool has_exit_code;
     int last_exit_code;
     cz::Buffer_Array arena;
 };
 
-struct Parse_Continuation {
-    Parse_Line* start;
-    Parse_Line* success;
-    Parse_Line* failure;
-};
-
-struct Running_Line {
-    Running_Pipeline pipeline;
-    Parse_Continuation on;
+struct Running_Node {
+    cz::Vector<Running_Pipeline> bg;
+    Running_Pipeline fg;
+    bool fg_finished;
 };
 
 struct Running_Script {
     uint64_t id;
     cz::Buffer_Array arena;
-
-    cz::Vector<Running_Line> bg;
-    Running_Line fg;
-    bool fg_finished;
-
     Pseudo_Terminal tty;
+    Running_Node root;
 };
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -218,23 +214,29 @@ struct Parse_Program {
     cz::Str err_file;
 };
 
-struct Parse_Pipeline {
-    cz::Vector<Parse_Program> pipeline;
+struct Shell_Node {
+    enum Type {
+        SEQUENCE,  // Put sequence first so memset(0) gets valid & empty node.
+        PROGRAM,
+        PIPELINE,
+        AND,
+        OR,
+    } type;
+    union {
+        cz::Vector<Shell_Node> sequence;
+        Parse_Program* program;
+        cz::Vector<Shell_Node> pipeline;
+        struct {
+            Shell_Node* left;
+            Shell_Node* right;
+        } binary;
+    } v;
 };
 
-struct Parse_Line {
-    Parse_Pipeline pipeline;
-    Parse_Continuation on;
-};
-
-struct Parse_Script {
-    Parse_Line first;
-};
-
+/// Parse a string into a `Shell_Node` tree.  Does not do variable expansion.
 Error parse_script(const Shell_State* shell,
                    cz::Allocator allocator,
-                   Parse_Script* out,
-                   Parse_Continuation outer,
+                   Shell_Node* root,
                    cz::Str text);
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -242,14 +244,7 @@ Error parse_script(const Shell_State* shell,
 Error start_execute_script(Shell_State* shell,
                            Backlog_State* backlog,
                            cz::Buffer_Array arena,
-                           const Parse_Script& script,
-                           cz::Str command_line);
-
-Error start_execute_line(Shell_State* shell,
-                         Backlog_State* backlog,
-                         Running_Script* running_script,
-                         const Parse_Line& line,
-                         bool background);
+                           Shell_Node* root);
 
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -258,7 +253,6 @@ bool tick_program(Shell_State* shell,
                   cz::Slice<Backlog_State*> backlogs,
                   Backlog_State* backlog,
                   Running_Script* script,
-                  Running_Line* line,
                   Running_Program* program,
                   int* exit_code,
-                  bool* force_exit);
+                  bool* force_quit);

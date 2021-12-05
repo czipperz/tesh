@@ -532,12 +532,12 @@ static bool run_script(Shell_State* shell, Backlog_State* backlog, cz::Str text)
     }
 #endif
 
-    Parse_Script script = {};
-    Error error = parse_script(shell, arena.allocator(), &script, {}, text);
+    Shell_Node root = {};
+    Error error = parse_script(shell, arena.allocator(), &root, text);
     if (error != Error_Success)
         goto fail;
 
-    error = start_execute_script(shell, backlog, arena, script, text);
+    error = start_execute_script(shell, backlog, arena, &root);
     if (error != Error_Success)
         goto fail;
 
@@ -576,20 +576,21 @@ static void tick_pipeline(Shell_State* shell,
                           cz::Slice<Backlog_State*> backlogs,
                           Backlog_State* backlog,
                           Running_Script* script,
-                          Running_Line* line,
+                          Running_Pipeline* pipeline,
                           bool* force_quit) {
-    Running_Pipeline* pipeline = &line->pipeline;
-    for (size_t p = 0; p < pipeline->pipeline.len; ++p) {
-        Running_Program* program = &pipeline->pipeline[p];
+    for (size_t p = 0; p < pipeline->programs.len; ++p) {
+        Running_Program* program = &pipeline->programs[p];
         int exit_code = 1;
-        if (tick_program(shell, rend, backlogs, backlog, script, line, program, &exit_code,
+        if (tick_program(shell, rend, backlogs, backlog, script, program, &exit_code,
                          force_quit)) {
-            if (p + 1 == pipeline->length)
+            if (!pipeline->has_exit_code && p + 1 == pipeline->programs.len) {
+                pipeline->has_exit_code = true;
                 pipeline->last_exit_code = exit_code;
+            }
             backlog->end = std::chrono::high_resolution_clock::now();
-            pipeline->pipeline.remove(p);
+            pipeline->programs.remove(p);
             --p;
-            if (pipeline->pipeline.len == 0)
+            if (pipeline->programs.len == 0)
                 return;
         }
         if (*force_quit)
@@ -600,7 +601,7 @@ static void tick_pipeline(Shell_State* shell,
 static bool finish_line(Shell_State* shell,
                         Backlog_State* backlog,
                         Running_Script* script,
-                        Running_Line* line,
+                        Running_Pipeline* line,
                         bool background) {
 #ifdef TRACY_ENABLE
     {
@@ -609,15 +610,17 @@ static bool finish_line(Shell_State* shell,
     }
 #endif
 
+    return true; // TODO
+#if 0
     Parse_Line* next = nullptr;
-    if (line->pipeline.last_exit_code == 0)
+    if (line->last_exit_code == 0)
         next = line->on.success;
     else
         next = line->on.failure;
 
     if (!next) {
         if (!background)
-            backlog->exit_code = line->pipeline.last_exit_code;
+            backlog->exit_code = line->last_exit_code;
         return false;
     }
 
@@ -637,6 +640,7 @@ static bool finish_line(Shell_State* shell,
     }
 
     return true;
+#endif
 }
 
 static void read_tty_output(Backlog_State* backlog, Running_Script* script, bool cap_read_calls) {
@@ -679,35 +683,35 @@ static bool read_process_data(Shell_State* shell,
         Backlog_State* backlog = backlogs[script->id];
         size_t starting_length = backlog->length;
 
-        for (size_t b = 0; b < script->bg.len; ++b) {
-            Running_Line* line = &script->bg[b];
+        for (size_t b = 0; b < script->root.bg.len; ++b) {
+            Running_Pipeline* line = &script->root.bg[b];
             tick_pipeline(shell, rend, backlogs, backlog, script, line, force_quit);
-            if (line->pipeline.pipeline.len == 0) {
+            if (line->programs.len == 0) {
                 finish_line(shell, backlog, script, line, /*background=*/true);
                 --b;
             }
         }
 
-        tick_pipeline(shell, rend, backlogs, backlog, script, &script->fg, force_quit);
+        tick_pipeline(shell, rend, backlogs, backlog, script, &script->root.fg, force_quit);
 
         if (*force_quit)
             return true;
 
         read_tty_output(backlog, script, /*cap_read_calls=*/true);
 
-        if (script->fg.pipeline.pipeline.len == 0 && !script->fg_finished) {
-            bool started = finish_line(shell, backlog, script, &script->fg, /*background=*/false);
+        if (script->root.fg.programs.len == 0 && !script->root.fg_finished) {
+            bool started = finish_line(shell, backlog, script, &script->root.fg, /*background=*/false);
             if (started) {
                 // Rerun to prevent long scripts from only doing one command per frame.
                 // TODO: rate limit to prevent big scripts (with all builtins) from hanging.
                 --i;
             } else {
-                script->fg_finished = true;
+                script->root.fg_finished = true;
                 --i;
             }
         }
 
-        if (script->fg_finished && script->bg.len == 0) {
+        if (script->root.fg_finished && script->root.bg.len == 0) {
             if (!backlog->done) {
                 backlog->done = true;
                 backlog->end = std::chrono::high_resolution_clock::now();
@@ -1848,7 +1852,7 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
                     if (script) {
 #ifdef TRACY_ENABLE
                         cz::String message =
-                            cz::format(temp_allocator, "End: ", script->fg.pipeline.command_line);
+                            cz::format(temp_allocator, "End: ", script->root.fg.pipeline.command_line);
                         TracyMessage(message.buffer, message.len);
 #endif
 

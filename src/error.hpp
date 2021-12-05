@@ -1,9 +1,10 @@
 #pragma once
 
 enum Error {
-    Error_Success = 0,
-    Error_IO = 1,
-    Error_Parse = 2,
-    Error_InvalidPath = 3,
-    Error_InvalidProgram = 4,
+    Error_Success,
+    Error_IO,
+    Error_Parse_UnterminatedString,
+    Error_Parse_EmptyProgram,
+    Error_InvalidPath,
+    Error_InvalidProgram,
 };

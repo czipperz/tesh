@@ -31,7 +31,6 @@ bool tick_program(Shell_State* shell,
                   cz::Slice<Backlog_State*> backlogs,
                   Backlog_State* backlog,
                   Running_Script* script,
-                  Running_Line* line,
                   Running_Program* program,
                   int* exit_code,
                   bool* force_quit) {
@@ -269,7 +268,7 @@ bool tick_program(Shell_State* shell,
         }
 
         cz::Str option = builtin.args[1];
-        int64_t value;
+        int value;
         if (!cz::parse(builtin.args[2], &value)) {
             (void)builtin.err.write("configure: Usage: configure [option] [value]\n");
             goto finish_builtin;
@@ -369,6 +368,7 @@ bool tick_program(Shell_State* shell,
         cz::String contents = {};
         read_to_string(file, script->arena.allocator(), &contents);
 
+#if 0
         Parse_Script subscript = {};
         Error error =
             parse_script(shell, script->arena.allocator(), &subscript, line->on, contents);
@@ -384,6 +384,7 @@ bool tick_program(Shell_State* shell,
         line->on = {};
         line->on.success = first;
         line->on.failure = first;
+#endif
         goto finish_builtin;
     } break;
 

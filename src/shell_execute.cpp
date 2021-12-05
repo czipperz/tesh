@@ -33,12 +33,19 @@ struct Stdio_State {
 ///////////////////////////////////////////////////////////////////////////////
 
 static Error start_execute_pipeline(Shell_State* shell,
+                                    Running_Script* script,
+                                    Backlog_State* backlog,
+                                    Running_Pipeline* pipeline);
+
+#if 0
+static Error start_execute_pipeline(Shell_State* shell,
                                     Backlog_State* backlog,
                                     cz::Buffer_Array arena,
                                     const Running_Script& script,
                                     const Parse_Pipeline& parse,
                                     Running_Pipeline* running,
                                     bool bind_stdin);
+#endif
 
 static Error run_program(Shell_State* shell,
                          cz::Allocator allocator,
@@ -52,15 +59,14 @@ static void recognize_builtins(Running_Program* program,
                                const Parse_Program& parse,
                                cz::Allocator allocator);
 
+static void descend_to_first_pipeline(cz::Vector<Shell_Node*>* path, Shell_Node* child);
+
 ///////////////////////////////////////////////////////////////////////////////
 
 Error start_execute_script(Shell_State* shell,
                            Backlog_State* backlog,
                            cz::Buffer_Array arena,
-                           const Parse_Script& parse,
-                           cz::Str command_line) {
-    Error error = Error_Success;
-
+                           Shell_Node* root) {
     Running_Script running = {};
     running.id = backlog->id;
     running.arena = arena;
@@ -68,8 +74,12 @@ Error start_execute_script(Shell_State* shell,
     if (!create_pseudo_terminal(&running.tty, shell->width, shell->height))
         return Error_IO;
 
-    error = start_execute_line(shell, backlog, &running, parse.first, /*background=*/false);
+    running.root.fg.arena = alloc_arena(shell);
+    descend_to_first_pipeline(&running.root.fg.path, root);
+
+    Error error = start_execute_pipeline(shell, &running, backlog, &running.root.fg);
     if (error != Error_Success) {
+        recycle_arena(shell, running.root.fg.arena);
         destroy_pseudo_terminal(&running.tty);
         return error;
     }
@@ -85,8 +95,29 @@ Error start_execute_script(Shell_State* shell,
     return Error_Success;
 }
 
+static void descend_to_first_pipeline(cz::Vector<Shell_Node*>* path, Shell_Node* child) {
+    while (1) {
+        path->reserve(cz::heap_allocator(), 1);
+        path->push(child);
+
+        switch (child->type) {
+        case Shell_Node::PROGRAM:
+        case Shell_Node::PIPELINE:
+            return;
+        case Shell_Node::SEQUENCE:
+            child = &child->v.sequence[0];
+            break;
+        case Shell_Node::AND:
+        case Shell_Node::OR:
+            child = child->v.binary.left;
+            break;
+        }
+    }
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 
+#if 0
 Error start_execute_line(Shell_State* shell,
                          Backlog_State* backlog,
                          Running_Script* running,
@@ -127,29 +158,61 @@ again:
 
     return Error_Success;
 }
+#endif
 
 ///////////////////////////////////////////////////////////////////////////////
 
+#if 0
 static Error start_execute_pipeline(Shell_State* shell,
                                     Backlog_State* backlog,
                                     cz::Buffer_Array arena,
                                     const Running_Script& script,
                                     const Parse_Pipeline& parse,
                                     Running_Pipeline* running,
-                                    bool bind_stdin) {
+                                    bool bind_stdin)
+#endif
+
+#if 0
+static bool finish_line(Shell_State* shell,
+                        Backlog_State* backlog,
+                        Running_Script* script,
+                        Running_Pipeline* line,
+                        bool background) {
+    
+}
+#endif
+
+static Error start_execute_pipeline(Shell_State* shell,
+                                    Running_Script* script,
+                                    Backlog_State* backlog,
+                                    Running_Pipeline* pipeline) {
+    bool bind_stdin = true;
+
     ZoneScoped;
 
-    running->length = parse.pipeline.len;
-    running->arena = arena;
-    // running->command_line = command_line.clone(arena.allocator());
-    cz::Allocator allocator = arena.allocator();
+    // TODO async stuff inside our children needs to be allocated separately.
+    pipeline->arena.clear();
 
-    cz::Vector<Running_Program> pipeline = {};
-    CZ_DEFER(pipeline.drop(cz::heap_allocator()));
+    // Get the nodes in the pipeline.
+    Shell_Node* pipeline_node = pipeline->path.last();
+    cz::Slice<Shell_Node> program_nodes;
+    if (pipeline_node->type == Shell_Node::PIPELINE) {
+        program_nodes = pipeline_node->v.pipeline;
+    } else {
+        // Only one element in the pipeline so it's left raw.
+        program_nodes = {pipeline_node, 1};
+    }
+
+    cz::Allocator allocator = pipeline->arena.allocator();
+
+    cz::Vector<Running_Program> programs = {};
+    CZ_DEFER(programs.drop(cz::heap_allocator()));
     cz::Input_File pipe_in;
 
-    for (size_t p = 0; p < parse.pipeline.len; ++p) {
-        Parse_Program parse_program = parse.pipeline[p];
+    for (size_t p = 0; p < program_nodes.len; ++p) {
+        Shell_Node* program_node = &program_nodes[p];
+        CZ_ASSERT(program_node->type == Shell_Node::PROGRAM);  // TODO
+        const Parse_Program& parse_program = *program_node->v.program;
 
         Running_Program running_program = {};
         recognize_builtins(&running_program, parse_program, allocator);
@@ -160,8 +223,8 @@ static Error start_execute_pipeline(Shell_State* shell,
         if (parse_program.in_file.buffer) {
             stdio.in_type = File_Type_File;
             path.len = 0;
-            cz::path::make_absolute(parse_program.in_file, shell->working_directory,
-                                    temp_allocator, &path);
+            cz::path::make_absolute(parse_program.in_file, shell->working_directory, temp_allocator,
+                                    &path);
             if (!stdio.in.open(path.buffer))
                 return Error_InvalidPath;
             stdio.in_count = allocator.alloc<size_t>();
@@ -186,7 +249,7 @@ static Error start_execute_pipeline(Shell_State* shell,
             path.len = 0;
             stdio.out_count = allocator.alloc<size_t>();
             *stdio.out_count = 1;
-        } else if (p + 1 < parse.pipeline.len) {
+        } else if (p + 1 < program_nodes.len) {
             stdio.out_type = File_Type_Pipe;
         }
 
@@ -203,8 +266,8 @@ static Error start_execute_pipeline(Shell_State* shell,
         }
 
         // Make pipes for the next iteration.
-        if ((stdio.out_type == File_Type_Pipe || stdio.err_type == File_Type_Pipe) &&
-            (p + 1 < parse.pipeline.len && !parse.pipeline[p + 1].in_file.buffer)) {
+        if (stdio.out_type == File_Type_Pipe || stdio.err_type == File_Type_Pipe) {
+            // if (p + 1 < program_nodes.len && !program_nodes[p + 1].in_file.buffer) {
             cz::Output_File pipe_out;
             if (!cz::create_pipe(&pipe_in, &pipe_out))
                 return Error_IO;
@@ -221,20 +284,19 @@ static Error start_execute_pipeline(Shell_State* shell,
                 stdio.err_count = count;
                 ++*count;
             }
+            // }
         }
 
-        Error error = run_program(shell, arena.allocator(), &running_program, parse_program, stdio,
-                                  backlog, script);
+        Error error =
+            run_program(shell, allocator, &running_program, parse_program, stdio, backlog, *script);
         if (error != Error_Success)
             return error;
 
-        pipeline.reserve(cz::heap_allocator(), 1);
-        pipeline.push(running_program);
+        programs.reserve(cz::heap_allocator(), 1);
+        programs.push(running_program);
     }
 
-    running->pipeline = pipeline.clone(arena.allocator());
-    pipeline.len = 0;
-
+    pipeline->programs = programs.clone(allocator);
     return Error_Success;
 }
 

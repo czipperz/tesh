@@ -109,20 +109,23 @@ static void kill_program(Running_Program* program) {
 }
 
 void cleanup_pipeline(Running_Pipeline* pipeline) {
-    for (size_t p = 0; p < pipeline->pipeline.len; ++p) {
-        kill_program(&pipeline->pipeline[p]);
+    for (size_t p = 0; p < pipeline->programs.len; ++p) {
+        kill_program(&pipeline->programs[p]);
     }
 }
 
-static void cleanup_process(Running_Script* script) {
-    cleanup_pipeline(&script->fg.pipeline);
+static void cleanup_script(Running_Script* script) {
+    for (size_t i = 0; i < script->root.bg.len; ++i) {
+        cleanup_pipeline(&script->root.bg[i]);
+    }
+    cleanup_pipeline(&script->root.fg);
     destroy_pseudo_terminal(&script->tty);
 }
 
 void cleanup_processes(Shell_State* shell) {
     for (size_t i = 0; i < shell->scripts.len; ++i) {
         Running_Script* script = &shell->scripts[i];
-        cleanup_process(script);
+        cleanup_script(script);
     }
 }
 
@@ -143,20 +146,17 @@ void recycle_arena(Shell_State* shell, cz::Buffer_Array arena) {
 
 void recycle_pipeline(Shell_State* shell, Running_Pipeline* pipeline) {
     cleanup_pipeline(pipeline);
-
-    // Empty pipelines don't have an arena.
-    if (pipeline->length > 0)
-        recycle_arena(shell, pipeline->arena);
+    recycle_arena(shell, pipeline->arena);
 }
 
 void recycle_process(Shell_State* shell, Running_Script* script) {
-    cleanup_process(script);
+    cleanup_script(script);
 
     recycle_arena(shell, script->arena);
 
-    // Empty pipelines don't have an arena.
-    if (script->fg.pipeline.length > 0)
-        recycle_arena(shell, script->fg.pipeline.arena);
+    for (size_t i = 0; i < script->root.bg.len; ++i)
+        recycle_arena(shell, script->root.bg[i].arena);
+    recycle_arena(shell, script->root.fg.arena);
 
     if (script->id == shell->attached_process)
         shell->attached_process = -1;
