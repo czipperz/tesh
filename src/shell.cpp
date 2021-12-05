@@ -156,7 +156,9 @@ void recycle_process(Shell_State* shell, Running_Script* script) {
 
     for (size_t i = 0; i < script->root.bg.len; ++i)
         recycle_arena(shell, script->root.bg[i].arena);
-    recycle_arena(shell, script->root.fg.arena);
+
+    if (!script->root.fg_finished)
+        recycle_arena(shell, script->root.fg.arena);
 
     if (script->id == shell->attached_process)
         shell->attached_process = -1;
