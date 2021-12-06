@@ -610,6 +610,7 @@ void expand_arg(const Shell_State* shell,
                     cz::Str value = deref_var_at_point(shell, text, &index);
                     word->reserve(allocator, value.len);
                     word->append(value);
+                    continue;
                 } else if (text[index] == '\\') {
                     ++index;
                     if (index == text.len)
@@ -715,7 +716,7 @@ static cz::Str deref_var_at_point(const Shell_State* shell, cz::Str text, size_t
         ++*index;
         while (*index < text.len) {
             char ch = text[*index];
-            if (!cz::is_alnum(ch) || ch == '_')
+            if (!(cz::is_alnum(ch) || ch == '_'))
                 break;
             ++*index;
         }

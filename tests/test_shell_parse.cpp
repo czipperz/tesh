@@ -66,6 +66,17 @@ static Error parse_and_emit(const Shell_State* shell, cz::String* string, cz::St
     return error;
 }
 
+static cz::Str expand(const Shell_State* shell, cz::Str arg) {
+    cz::Vector<cz::Str> vec = {};
+    expand_arg_split(shell, arg, cz::heap_allocator(), &vec);
+
+    cz::String string = {};
+    for (size_t i = 0; i < vec.len; ++i) {
+        cz::append(cz::heap_allocator(), &string, "arg", i, ": ", vec[i], '\n');
+    }
+    return string;
+}
+
 TEST_CASE("parse_script empty line") {
     Shell_State shell = {};
     cz::String string = {};
@@ -79,7 +90,8 @@ TEST_CASE("parse_script one word") {
     cz::String string = {};
     Error error = parse_and_emit(&shell, &string, "abc");
     REQUIRE(error == Error_Success);
-    CHECK(string.as_str() == "\
+    CHECK(string.as_str() ==
+          "\
 program:\n\
     arg0: abc\n");
 }
@@ -89,7 +101,8 @@ TEST_CASE("parse_script two words") {
     cz::String string = {};
     Error error = parse_and_emit(&shell, &string, "abc def");
     REQUIRE(error == Error_Success);
-    CHECK(string.as_str() == "\
+    CHECK(string.as_str() ==
+          "\
 program:\n\
     arg0: abc\n\
     arg1: def\n");
@@ -100,7 +113,8 @@ TEST_CASE("parse_script two words whitespace") {
     cz::String string = {};
     Error error = parse_and_emit(&shell, &string, "   abc   def   ");
     REQUIRE(error == Error_Success);
-    CHECK(string.as_str() == "\
+    CHECK(string.as_str() ==
+          "\
 program:\n\
     arg0: abc\n\
     arg1: def\n");
@@ -111,7 +125,8 @@ TEST_CASE("parse_script pipe simple 1") {
     cz::String string = {};
     Error error = parse_and_emit(&shell, &string, "a | b");
     REQUIRE(error == Error_Success);
-    CHECK(string.as_str() == "\
+    CHECK(string.as_str() ==
+          "\
 pipeline:\n\
     program:\n\
         arg0: a\n\
@@ -124,7 +139,8 @@ TEST_CASE("parse_script pipe simple 2") {
     cz::String string = {};
     Error error = parse_and_emit(&shell, &string, "a b|c d");
     REQUIRE(error == Error_Success);
-    CHECK(string.as_str() == "\
+    CHECK(string.as_str() ==
+          "\
 pipeline:\n\
     program:\n\
         arg0: a\n\
@@ -139,7 +155,8 @@ TEST_CASE("parse_script single quotes basic cases") {
     cz::String string = {};
     Error error = parse_and_emit(&shell, &string, "a '' 'b' 'abcabc'");
     REQUIRE(error == Error_Success);
-    CHECK(string.as_str() == "\
+    CHECK(string.as_str() ==
+          "\
 program:\n\
     arg0: a\n\
     arg1: ''\n\
@@ -166,7 +183,8 @@ TEST_CASE("parse_script single quotes weird cases") {
     cz::String string = {};
     Error error = parse_and_emit(&shell, &string, "' \n\n ' 'c'a'b'");
     REQUIRE(error == Error_Success);
-    CHECK(string.as_str() == "\
+    CHECK(string.as_str() ==
+          "\
 program:\n\
     arg0: ' \n\n '\n\
     arg1: 'c'a'b'\n");
@@ -177,7 +195,8 @@ TEST_CASE("parse_script double quote basic") {
     cz::String string = {};
     Error error = parse_and_emit(&shell, &string, "\"a\" \"\" \"abc\"");
     REQUIRE(error == Error_Success);
-    CHECK(string.as_str() == "\
+    CHECK(string.as_str() ==
+          "\
 program:\n\
     arg0: \"a\"\n\
     arg1: \"\"\n\
@@ -189,7 +208,8 @@ TEST_CASE("parse_script double quote escape") {
     cz::String string = {};
     Error error = parse_and_emit(&shell, &string, "\"\\\\ \\n \\a \\$ \\` \\\"\"");
     REQUIRE(error == Error_Success);
-    CHECK(string.as_str() == "\
+    CHECK(string.as_str() ==
+          "\
 program:\n\
     arg0: \"\\\\ \\n \\a \\$ \\` \\\"\"\n");
 }
@@ -199,7 +219,8 @@ TEST_CASE("parse_script variable") {
     cz::String string = {};
     Error error = parse_and_emit(&shell, &string, "a=b c=d");
     REQUIRE(error == Error_Success);
-    CHECK(string.as_str() == "\
+    CHECK(string.as_str() ==
+          "\
 program:\n\
     var0: a\n\
     val0: b\n\
@@ -212,7 +233,8 @@ TEST_CASE("parse_script variable after arg is arg") {
     cz::String string = {};
     Error error = parse_and_emit(&shell, &string, "a=b arg c=d");
     REQUIRE(error == Error_Success);
-    CHECK(string.as_str() == "\
+    CHECK(string.as_str() ==
+          "\
 program:\n\
     var0: a\n\
     val0: b\n\
@@ -225,7 +247,8 @@ TEST_CASE("parse_script file indirection") {
     cz::String string = {};
     Error error = parse_and_emit(&shell, &string, "echo < in arg1 > out arg2 2> err arg3");
     REQUIRE(error == Error_Success);
-    CHECK(string.as_str() == "\
+    CHECK(string.as_str() ==
+          "\
 program:\n\
     arg0: echo\n\
     arg1: arg1\n\
@@ -241,58 +264,32 @@ TEST_CASE("parse_script file indirection stderr must be 2> no space") {
     cz::String string = {};
     Error error = parse_and_emit(&shell, &string, "echo 2 > out");
     REQUIRE(error == Error_Success);
-    CHECK(string.as_str() == "\
+    CHECK(string.as_str() ==
+          "\
 program:\n\
     arg0: echo\n\
     arg1: 2\n\
     out_file: out\n");
 }
 
-#if 0
 TEST_CASE("parse_script variable expand simple") {
     Shell_State shell = {};
     set_var(&shell, "var", "$value");
-    Parse_Script script = {};
-    Error error = tokenize(&shell, cz::heap_allocator(), &script, "$var$var");
-    REQUIRE(error == Error_Success);
-    size_t index = 0;
-    Parse_Pipeline pipeline;
-    error = parse_pipeline(script.tokens, &index, cz::heap_allocator(), &pipeline);
-    REQUIRE(error == Error_Success);
-    REQUIRE(pipeline.pipeline.len == 1);
-    REQUIRE(pipeline.pipeline[0].args.len == 1);
-    CHECK(pipeline.pipeline[0].args[0] == "$value$value");
+    REQUIRE(expand(&shell, "$var$var") == "arg0: $value$value\n");
 }
 
 TEST_CASE("parse_script variable expand inside quotes") {
     Shell_State shell = {};
     set_var(&shell, "var", "$value");
-    Parse_Script script = {};
-    Error error = tokenize(&shell, cz::heap_allocator(), &script, "\"$var$var\"");
-    REQUIRE(error == Error_Success);
-    size_t index = 0;
-    Parse_Pipeline pipeline;
-    error = parse_pipeline(script.tokens, &index, cz::heap_allocator(), &pipeline);
-    REQUIRE(error == Error_Success);
-    REQUIRE(pipeline.pipeline.len == 1);
-    REQUIRE(pipeline.pipeline[0].args.len == 1);
-    CHECK(pipeline.pipeline[0].args[0] == "$value$value");
+    REQUIRE(expand(&shell, "\"$var$var\"") == "arg0: $value$value\n");
 }
 
 TEST_CASE("parse_script 'echo $hi' hi is undefined") {
     Shell_State shell = {};
-    Parse_Script script = {};
-    Error error = tokenize(&shell, cz::heap_allocator(), &script, "echo $hi");
-    REQUIRE(error == Error_Success);
-    size_t index = 0;
-    Parse_Pipeline pipeline;
-    error = parse_pipeline(script.tokens, &index, cz::heap_allocator(), &pipeline);
-    REQUIRE(error == Error_Success);
-    REQUIRE(pipeline.pipeline.len == 1);
-    REQUIRE(pipeline.pipeline[0].args.len == 1);
-    CHECK(pipeline.pipeline[0].args[0] == "echo");
+    REQUIRE(expand(&shell, "$hi") == "");
 }
 
+#if 0
 TEST_CASE("parse_script multi word variable expanded") {
     Shell_State shell = {};
     set_var(&shell, "var", "a b");
