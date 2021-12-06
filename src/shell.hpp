@@ -242,6 +242,15 @@ Error parse_script(const Shell_State* shell,
                    Shell_Node* root,
                    cz::Str text);
 
+void expand_arg_single(const Shell_State* shell,
+                       cz::Str arg,
+                       cz::Allocator allocator,
+                       cz::String* output);
+void expand_arg_split(const Shell_State* shell,
+                      cz::Str arg,
+                      cz::Allocator allocator,
+                      cz::Vector<cz::Str>* output);
+
 ///////////////////////////////////////////////////////////////////////////////
 
 Error start_execute_script(Shell_State* shell,

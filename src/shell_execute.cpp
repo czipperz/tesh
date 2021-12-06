@@ -314,9 +314,6 @@ static Error start_execute_pipeline(Shell_State* shell,
         CZ_ASSERT(program_node->type == Shell_Node::PROGRAM);  // TODO
         const Parse_Program& parse_program = *program_node->v.program;
 
-        Running_Program running_program = {};
-        recognize_builtins(&running_program, parse_program, allocator);
-
         Stdio_State stdio = {};
 
         cz::String path = {};
@@ -387,6 +384,8 @@ static Error start_execute_pipeline(Shell_State* shell,
             // }
         }
 
+        Running_Program running_program = {};
+
         Error error = run_program(shell, allocator, &running_program, parse_program, stdio, backlog,
                                   script->tty);
         if (error != Error_Success)
@@ -416,6 +415,15 @@ static Error run_program(Shell_State* shell,
                          Stdio_State stdio,
                          Backlog_State* backlog,
                          const Pseudo_Terminal& tty) {
+    cz::Vector<cz::Str> args = {};
+    for (size_t i = 0; i < parse.args.len; ++i) {
+        expand_arg_split(shell, parse.args[i], allocator, &args);
+    }
+    cz::change_allocator(cz::heap_allocator(), allocator, &args);
+
+    parse.args = args;
+    recognize_builtins(program, parse, allocator);
+
     // If command is a builtin.
     if (program->type != Running_Program::PROCESS) {
         if (stdio.in_type == File_Type_Pipe && !stdio.in.set_non_blocking())
@@ -460,8 +468,6 @@ static Error run_program(Shell_State* shell,
         return Error_Success;
     }
 
-    cz::Vector<cz::Str> args = parse.args.clone(temp_allocator);
-
     cz::String full_path = {};
     if (!find_in_path(shell, args[0], allocator, &full_path)) {
         return Error_InvalidProgram;
@@ -470,7 +476,7 @@ static Error run_program(Shell_State* shell,
 
 #ifdef _WIN32
     if (args[0].ends_with_case_insensitive(".ps1")) {
-        args.reserve(temp_allocator, 1);
+        args.reserve(cz::heap_allocator(), 1);
         args.insert(0, "powershell");
     }
 #endif
@@ -616,6 +622,7 @@ static void recognize_builtins(Running_Program* program,
                                cz::Allocator allocator) {
     program->type = Running_Program::PROCESS;
 
+    // Line that only assigns to variables runs as special builtin.
     if (parse.args.len == 0) {
         CZ_ASSERT(parse.variable_names.len > 0);
         program->type = Running_Program::VARIABLES;

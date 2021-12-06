@@ -4,19 +4,6 @@
 #include <cz/heap.hpp>
 
 ///////////////////////////////////////////////////////////////////////////////
-// Utility
-///////////////////////////////////////////////////////////////////////////////
-
-template <class T>
-static void change_allocator(cz::Allocator old_allocator,
-                             cz::Allocator new_allocator,
-                             cz::Vector<T>* vector) {
-    auto copy = vector->clone(new_allocator);
-    vector->drop(old_allocator);
-    *vector = copy;
-}
-
-///////////////////////////////////////////////////////////////////////////////
 // Forward declarations
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -58,6 +45,8 @@ static Error parse_program(cz::Allocator allocator,
                            Parse_Program* program,
                            size_t* index);
 static void deal_with_token(cz::Allocator allocator, Parse_Program* program, cz::Str token);
+
+static cz::Str deref_var_at_point(const Shell_State* shell, cz::Str text, size_t* index);
 
 ///////////////////////////////////////////////////////////////////////////////
 // Driver
@@ -276,8 +265,29 @@ static Error advance_through_double_quote_string(cz::Str text, size_t* index) {
 }
 
 static Error advance_through_dollar_sign(cz::Str text, size_t* index) {
-    // ${} can stay but $() should be moved to run beforehand.
-    CZ_PANIC("todo");
+    ++*index;
+    if (*index == text.len)
+        return Error_Success;
+
+    switch (text[*index]) {
+    case CZ_ALNUM_CASES:
+    case '_': {
+        ++*index;
+        while (*index < text.len) {
+            char ch = text[*index];
+            if (!cz::is_alnum(ch) || ch == '_')
+                break;
+            ++*index;
+        }
+        break;
+    } break;
+
+    default:
+        // ${} can stay but $() should be moved to run beforehand.
+        CZ_PANIC("todo");
+    }
+
+    return Error_Success;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -456,7 +466,7 @@ static Error parse_pipeline(const Shell_State* shell,
     }
 
     if (node->type == Shell_Node::PIPELINE) {
-        change_allocator(cz::heap_allocator(), allocator, &node->v.pipeline);
+        cz::change_allocator(cz::heap_allocator(), allocator, &node->v.pipeline);
     }
     return Error_Success;
 }
@@ -502,9 +512,9 @@ static Error parse_program(cz::Allocator allocator,
         return Error_Parse_EmptyProgram;
     }
 
-    change_allocator(cz::heap_allocator(), allocator, &program->args);
-    change_allocator(cz::heap_allocator(), allocator, &program->variable_names);
-    change_allocator(cz::heap_allocator(), allocator, &program->variable_values);
+    cz::change_allocator(cz::heap_allocator(), allocator, &program->args);
+    cz::change_allocator(cz::heap_allocator(), allocator, &program->variable_names);
+    cz::change_allocator(cz::heap_allocator(), allocator, &program->variable_values);
     return Error_Success;
 }
 
@@ -552,4 +562,169 @@ static void deal_with_token(cz::Allocator allocator, Parse_Program* program, cz:
 
     program->args.reserve(cz::heap_allocator(), 1);
     program->args.push(token);
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// Argument expansion
+///////////////////////////////////////////////////////////////////////////////
+
+void expand_arg(const Shell_State* shell,
+                cz::Str text,
+                cz::Allocator allocator,
+                cz::Vector<cz::Str>* words,
+                cz::String* word) {
+    bool has_word = false;
+    for (size_t index = 0; index < text.len;) {
+        switch (text[index]) {
+        case '\'': {
+            has_word = true;
+            ++index;
+            while (1) {
+                if (index == text.len)
+                    CZ_PANIC("Error_Parse_UnterminatedString should be caught earlier");
+
+                // Go until we hit another '\''.
+                if (text[index] == '\'') {
+                    ++index;
+                    break;
+                }
+
+                word->reserve(allocator, 1);
+                word->push(text[index]);
+                ++index;
+            }
+        } break;
+
+        case '"': {
+            has_word = true;
+            ++index;
+            while (1) {
+                if (index == text.len)
+                    CZ_PANIC("Error_Parse_UnterminatedString should be caught earlier");
+
+                // Go until we hit another '"'.
+                if (text[index] == '"') {
+                    ++index;
+                    break;
+                } else if (text[index] == '$') {
+                    cz::Str value = deref_var_at_point(shell, text, &index);
+                    word->reserve(allocator, value.len);
+                    word->append(value);
+                } else if (text[index] == '\\') {
+                    ++index;
+                    if (index == text.len)
+                        CZ_PANIC("Error_Parse_UnterminatedString should be caught earlier");
+                    char c2 = text[index];
+
+                    // From manual testing it looks like these are the only
+                    // escape sequences that are processed.  Others are
+                    // left (ie typing '\\' -> '\' but '\n' -> '\n').
+                    if (c2 == '"' || c2 == '\\' || c2 == '`' || c2 == '$') {
+                        word->reserve(allocator, 1);
+                        word->push(c2);
+                        ++index;
+                    } else if (c2 == '\n') {
+                        // Skip backslash newline.
+                        ++index;
+                    } else {
+                        // Pass through both the backslash and the character afterwords.
+                        word->reserve(allocator, 1);
+                        word->push('\\');
+                    }
+                    continue;
+                }
+
+                word->reserve(allocator, 1);
+                word->push(text[index]);
+                ++index;
+            }
+        } break;
+
+        case '$': {
+            cz::Str value = deref_var_at_point(shell, text, &index);
+            if (words) {
+                size_t i = 0;
+                while (i < value.len) {
+                    if (cz::is_blank(value[i])) {
+                        if (has_word || word->len > 0) {
+                            words->reserve(cz::heap_allocator(), 1);
+                            words->push(*word);
+                            *word = {};
+                            has_word = false;
+                        }
+                        ++i;
+                    }
+                    for (; i < value.len; ++i) {
+                        if (!cz::is_blank(value[i]))
+                            break;
+                    }
+
+                    for (; i < value.len; ++i) {
+                        if (cz::is_blank(value[i]))
+                            break;
+                        word->reserve(allocator, 1);
+                        word->push(value[i]);
+                    }
+                }
+            } else {
+                word->reserve(allocator, value.len);
+                word->append(value);
+            }
+        } break;
+
+        default:
+            word->reserve(allocator, 1);
+            word->push(text[index]);
+            ++index;
+            break;
+        }
+    }
+
+    if (words && (has_word || word->len > 0)) {
+        words->reserve(cz::heap_allocator(), 1);
+        words->push(*word);
+        *word = {};
+        has_word = false;
+    }
+}
+
+void expand_arg_single(const Shell_State* shell,
+                       cz::Str text,
+                       cz::Allocator allocator,
+                       cz::String* word) {
+    expand_arg(shell, text, allocator, nullptr, word);
+}
+
+void expand_arg_split(const Shell_State* shell,
+                      cz::Str text,
+                      cz::Allocator allocator,
+                      cz::Vector<cz::Str>* output) {
+    cz::String word = {};
+    expand_arg(shell, text, allocator, output, &word);
+}
+
+static cz::Str deref_var_at_point(const Shell_State* shell, cz::Str text, size_t* index) {
+    ++*index;
+    if (*index == text.len)
+        return "$";
+
+    switch (text[*index]) {
+    case CZ_ALNUM_CASES:
+    case '_': {
+        size_t start = *index;
+        ++*index;
+        while (*index < text.len) {
+            char ch = text[*index];
+            if (!cz::is_alnum(ch) || ch == '_')
+                break;
+            ++*index;
+        }
+        cz::Str value = "";
+        get_var(shell, text.slice(start, *index), &value);
+        return value;
+    } break;
+
+    default:
+        CZ_PANIC("todo");
+    }
 }
