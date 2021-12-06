@@ -289,86 +289,23 @@ TEST_CASE("parse_script 'echo $hi' hi is undefined") {
     REQUIRE(expand(&shell, "$hi") == "");
 }
 
-#if 0
 TEST_CASE("parse_script multi word variable expanded") {
     Shell_State shell = {};
     set_var(&shell, "var", "a b");
-    Parse_Script script = {};
-    Error error = tokenize(&shell, cz::heap_allocator(), &script, "\"$var\" echo $var");
-    REQUIRE(error == Error_Success);
-    size_t index = 0;
-    Parse_Pipeline pipeline;
-    error = parse_pipeline(script.tokens, &index, cz::heap_allocator(), &pipeline);
-    REQUIRE(error == Error_Success);
-    REQUIRE(pipeline.pipeline.len == 1);
-    REQUIRE(pipeline.pipeline[0].args.len == 4);
-    CHECK(pipeline.pipeline[0].args[0] == "a b");
-    CHECK(pipeline.pipeline[0].args[1] == "echo");
-    CHECK(pipeline.pipeline[0].args[2] == "a");
-    CHECK(pipeline.pipeline[0].args[3] == "b");
+    REQUIRE(expand(&shell, "$var") == "arg0: a\narg1: b\n");
 }
 
 TEST_CASE("parse_script backslash escapes dollar sign") {
     Shell_State shell = {};
-    Parse_Script script = {};
-    Error error = tokenize(&shell, cz::heap_allocator(), &script, "\\$var");
-    REQUIRE(error == Error_Success);
-    size_t index = 0;
-    Parse_Pipeline pipeline;
-    error = parse_pipeline(script.tokens, &index, cz::heap_allocator(), &pipeline);
-    REQUIRE(error == Error_Success);
-    REQUIRE(pipeline.pipeline.len == 1);
-    REQUIRE(pipeline.pipeline[0].args.len == 1);
-    CHECK(pipeline.pipeline[0].args[0] == "$var");
-}
-
-TEST_CASE("parse_script dollar sign space") {
-    Shell_State shell = {};
-    Parse_Script script = {};
-    Error error = tokenize(&shell, cz::heap_allocator(), &script, "$ a");
-    REQUIRE(error == Error_Success);
-    size_t index = 0;
-    Parse_Pipeline pipeline;
-    error = parse_pipeline(script.tokens, &index, cz::heap_allocator(), &pipeline);
-    REQUIRE(error == Error_Success);
-    REQUIRE(pipeline.pipeline.len == 1);
-    REQUIRE(pipeline.pipeline[0].args.len == 2);
-    CHECK(pipeline.pipeline[0].args[0] == "$");
-    CHECK(pipeline.pipeline[0].args[1] == "a");
+    REQUIRE(expand(&shell, "\\$var") == "arg0: $var\n");
 }
 
 TEST_CASE("parse_script dollar sign space in quotes") {
     Shell_State shell = {};
-    Parse_Script script = {};
-    Error error = tokenize(&shell, cz::heap_allocator(), &script, "\"$ a\"");
-    REQUIRE(error == Error_Success);
-    size_t index = 0;
-    Parse_Pipeline pipeline;
-    error = parse_pipeline(script.tokens, &index, cz::heap_allocator(), &pipeline);
-    REQUIRE(error == Error_Success);
-    REQUIRE(pipeline.pipeline.len == 1);
-    REQUIRE(pipeline.pipeline[0].args.len == 1);
-    CHECK(pipeline.pipeline[0].args[0] == "$ a");
+    REQUIRE(expand(&shell, "\"$ a\"") == "arg0: $ a\n");
 }
 
-TEST_CASE("parse_script multi word variable a=$var keeps one word") {
-    Shell_State shell = {};
-    set_var(&shell, "var", "multi word");
-    Parse_Script script = {};
-    Error error = tokenize(&shell, cz::heap_allocator(), &script, "a=$var");
-    REQUIRE(error == Error_Success);
-    size_t index = 0;
-    Parse_Pipeline pipeline;
-    error = parse_pipeline(script.tokens, &index, cz::heap_allocator(), &pipeline);
-    REQUIRE(error == Error_Success);
-    REQUIRE(pipeline.pipeline.len == 1);
-    CHECK(pipeline.pipeline[0].args.len == 0);
-    REQUIRE(pipeline.pipeline[0].variable_names.len == 1);
-    REQUIRE(pipeline.pipeline[0].variable_values.len == 1);
-    CHECK(pipeline.pipeline[0].variable_names[0] == "a");
-    CHECK(pipeline.pipeline[0].variable_values[0] == "multi word");
-}
-
+#if 0
 TEST_CASE("parse_script semicolon combiner") {
     Shell_State shell = {};
     Parse_Script script = {};

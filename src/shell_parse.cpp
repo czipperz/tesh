@@ -206,6 +206,12 @@ static Error advance_through_token(cz::Str text,
 
             ///////////////////////////////////////////////
 
+        case '\\': {
+            ++*index;
+            if (*index < text.len)
+                ++*index;
+        } break;
+
         default:
             ++*index;
             break;
@@ -673,6 +679,25 @@ void expand_arg(const Shell_State* shell,
             }
         } break;
 
+        case '\\': {
+            ++index;
+            if (index < text.len) {
+                char c2 = text[index];
+                if (c2 == '"' || c2 == '\\' || c2 == '`' || c2 == '$') {
+                    word->reserve(allocator, 1);
+                    word->push(c2);
+                } else {
+                    word->reserve(allocator, 2);
+                    word->push('\\');
+                    word->push(c2);
+                }
+                ++index;
+            } else {
+                word->reserve(allocator, 1);
+                word->push('\\');
+            }
+        } break;
+
         default:
             word->reserve(allocator, 1);
             word->push(text[index]);
@@ -726,6 +751,6 @@ static cz::Str deref_var_at_point(const Shell_State* shell, cz::Str text, size_t
     } break;
 
     default:
-        CZ_PANIC("todo");
+        return "$";
     }
 }
