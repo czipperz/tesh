@@ -119,6 +119,10 @@ static Error tokenize(const Shell_State* shell,
     return Error_Success;
 }
 
+///////////////////////////////////////////////////////////////////////////////
+// Tokenization - eat one token
+///////////////////////////////////////////////////////////////////////////////
+
 static Error advance_through_token(cz::Str text,
                                    size_t* token_start,
                                    size_t* index,
@@ -220,6 +224,10 @@ static Error advance_through_token(cz::Str text,
     }
 }
 
+///////////////////////////////////////////////////////////////////////////////
+// Tokenization utility
+///////////////////////////////////////////////////////////////////////////////
+
 static Error advance_through_single_quote_string(cz::Str text, size_t* index) {
     ++*index;
     while (1) {
@@ -293,6 +301,10 @@ static int get_precedence(cz::Str token) {
     return 0;
 }
 
+///////////////////////////////////////////////////////////////////////////////
+// Parse sequence
+///////////////////////////////////////////////////////////////////////////////
+
 static Error parse_sequence(const Shell_State* shell,
                             cz::Allocator allocator,
                             cz::Slice<cz::Str> tokens,
@@ -342,6 +354,10 @@ static Error parse_sequence(const Shell_State* shell,
     return Error_Success;
 }
 
+///////////////////////////////////////////////////////////////////////////////
+// Parse binary
+///////////////////////////////////////////////////////////////////////////////
+
 static Error parse_binary(const Shell_State* shell,
                           cz::Allocator allocator,
                           cz::Slice<cz::Str> tokens,
@@ -388,6 +404,10 @@ static Error parse_binary(const Shell_State* shell,
             return error;
     }
 }
+
+///////////////////////////////////////////////////////////////////////////////
+// Parse pipeline
+///////////////////////////////////////////////////////////////////////////////
 
 static Error parse_pipeline(const Shell_State* shell,
                             cz::Allocator allocator,
@@ -440,6 +460,10 @@ static Error parse_pipeline(const Shell_State* shell,
     }
     return Error_Success;
 }
+
+///////////////////////////////////////////////////////////////////////////////
+// Parse program
+///////////////////////////////////////////////////////////////////////////////
 
 static Error parse_program(cz::Allocator allocator,
                            cz::Slice<cz::Str> tokens,
