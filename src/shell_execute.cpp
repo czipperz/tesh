@@ -420,8 +420,35 @@ static Error run_program(Shell_State* shell,
         expand_arg_split(shell, parse.args[i], allocator, &args);
     }
     cz::change_allocator(cz::heap_allocator(), allocator, &args);
-
     parse.args = args;
+
+    {
+        cz::Vector<cz::Str> variable_values = {};
+        variable_values.reserve(allocator, parse.variable_values.len);
+        for (size_t i = 0; i < parse.variable_values.len; ++i) {
+            cz::String value = {};
+            expand_arg_single(shell, parse.variable_values[i], allocator, &value);
+            variable_values.push(value);
+        }
+        parse.variable_values = variable_values;
+    }
+
+    if (parse.in_file.buffer) {
+        cz::String file = {};
+        expand_arg_single(shell, parse.in_file, allocator, &file);
+        parse.in_file = file;
+    }
+    if (parse.out_file.buffer) {
+        cz::String file = {};
+        expand_arg_single(shell, parse.out_file, allocator, &file);
+        parse.out_file = file;
+    }
+    if (parse.err_file.buffer) {
+        cz::String file = {};
+        expand_arg_single(shell, parse.err_file, allocator, &file);
+        parse.err_file = file;
+    }
+
     recognize_builtins(program, parse, allocator);
 
     // If command is a builtin.
