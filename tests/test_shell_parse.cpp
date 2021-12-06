@@ -217,8 +217,35 @@ program:\n\
     var0: a\n\
     val0: b\n\
     arg0: arg\n\
-    arg1: c=d\n\
-");
+    arg1: c=d\n");
+}
+
+TEST_CASE("parse_script file indirection") {
+    Shell_State shell = {};
+    cz::String string = {};
+    Error error = parse_and_emit(&shell, &string, "echo < in arg1 > out arg2 2> err arg3");
+    REQUIRE(error == Error_Success);
+    CHECK(string.as_str() == "\
+program:\n\
+    arg0: echo\n\
+    arg1: arg1\n\
+    arg2: arg2\n\
+    arg3: arg3\n\
+    in_file: in\n\
+    out_file: out\n\
+    err_file: err\n");
+}
+
+TEST_CASE("parse_script file indirection stderr must be 2> no space") {
+    Shell_State shell = {};
+    cz::String string = {};
+    Error error = parse_and_emit(&shell, &string, "echo 2 > out");
+    REQUIRE(error == Error_Success);
+    CHECK(string.as_str() == "\
+program:\n\
+    arg0: echo\n\
+    arg1: 2\n\
+    out_file: out\n");
 }
 
 #if 0
@@ -343,45 +370,6 @@ TEST_CASE("parse_script multi word variable a=$var keeps one word") {
     REQUIRE(pipeline.pipeline[0].variable_values.len == 1);
     CHECK(pipeline.pipeline[0].variable_names[0] == "a");
     CHECK(pipeline.pipeline[0].variable_values[0] == "multi word");
-}
-
-TEST_CASE("parse_script file indirection") {
-    Shell_State shell = {};
-    Parse_Script script = {};
-    Error error =
-        tokenize(&shell, cz::heap_allocator(), &script, "echo < in arg1 > out arg2 2> err arg3");
-    REQUIRE(error == Error_Success);
-    size_t index = 0;
-    Parse_Pipeline pipeline;
-    error = parse_pipeline(script.tokens, &index, cz::heap_allocator(), &pipeline);
-    REQUIRE(error == Error_Success);
-    REQUIRE(pipeline.pipeline.len == 1);
-    REQUIRE(pipeline.pipeline[0].args.len == 4);
-    CHECK(pipeline.pipeline[0].args[0] == "echo");
-    CHECK(pipeline.pipeline[0].args[1] == "arg1");
-    CHECK(pipeline.pipeline[0].args[2] == "arg2");
-    CHECK(pipeline.pipeline[0].args[3] == "arg3");
-
-    CHECK(pipeline.pipeline[0].in_file == "in");
-    CHECK(pipeline.pipeline[0].out_file == "out");
-    CHECK(pipeline.pipeline[0].err_file == "err");
-}
-
-TEST_CASE("parse_script file indirection stderr must be 2> no space") {
-    Shell_State shell = {};
-    Parse_Script script = {};
-    Error error = tokenize(&shell, cz::heap_allocator(), &script, "echo 2 > out");
-    REQUIRE(error == Error_Success);
-    size_t index = 0;
-    Parse_Pipeline pipeline;
-    error = parse_pipeline(script.tokens, &index, cz::heap_allocator(), &pipeline);
-    REQUIRE(error == Error_Success);
-    REQUIRE(pipeline.pipeline.len == 1);
-    REQUIRE(pipeline.pipeline[0].args.len == 2);
-    CHECK(pipeline.pipeline[0].args[0] == "echo");
-    CHECK(pipeline.pipeline[0].args[1] == "2");
-
-    CHECK(pipeline.pipeline[0].out_file == "out");
 }
 
 TEST_CASE("parse_script semicolon combiner") {

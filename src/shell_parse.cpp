@@ -149,12 +149,14 @@ static Error advance_through_token(cz::Str text,
             return Error_Success;
 
         case '<':  // TODO <& >&, <<, <<<, etc.
-        case '>':
-            if (*index == *token_start) {
+        case '>': {
+            cz::Str before = text.slice(*token_start, *index);
+            if (*index == *token_start || before == "1" || before == "2") {
                 *any_special = true;
                 ++*index;
             }
             return Error_Success;
+        }
 
         case '&':
         case '|':
@@ -443,12 +445,33 @@ static Error parse_program(cz::Allocator allocator,
                            cz::Slice<cz::Str> tokens,
                            Parse_Program* program,
                            size_t* index) {
-    for (; *index < tokens.len; ++*index) {
-        // TODO: var=val, <, >
+    for (; *index < tokens.len;) {
         cz::Str token = tokens[*index];
         if (get_precedence(token))
             break;  // TODO special handling for (???
+
+        if (token == "<" || token == ">" || token == "1>" || token == "2>") {
+            if (*index + 1 == tokens.len)
+                return Error_Parse_NothingToIndirect;
+            cz::Str* slot;
+            if (token == "<") {
+                slot = &program->in_file;
+            } else if (token == ">" || token == "1>") {
+                slot = &program->out_file;
+            } else if (token == "2>") {
+                slot = &program->err_file;
+            } else {
+                CZ_PANIC("unreachable");
+            }
+
+            if (!slot->buffer)
+                *slot = tokens[*index + 1];
+            *index += 2;
+            continue;
+        }
+
         deal_with_token(allocator, program, token);
+        ++*index;
     }
 
     if (program->args.len == 0 && program->variable_names.len == 0) {
@@ -502,10 +525,6 @@ static void deal_with_token(cz::Allocator allocator, Parse_Program* program, cz:
             break;
         }
     }
-
-    // Note: a token by definition has len >= 1.
-    if (token[0] == '<' || token[0] == '>')
-        CZ_PANIC("todo");
 
     program->args.reserve(cz::heap_allocator(), 1);
     program->args.push(token);

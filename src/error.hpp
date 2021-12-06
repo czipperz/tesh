@@ -5,6 +5,7 @@ enum Error {
     Error_IO,
     Error_Parse_UnterminatedString,
     Error_Parse_EmptyProgram,
+    Error_Parse_NothingToIndirect,
     Error_InvalidPath,
     Error_InvalidProgram,
 };
