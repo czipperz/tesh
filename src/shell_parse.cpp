@@ -285,7 +285,22 @@ static Error advance_through_dollar_sign(cz::Str text, size_t* index) {
                 break;
             ++*index;
         }
-        break;
+    } break;
+
+    case '{': {
+        ++*index;
+        size_t start = *index;
+        while (*index < text.len) {
+            char ch = text[*index];
+            if (!cz::is_alnum(ch) || ch == '_')
+                break;
+            ++*index;
+        }
+        if (*index == start || *index == text.len || text[*index] != '}') {
+            // TODO handle cases like ${a:b}
+            return Error_Parse_UnterminatedVariable;
+        }
+        ++*index;
     } break;
 
     default:
@@ -770,6 +785,25 @@ static cz::Str deref_var_at_point(const Shell_State* shell, cz::Str text, size_t
         }
         cz::Str value = "";
         get_var(shell, text.slice(start, *index), &value);
+        return value;
+    } break;
+
+    case '{': {
+        ++*index;
+        size_t start = *index;
+        while (*index < text.len) {
+            char ch = text[*index];
+            if (!cz::is_alnum(ch) || ch == '_')
+                break;
+            ++*index;
+        }
+        if (*index == start || *index == text.len || text[*index] != '}') {
+            CZ_PANIC("Error_Parse_UnterminatedVariable should be handled earlier");
+        }
+
+        cz::Str value = "";
+        get_var(shell, text.slice(start, *index), &value);
+        ++*index;
         return value;
     } break;
 

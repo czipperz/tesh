@@ -565,35 +565,19 @@ TEST_CASE("parse_script alias not expanded when quoted") {
     CHECK(pipeline.pipeline[0].args[0] == "aa");
     CHECK(pipeline.pipeline[0].args[1] == "cc");
 }
+#endif
 
 TEST_CASE("parse_script expand ${x}") {
     Shell_State shell = {};
     set_var(&shell, "aa", "bb");
-    Parse_Script script = {};
-    Error error = tokenize(&shell, cz::heap_allocator(), &script, "${aa} cc");
+    cz::String string = {};
+    Error error = parse_and_emit(&shell, &string, "${aa} cc");
     REQUIRE(error == Error_Success);
-    size_t index = 0;
-    Parse_Pipeline pipeline;
-    error = parse_pipeline(script.tokens, &index, cz::heap_allocator(), &pipeline);
-    REQUIRE(error == Error_Success);
-    REQUIRE(pipeline.pipeline.len == 1);
-    REQUIRE(pipeline.pipeline[0].args.len == 2);
-    CHECK(pipeline.pipeline[0].args[0] == "bb");
-    CHECK(pipeline.pipeline[0].args[1] == "cc");
-}
+    CHECK(string.as_str() ==
+          "\
+program:\n\
+    arg0: ${aa}\n\
+    arg1: cc\n");
 
-TEST_CASE("parse_script evaluate var expand before var set") {
-    Shell_State shell = {};
-    set_var(&shell, "aa", "cc");
-    Parse_Script script = {};
-    Error error = tokenize(&shell, cz::heap_allocator(), &script, "aa=bb x${aa}y");
-    REQUIRE(error == Error_Success);
-    size_t index = 0;
-    Parse_Pipeline pipeline;
-    error = parse_pipeline(script.tokens, &index, cz::heap_allocator(), &pipeline);
-    REQUIRE(error == Error_Success);
-    REQUIRE(pipeline.pipeline.len == 1);
-    REQUIRE(pipeline.pipeline[0].args.len == 1);
-    CHECK(pipeline.pipeline[0].args[0] == "xccy");
+    REQUIRE(expand(&shell, "${aa}") == "arg0: bb\n");
 }
-#endif
