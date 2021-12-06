@@ -384,7 +384,12 @@ static Error parse_binary(const Shell_State* shell,
     // Honor precedence:    `a && b || c` -> `(a && b) || c`
 
     Shell_Node sub;
-    Error error = parse_pipeline(shell, allocator, tokens, &sub, index);
+    Error error;
+    if (max_precedence == 6) {
+        error = parse_pipeline(shell, allocator, tokens, &sub, index);
+    } else {
+        error = parse_binary(shell, allocator, tokens, max_precedence - 2, &sub, index);
+    }
     if (error != Error_Success)
         return error;
 
@@ -413,9 +418,11 @@ static Error parse_binary(const Shell_State* shell,
 
         // Since we're doing LTR loop here, there's no point in
         // having a child do it as well at the same precedence.
-        int sub_precedence = cz::min(precedence, max_precedence - 1);
-
-        error = parse_binary(shell, allocator, tokens, sub_precedence, &sub, index);
+        if (precedence == max_precedence) {
+            error = parse_pipeline(shell, allocator, tokens, &sub, index);
+        } else {
+            error = parse_binary(shell, allocator, tokens, precedence, &sub, index);
+        }
         if (error != Error_Success)
             return error;
     }

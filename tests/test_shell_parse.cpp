@@ -7,10 +7,11 @@ static void append_node(cz::Allocator allocator,
                         Shell_Node* node,
                         size_t depth) {
     static const size_t spd = 4;
+    cz::Str async_str = (node->async ? " (async)" : "");
     switch (node->type) {
     case Shell_Node::PROGRAM: {
         Parse_Program* program = node->v.program;
-        append(allocator, string, cz::many(' ', depth * spd), "program:\n");
+        append(allocator, string, cz::many(' ', depth * spd), "program", async_str, ":\n");
         for (size_t i = 0; i < program->variable_names.len; ++i) {
             append(allocator, string, cz::many(' ', (depth + 1) * spd), "var", i, ": ",
                    program->variable_names[i], '\n');
@@ -36,7 +37,7 @@ static void append_node(cz::Allocator allocator,
     } break;
 
     case Shell_Node::PIPELINE: {
-        append(allocator, string, cz::many(' ', depth * spd), "pipeline:\n");
+        append(allocator, string, cz::many(' ', depth * spd), "pipeline", async_str, ":\n");
         for (size_t i = 0; i < node->v.pipeline.len; ++i) {
             append_node(allocator, string, &node->v.pipeline[i], depth + 1);
         }
@@ -45,12 +46,16 @@ static void append_node(cz::Allocator allocator,
     case Shell_Node::AND:
     case Shell_Node::OR: {
         cz::Str op = (node->type == Shell_Node::AND ? "and" : "or");
-        append(allocator, string, cz::many(' ', depth * spd), op, ":\n");
-        append_node(allocator, string, node->v.binary.left, depth);
-        append_node(allocator, string, node->v.binary.right, depth);
+        append(allocator, string, cz::many(' ', depth * spd), op, async_str, ":\n");
+        append_node(allocator, string, node->v.binary.left, depth + 1);
+        append_node(allocator, string, node->v.binary.right, depth + 1);
     } break;
 
     case Shell_Node::SEQUENCE:
+        if (node->async) {
+            append(allocator, string, cz::many(' ', depth * spd), "async:\n");
+            depth++;
+        }
         for (size_t i = 0; i < node->v.sequence.len; ++i) {
             append_node(allocator, string, &node->v.sequence[i], depth);
         }
@@ -305,133 +310,109 @@ TEST_CASE("parse_script dollar sign space in quotes") {
     REQUIRE(expand(&shell, "\"$ a\"") == "arg0: $ a\n");
 }
 
-#if 0
 TEST_CASE("parse_script semicolon combiner") {
     Shell_State shell = {};
-    Parse_Script script = {};
-    Error error = tokenize(&shell, cz::heap_allocator(), &script, "echo hi; echo bye");
+    cz::String string = {};
+    Error error = parse_and_emit(&shell, &string, "echo hi; echo bye");
     REQUIRE(error == Error_Success);
-    size_t index = 0;
-    Parse_Pipeline pipeline;
-    error = parse_pipeline(script.tokens, &index, cz::heap_allocator(), &pipeline);
-    REQUIRE(error == Error_Success);
-    REQUIRE(pipeline.pipeline.len == 1);
-    REQUIRE(pipeline.pipeline[0].args.len == 2);
-    CHECK(pipeline.pipeline[0].args[0] == "echo");
-    CHECK(pipeline.pipeline[0].args[1] == "hi");
-
-    REQUIRE(script.first.on.success);
-    CHECK(script.first.on.success == script.first.on.failure);
-    CHECK_FALSE(script.first.on.success->on.success);
-
-    pipeline = script.first.on.success->pipeline;
-    REQUIRE(pipeline.pipeline.len == 1);
-    REQUIRE(pipeline.pipeline[0].args.len == 2);
-    CHECK(pipeline.pipeline[0].args[0] == "echo");
-    CHECK(pipeline.pipeline[0].args[1] == "bye");
+    CHECK(string.as_str() ==
+          "\
+program:\n\
+    arg0: echo\n\
+    arg1: hi\n\
+program:\n\
+    arg0: echo\n\
+    arg1: bye\n");
 }
 
 TEST_CASE("parse_script newline combiner") {
     Shell_State shell = {};
-    Parse_Script script = {};
-    Error error = tokenize(&shell, cz::heap_allocator(), &script, "echo hi \n echo bye");
+    cz::String string = {};
+    Error error = parse_and_emit(&shell, &string, "echo hi \n echo bye");
     REQUIRE(error == Error_Success);
-    size_t index = 0;
-    Parse_Pipeline pipeline;
-    error = parse_pipeline(script.tokens, &index, cz::heap_allocator(), &pipeline);
-    REQUIRE(error == Error_Success);
-    REQUIRE(pipeline.pipeline.len == 1);
-    REQUIRE(pipeline.pipeline[0].args.len == 2);
-    CHECK(pipeline.pipeline[0].args[0] == "echo");
-    CHECK(pipeline.pipeline[0].args[1] == "hi");
-
-    REQUIRE(script.first.on.success);
-    CHECK(script.first.on.success == script.first.on.failure);
-    CHECK_FALSE(script.first.on.success->on.success);
-
-    pipeline = script.first.on.success->pipeline;
-    REQUIRE(pipeline.pipeline.len == 1);
-    REQUIRE(pipeline.pipeline[0].args.len == 2);
-    CHECK(pipeline.pipeline[0].args[0] == "echo");
-    CHECK(pipeline.pipeline[0].args[1] == "bye");
+    CHECK(string.as_str() ==
+          "\
+program:\n\
+    arg0: echo\n\
+    arg1: hi\n\
+program:\n\
+    arg0: echo\n\
+    arg1: bye\n");
 }
 
 TEST_CASE("parse_script && combiner") {
     Shell_State shell = {};
-    Parse_Script script = {};
-    Error error = tokenize(&shell, cz::heap_allocator(), &script, "echo hi && echo bye");
+    cz::String string = {};
+    Error error = parse_and_emit(&shell, &string, "echo hi && echo bye");
     REQUIRE(error == Error_Success);
-    size_t index = 0;
-    Parse_Pipeline pipeline;
-    error = parse_pipeline(script.tokens, &index, cz::heap_allocator(), &pipeline);
-    REQUIRE(error == Error_Success);
-    REQUIRE(pipeline.pipeline.len == 1);
-    REQUIRE(pipeline.pipeline[0].args.len == 2);
-    CHECK(pipeline.pipeline[0].args[0] == "echo");
-    CHECK(pipeline.pipeline[0].args[1] == "hi");
-
-    REQUIRE(script.first.on.success);
-    CHECK_FALSE(script.first.on.failure);
-    CHECK_FALSE(script.first.on.success->on.success);
-
-    pipeline = script.first.on.success->pipeline;
-    REQUIRE(pipeline.pipeline.len == 1);
-    REQUIRE(pipeline.pipeline[0].args.len == 2);
-    CHECK(pipeline.pipeline[0].args[0] == "echo");
-    CHECK(pipeline.pipeline[0].args[1] == "bye");
+    CHECK(string.as_str() ==
+          "\
+and:\n\
+    program:\n\
+        arg0: echo\n\
+        arg1: hi\n\
+    program:\n\
+        arg0: echo\n\
+        arg1: bye\n");
 }
 
 TEST_CASE("parse_script || combiner") {
     Shell_State shell = {};
-    Parse_Script script = {};
-    Error error = tokenize(&shell, cz::heap_allocator(), &script, "echo hi || echo bye");
+    cz::String string = {};
+    Error error = parse_and_emit(&shell, &string, "echo hi || echo bye");
     REQUIRE(error == Error_Success);
-    size_t index = 0;
-    Parse_Pipeline pipeline;
-    error = parse_pipeline(script.tokens, &index, cz::heap_allocator(), &pipeline);
+    CHECK(string.as_str() ==
+          "\
+or:\n\
+    program:\n\
+        arg0: echo\n\
+        arg1: hi\n\
+    program:\n\
+        arg0: echo\n\
+        arg1: bye\n");
+}
+
+TEST_CASE("parse_script && || precedence") {
+    Shell_State shell = {};
+    cz::String string = {};
+    Error error =
+        parse_and_emit(&shell, &string, "echo hi && echo bye || echo hello && echo world");
     REQUIRE(error == Error_Success);
-    REQUIRE(pipeline.pipeline.len == 1);
-    REQUIRE(pipeline.pipeline[0].args.len == 2);
-    CHECK(pipeline.pipeline[0].args[0] == "echo");
-    CHECK(pipeline.pipeline[0].args[1] == "hi");
-
-    REQUIRE(script.first.on.failure);
-    CHECK_FALSE(script.first.on.success);
-    CHECK_FALSE(script.first.on.failure->on.success);
-
-    pipeline = script.first.on.failure->pipeline;
-    REQUIRE(pipeline.pipeline.len == 1);
-    REQUIRE(pipeline.pipeline[0].args.len == 2);
-    CHECK(pipeline.pipeline[0].args[0] == "echo");
-    CHECK(pipeline.pipeline[0].args[1] == "bye");
+    CHECK(string.as_str() ==
+          "\
+or:\n\
+    and:\n\
+        program:\n\
+            arg0: echo\n\
+            arg1: hi\n\
+        program:\n\
+            arg0: echo\n\
+            arg1: bye\n\
+    and:\n\
+        program:\n\
+            arg0: echo\n\
+            arg1: hello\n\
+        program:\n\
+            arg0: echo\n\
+            arg1: world\n");
 }
 
 TEST_CASE("parse_script & combiner") {
     Shell_State shell = {};
-    Parse_Script script = {};
-    Error error = tokenize(&shell, cz::heap_allocator(), &script, "echo hi & echo bye");
+    cz::String string = {};
+    Error error = parse_and_emit(&shell, &string, "echo hi & echo bye");
     REQUIRE(error == Error_Success);
-    size_t index = 0;
-    Parse_Pipeline pipeline;
-    error = parse_pipeline(script.tokens, &index, cz::heap_allocator(), &pipeline);
-    REQUIRE(error == Error_Success);
-    REQUIRE(pipeline.pipeline.len == 1);
-    REQUIRE(pipeline.pipeline[0].args.len == 2);
-    CHECK(pipeline.pipeline[0].args[0] == "echo");
-    CHECK(pipeline.pipeline[0].args[1] == "hi");
-
-    REQUIRE(script.first.on.start);
-    CHECK_FALSE(script.first.on.success);
-    CHECK_FALSE(script.first.on.failure);
-    CHECK_FALSE(script.first.on.start->on.success);
-
-    pipeline = script.first.on.start->pipeline;
-    REQUIRE(pipeline.pipeline.len == 1);
-    REQUIRE(pipeline.pipeline[0].args.len == 2);
-    CHECK(pipeline.pipeline[0].args[0] == "echo");
-    CHECK(pipeline.pipeline[0].args[1] == "bye");
+    CHECK(string.as_str() ==
+          "\
+program (async):\n\
+    arg0: echo\n\
+    arg1: hi\n\
+program:\n\
+    arg0: echo\n\
+    arg1: bye\n");
 }
 
+#if 0
 TEST_CASE("parse_script backslash escapes newline") {
     Shell_State shell = {};
     Parse_Script script = {};
