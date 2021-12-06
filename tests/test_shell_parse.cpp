@@ -412,126 +412,45 @@ program:\n\
     arg1: bye\n");
 }
 
-#if 0
 TEST_CASE("parse_script backslash escapes newline") {
     Shell_State shell = {};
-    Parse_Script script = {};
-    Error error = tokenize(&shell, cz::heap_allocator(), &script, "abc d\\\nef");
+    cz::String string = {};
+    Error error = parse_and_emit(&shell, &string, "d\\\nef");
     REQUIRE(error == Error_Success);
-    size_t index = 0;
-    Parse_Pipeline pipeline;
-    error = parse_pipeline(script.tokens, &index, cz::heap_allocator(), &pipeline);
-    REQUIRE(error == Error_Success);
-    REQUIRE(pipeline.pipeline.len == 1);
-    REQUIRE(pipeline.pipeline[0].args.len == 2);
-    CHECK(pipeline.pipeline[0].args[0] == "abc");
-    CHECK(pipeline.pipeline[0].args[1] == "def");
+    CHECK(string.as_str() ==
+          "\
+program:\n\
+    arg0: d\\\nef\n");
+
+    REQUIRE(expand(&shell, "d\\\nef") == "arg0: def\n");
 }
 
 TEST_CASE("parse_script backslash escapes newline inside string") {
     Shell_State shell = {};
-    Parse_Script script = {};
-    Error error = tokenize(&shell, cz::heap_allocator(), &script, "abc \"d\\\nef\"");
-    REQUIRE(error == Error_Success);
-    size_t index = 0;
-    Parse_Pipeline pipeline;
-    error = parse_pipeline(script.tokens, &index, cz::heap_allocator(), &pipeline);
-    REQUIRE(error == Error_Success);
-    REQUIRE(pipeline.pipeline.len == 1);
-    REQUIRE(pipeline.pipeline[0].args.len == 2);
-    CHECK(pipeline.pipeline[0].args[0] == "abc");
-    CHECK(pipeline.pipeline[0].args[1] == "def");
+    REQUIRE(expand(&shell, "\"d\\\nef\"") == "arg0: def\n");
 }
 
 TEST_CASE("parse_script tilde not expanded") {
     Shell_State shell = {};
-    Parse_Script script = {};
-    Error error = tokenize(&shell, cz::heap_allocator(), &script, "\\~ \"~\" \"~/\"");
-    REQUIRE(error == Error_Success);
-    size_t index = 0;
-    Parse_Pipeline pipeline;
-    error = parse_pipeline(script.tokens, &index, cz::heap_allocator(), &pipeline);
-    REQUIRE(error == Error_Success);
-    REQUIRE(pipeline.pipeline.len == 1);
-    REQUIRE(pipeline.pipeline[0].args.len == 3);
-    CHECK(pipeline.pipeline[0].args[0] == "~");
-    CHECK(pipeline.pipeline[0].args[1] == "~");
-    CHECK(pipeline.pipeline[0].args[2] == "~/");
+    CHECK(expand(&shell, "\\~") == "arg0: ~\n");
+    CHECK(expand(&shell, "\"~\"") == "arg0: ~\n");
+    CHECK(expand(&shell, "\"~/\"") == "arg0: ~/\n");
 }
 
 TEST_CASE("parse_script tilde not expanded after start of word") {
     Shell_State shell = {};
-    Parse_Script script = {};
-    Error error = tokenize(&shell, cz::heap_allocator(), &script, "a~/ $abc~/");
-    REQUIRE(error == Error_Success);
-    size_t index = 0;
-    Parse_Pipeline pipeline;
-    error = parse_pipeline(script.tokens, &index, cz::heap_allocator(), &pipeline);
-    REQUIRE(error == Error_Success);
-    REQUIRE(pipeline.pipeline.len == 1);
-    REQUIRE(pipeline.pipeline[0].args.len == 2);
-    CHECK(pipeline.pipeline[0].args[0] == "a~/");
-    CHECK(pipeline.pipeline[0].args[1] == "~/");
-}
-
-TEST_CASE("parse_script tilde expanded simple") {
-    Shell_State shell = {};
-    set_var(&shell, "HOME", "/path/to/my/home");
-    Parse_Script script = {};
-    Error error = tokenize(&shell, cz::heap_allocator(), &script, "~ ~/ ~/abc/123");
-    REQUIRE(error == Error_Success);
-    size_t index = 0;
-    Parse_Pipeline pipeline;
-    error = parse_pipeline(script.tokens, &index, cz::heap_allocator(), &pipeline);
-    REQUIRE(error == Error_Success);
-    REQUIRE(pipeline.pipeline.len == 1);
-    REQUIRE(pipeline.pipeline[0].args.len == 3);
-    CHECK(pipeline.pipeline[0].args[0] == "/path/to/my/home");
-    CHECK(pipeline.pipeline[0].args[1] == "/path/to/my/home/");
-    CHECK(pipeline.pipeline[0].args[2] == "/path/to/my/home/abc/123");
+    CHECK(expand(&shell, "a~/") == "arg0: a~/\n");
+    CHECK(expand(&shell, "$abc~/") == "arg0: ~/\n");
 }
 
 #if 0
-TEST_CASE("parse_script outer continuation 1") {
+TEST_CASE("parse_script tilde expanded simple") {
     Shell_State shell = {};
-    Parse_Continuation outer = {};
-    outer.success = cz::heap_allocator().alloc<Parse_Line>();
-    outer.failure = cz::heap_allocator().alloc<Parse_Line>();
-    outer.start = cz::heap_allocator().alloc<Parse_Line>();
-    Parse_Script script = {};
-    Error error = tokenize(&shell, cz::heap_allocator(), &script, outer, "a; b");
-    REQUIRE(error == Error_Success);
-
-    const Parse_Line* first = &script.first;
-    CHECK(first->on.success == first->on.failure);
-    CHECK(first->on.start == outer.start);
-    REQUIRE(first->on.success);
-    const Parse_Line* second = first->on.success;
-    CHECK(second->on.success == outer.success);
-    CHECK(second->on.failure == outer.failure);
-    CHECK_FALSE(second->on.start);
+    set_var(&shell, "HOME", "/path/to/my/home");
+    CHECK(expand(&shell, "~") == "arg0: /path/to/my/home\n");
+    CHECK(expand(&shell, "~/") == "arg0: /path/to/my/home/\n");
+    CHECK(expand(&shell, "~/abc/123") == "arg0: /path/to/my/home/abc/123\n");
 }
-
-TEST_CASE("parse_script outer continuation 2") {
-    Shell_State shell = {};
-    Parse_Continuation outer = {};
-    outer.success = cz::heap_allocator().alloc<Parse_Line>();
-    outer.failure = cz::heap_allocator().alloc<Parse_Line>();
-    outer.start = cz::heap_allocator().alloc<Parse_Line>();
-    Parse_Script script = {};
-    Error error = tokenize(&shell, cz::heap_allocator(), &script, outer, "a && b");
-    REQUIRE(error == Error_Success);
-
-    const Parse_Line* first = &script.first;
-    CHECK(first->on.failure == outer.failure);
-    CHECK(first->on.start == outer.start);
-    REQUIRE(first->on.success);
-    const Parse_Line* second = first->on.success;
-    CHECK(second->on.success == outer.success);
-    CHECK(second->on.failure == outer.failure);
-    CHECK_FALSE(second->on.start);
-}
-#endif
 
 TEST_CASE("parse_script comment basic") {
     Shell_State shell = {};

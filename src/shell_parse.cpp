@@ -690,15 +690,17 @@ void expand_arg(const Shell_State* shell,
             ++index;
             if (index < text.len) {
                 char c2 = text[index];
-                if (c2 == '"' || c2 == '\\' || c2 == '`' || c2 == '$') {
+                if (c2 == '"' || c2 == '\\' || c2 == '`' || c2 == '$' || c2 == ' ' || c2 == '~') {
                     word->reserve(allocator, 1);
                     word->push(c2);
+                    ++index;
+                } else if (c2 == '\n') {
+                    // Skip backslash newline.
+                    ++index;
                 } else {
-                    word->reserve(allocator, 2);
+                    word->reserve(allocator, 1);
                     word->push('\\');
-                    word->push(c2);
                 }
-                ++index;
             } else {
                 word->reserve(allocator, 1);
                 word->push('\\');
