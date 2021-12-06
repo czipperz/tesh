@@ -686,6 +686,20 @@ void expand_arg(const Shell_State* shell,
             }
         } break;
 
+        case '~': {
+            if (index == 0) {
+                cz::Str value;
+                if (get_var(shell, "HOME", &value)) {
+                    word->reserve(allocator, value.len);
+                    word->append(value);
+                }
+            } else {
+                word->reserve(allocator, 1);
+                word->push('~');
+            }
+            ++index;
+        } break;
+
         case '\\': {
             ++index;
             if (index < text.len) {

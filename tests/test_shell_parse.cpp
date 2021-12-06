@@ -443,7 +443,6 @@ TEST_CASE("parse_script tilde not expanded after start of word") {
     CHECK(expand(&shell, "$abc~/") == "arg0: ~/\n");
 }
 
-#if 0
 TEST_CASE("parse_script tilde expanded simple") {
     Shell_State shell = {};
     set_var(&shell, "HOME", "/path/to/my/home");
@@ -452,6 +451,7 @@ TEST_CASE("parse_script tilde expanded simple") {
     CHECK(expand(&shell, "~/abc/123") == "arg0: /path/to/my/home/abc/123\n");
 }
 
+#if 0
 TEST_CASE("parse_script comment basic") {
     Shell_State shell = {};
     Parse_Script script = {};
