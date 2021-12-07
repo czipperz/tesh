@@ -345,9 +345,32 @@ static Error start_execute_pipeline(Shell_State* shell,
     for (size_t p = 0; p < program_nodes.len; ++p) {
         Shell_Node* program_node = &program_nodes[p];
         CZ_ASSERT(program_node->type == Shell_Node::PROGRAM);  // TODO
-        const Parse_Program& parse_program = *program_node->v.program;
+        Parse_Program parse_program = *program_node->v.program;
 
         Stdio_State stdio = {};
+
+        // Expand file arguments.
+        if (parse_program.in_file.buffer) {
+            cz::String file = {};
+            expand_arg_single(shell, parse_program.in_file, allocator, &file);
+            // Reallocate to ensure the file isn't null and also don't waste space.
+            file.realloc_null_terminate(allocator);
+            parse_program.in_file = file;
+        }
+        if (parse_program.out_file.buffer) {
+            cz::String file = {};
+            expand_arg_single(shell, parse_program.out_file, allocator, &file);
+            // Reallocate to ensure the file isn't null and also don't waste space.
+            file.realloc_null_terminate(allocator);
+            parse_program.out_file = file;
+        }
+        if (parse_program.err_file.buffer) {
+            cz::String file = {};
+            expand_arg_single(shell, parse_program.err_file, allocator, &file);
+            // Reallocate to ensure the file isn't null and also don't waste space.
+            file.realloc_null_terminate(allocator);
+            parse_program.err_file = file;
+        }
 
         cz::String path = {};
         if (parse_program.in_file.buffer) {
@@ -460,22 +483,6 @@ static Error run_program(Shell_State* shell,
             variable_values.push(value);
         }
         parse.variable_values = variable_values;
-    }
-
-    if (parse.in_file.buffer) {
-        cz::String file = {};
-        expand_arg_single(shell, parse.in_file, allocator, &file);
-        parse.in_file = file;
-    }
-    if (parse.out_file.buffer) {
-        cz::String file = {};
-        expand_arg_single(shell, parse.out_file, allocator, &file);
-        parse.out_file = file;
-    }
-    if (parse.err_file.buffer) {
-        cz::String file = {};
-        expand_arg_single(shell, parse.err_file, allocator, &file);
-        parse.err_file = file;
     }
 
     if (parse.is_sub) {
