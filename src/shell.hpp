@@ -222,6 +222,7 @@ struct Shell_Node {
         PIPELINE,
         AND,
         OR,
+        PAREN,
     };
     Type type : 7;
     uint8_t async : 1;
@@ -233,6 +234,7 @@ struct Shell_Node {
             Shell_Node* left;
             Shell_Node* right;
         } binary;
+        Shell_Node* paren;
     } v;
 };
 

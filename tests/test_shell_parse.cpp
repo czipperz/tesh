@@ -60,6 +60,14 @@ static void append_node(cz::Allocator allocator,
             append_node(allocator, string, &node->v.sequence[i], depth);
         }
         break;
+
+    case Shell_Node::PAREN:
+        append(allocator, string, cz::many(' ', depth * spd), "paren:\n");
+        append_node(allocator, string, node->v.paren, depth + 1);
+        break;
+
+    default:
+        CZ_PANIC("Invalid Shell_Node type");
     }
 }
 
@@ -590,14 +598,15 @@ TEST_CASE("parse_script ()") {
     CHECK(string.as_str() ==
           "\
 and:\n\
-    program:\n\
-        arg0: a\n\
-    program:\n\
-        arg0: b\n\
-    or:\n\
+    paren:\n\
         program:\n\
-            arg0: c\n\
+            arg0: a\n\
         program:\n\
-            arg0: d\n");
-
+            arg0: b\n\
+    paren:\n\
+        or:\n\
+            program:\n\
+                arg0: c\n\
+            program:\n\
+                arg0: d\n");
 }

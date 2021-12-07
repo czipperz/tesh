@@ -527,11 +527,15 @@ static Error parse_program(const Shell_State* shell,
                     return Error_Parse_UnterminatedProgram;
                 } else {
                     ++*index;
-                    Error error = parse_sequence(shell, allocator, tokens, node, index);
+                    Shell_Node inner;
+                    Error error = parse_sequence(shell, allocator, tokens, &inner, index);
                     if (error != Error_Success)
                         return error;
                     if (*index >= tokens.len || tokens[*index] != ")")
                         return Error_Parse_UnterminatedParen;
+
+                    node->type = Shell_Node::PAREN;
+                    node->v.paren = allocator.clone(inner);
                     ++*index;
                     return Error_Success;
                 }
