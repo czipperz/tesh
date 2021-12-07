@@ -105,17 +105,15 @@ static Error start_execute_node(Shell_State* shell,
                                 Shell_Node* root) {
     node->fg.arena = alloc_arena(shell);
 
-    bool found_first_pipeline = descend_to_first_pipeline(&node->fg.path, root);
-    if (found_first_pipeline) {
-        const bool background = false;
-        Error error = start_execute_line(shell, tty, node, backlog, &node->fg, background);
-        if (error != Error_Success) {
-            recycle_arena(shell, node->fg.arena);
-            return error;
-        }
-    }
+    if (!descend_to_first_pipeline(&node->fg.path, root))
+        return Error_Success;
 
-    return Error_Success;
+    const bool background = false;
+    Error error = start_execute_line(shell, tty, node, backlog, &node->fg, background);
+    if (error != Error_Success) {
+        recycle_arena(shell, node->fg.arena);
+    }
+    return error;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -474,9 +472,10 @@ static Error run_program(Shell_State* shell,
     }
 
     if (parse.is_sub) {
-        Running_Node sub = {};
-        sub.stdio = stdio;
-        return start_execute_node(shell, tty, backlog, &sub, parse.v.sub);
+        program->type = Running_Program::SUB;
+        program->v.sub = {};
+        program->v.sub.stdio = stdio;
+        return start_execute_node(shell, tty, backlog, &program->v.sub, parse.v.sub);
     }
 
     cz::Vector<cz::Str> args = {};

@@ -119,6 +119,44 @@ int64_t tty_write(Pseudo_Terminal* tty, cz::Str message);
 
 ///////////////////////////////////////////////////////////////////////////////
 
+enum File_Type {
+    File_Type_Terminal,
+    File_Type_File,
+    File_Type_Pipe,
+    File_Type_None,
+};
+
+struct Stdio_State {
+    File_Type in_type = File_Type_Terminal;
+    File_Type out_type = File_Type_Terminal;
+    File_Type err_type = File_Type_Terminal;
+    cz::Input_File in;
+    cz::Output_File out;
+    cz::Output_File err;
+    size_t* in_count;
+    size_t* out_count;
+    size_t* err_count;
+};
+
+struct Running_Node;
+struct Running_Program;
+struct Shell_Node;
+
+struct Running_Pipeline {
+    cz::Buffer_Array arena;
+    cz::Vector<Shell_Node*> path;
+    cz::Vector<Running_Program> programs;
+    bool has_exit_code;
+    int last_exit_code;
+};
+
+struct Running_Node {
+    cz::Vector<Running_Pipeline> bg;
+    Running_Pipeline fg;
+    bool fg_finished;
+    Stdio_State stdio;
+};
+
 struct Running_Program {
     enum Type {
         PROCESS,
@@ -144,6 +182,7 @@ struct Running_Program {
     } type;
     union {
         cz::Process process;
+        Running_Node sub;
         struct {
             cz::Slice<const cz::Str> args;
             Process_Input in;
@@ -175,43 +214,6 @@ struct Running_Program {
             } st;
         } builtin;
     } v;
-};
-
-enum File_Type {
-    File_Type_Terminal,
-    File_Type_File,
-    File_Type_Pipe,
-    File_Type_None,
-};
-
-struct Stdio_State {
-    File_Type in_type = File_Type_Terminal;
-    File_Type out_type = File_Type_Terminal;
-    File_Type err_type = File_Type_Terminal;
-    cz::Input_File in;
-    cz::Output_File out;
-    cz::Output_File err;
-    size_t* in_count;
-    size_t* out_count;
-    size_t* err_count;
-};
-
-struct Running_Node;
-struct Shell_Node;
-
-struct Running_Pipeline {
-    cz::Buffer_Array arena;
-    cz::Vector<Shell_Node*> path;
-    cz::Vector<Running_Program> programs;
-    bool has_exit_code;
-    int last_exit_code;
-};
-
-struct Running_Node {
-    cz::Vector<Running_Pipeline> bg;
-    Running_Pipeline fg;
-    bool fg_finished;
-    Stdio_State stdio;
 };
 
 struct Running_Script {

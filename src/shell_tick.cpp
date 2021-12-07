@@ -22,6 +22,7 @@ static void tick_pipeline(Shell_State* shell,
                           cz::Slice<Backlog_State*> backlogs,
                           Backlog_State* backlog,
                           Running_Pipeline* pipeline,
+                          Pseudo_Terminal* tty,
                           bool* force_quit);
 
 static bool tick_program(Shell_State* shell,
@@ -30,6 +31,7 @@ static bool tick_program(Shell_State* shell,
                          Backlog_State* backlog,
                          cz::Allocator allocator,
                          Running_Program* program,
+                         Pseudo_Terminal* tty,
                          int* exit_code,
                          bool* force_quit);
 
@@ -60,14 +62,14 @@ bool tick_running_node(Shell_State* shell,
     size_t starting_length = backlog->length;
     for (size_t b = 0; b < node->bg.len; ++b) {
         Running_Pipeline* line = &node->bg[b];
-        tick_pipeline(shell, rend, backlogs, backlog, line, force_quit);
+        tick_pipeline(shell, rend, backlogs, backlog, line, tty, force_quit);
         if (line->programs.len == 0) {
             finish_line(shell, *tty, node, backlog, line, /*background=*/true);
             --b;
         }
     }
 
-    tick_pipeline(shell, rend, backlogs, backlog, &node->fg, force_quit);
+    tick_pipeline(shell, rend, backlogs, backlog, &node->fg, tty, force_quit);
 
     if (*force_quit)
         return true;
@@ -95,12 +97,13 @@ static void tick_pipeline(Shell_State* shell,
                           cz::Slice<Backlog_State*> backlogs,
                           Backlog_State* backlog,
                           Running_Pipeline* pipeline,
+                          Pseudo_Terminal* tty,
                           bool* force_quit) {
     cz::Allocator allocator = pipeline->arena.allocator();
     for (size_t p = 0; p < pipeline->programs.len; ++p) {
         Running_Program* program = &pipeline->programs[p];
         int exit_code = 1;
-        if (tick_program(shell, rend, backlogs, backlog, allocator, program, &exit_code,
+        if (tick_program(shell, rend, backlogs, backlog, allocator, program, tty, &exit_code,
                          force_quit)) {
             if (!pipeline->has_exit_code && p + 1 == pipeline->programs.len) {
                 pipeline->has_exit_code = true;
@@ -159,6 +162,7 @@ static bool tick_program(Shell_State* shell,
                          Backlog_State* backlog,
                          cz::Allocator allocator,
                          Running_Program* program,
+                         Pseudo_Terminal* tty,
                          int* exit_code,
                          bool* force_quit) {
     ZoneScoped;
@@ -166,6 +170,13 @@ static bool tick_program(Shell_State* shell,
     switch (program->type) {
     case Running_Program::PROCESS:
         return program->v.process.try_join(exit_code);
+
+    case Running_Program::SUB: {
+        if (tick_running_node(shell, backlogs, rend, &program->v.sub, tty, backlog, force_quit)) {
+            *exit_code = program->v.sub.fg.last_exit_code;
+            return true;
+        }
+    } break;
 
     case Running_Program::ECHO: {
         auto& builtin = program->v.builtin;
