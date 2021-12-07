@@ -161,7 +161,7 @@ struct Running_Node {
     Running_Pipeline fg;
     bool fg_finished;
     Stdio_State stdio;
-    Shell_Local local;
+    Shell_Local* local;
 };
 
 struct Running_Program {

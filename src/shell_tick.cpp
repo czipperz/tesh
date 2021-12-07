@@ -64,14 +64,14 @@ bool tick_running_node(Shell_State* shell,
     size_t starting_length = backlog->length;
     for (size_t b = 0; b < node->bg.len; ++b) {
         Running_Pipeline* line = &node->bg[b];
-        tick_pipeline(shell, &node->local, rend, backlogs, backlog, line, tty, force_quit);
+        tick_pipeline(shell, node->local, rend, backlogs, backlog, line, tty, force_quit);
         if (line->programs.len == 0) {
             finish_line(shell, *tty, node, backlog, line, /*background=*/true);
             --b;
         }
     }
 
-    tick_pipeline(shell, &node->local, rend, backlogs, backlog, &node->fg, tty, force_quit);
+    tick_pipeline(shell, node->local, rend, backlogs, backlog, &node->fg, tty, force_quit);
 
     if (*force_quit)
         return true;

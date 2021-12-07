@@ -73,8 +73,7 @@ Error start_execute_script(Shell_State* shell,
     if (!create_pseudo_terminal(&running.tty, shell->width, shell->height))
         return Error_IO;
 
-    // TODO this should be a direct pointer not parent.
-    running.root.local.parent = &shell->local;
+    running.root.local = &shell->local;
 
 #ifdef _WIN32
     running.root.stdio.in = running.tty.child_in;
@@ -342,21 +341,21 @@ static Error start_execute_pipeline(Shell_State* shell,
         // Expand file arguments.
         if (parse_program.in_file.buffer) {
             cz::String file = {};
-            expand_arg_single(&node->local, parse_program.in_file, allocator, &file);
+            expand_arg_single(node->local, parse_program.in_file, allocator, &file);
             // Reallocate to ensure the file isn't null and also don't waste space.
             file.realloc_null_terminate(allocator);
             parse_program.in_file = file;
         }
         if (parse_program.out_file.buffer) {
             cz::String file = {};
-            expand_arg_single(&node->local, parse_program.out_file, allocator, &file);
+            expand_arg_single(node->local, parse_program.out_file, allocator, &file);
             // Reallocate to ensure the file isn't null and also don't waste space.
             file.realloc_null_terminate(allocator);
             parse_program.out_file = file;
         }
         if (parse_program.err_file.buffer) {
             cz::String file = {};
-            expand_arg_single(&node->local, parse_program.err_file, allocator, &file);
+            expand_arg_single(node->local, parse_program.err_file, allocator, &file);
             // Reallocate to ensure the file isn't null and also don't waste space.
             file.realloc_null_terminate(allocator);
             parse_program.err_file = file;
@@ -366,7 +365,7 @@ static Error start_execute_pipeline(Shell_State* shell,
         if (parse_program.in_file.buffer) {
             stdio.in_type = File_Type_File;
             path.len = 0;
-            cz::path::make_absolute(parse_program.in_file, get_wd(&node->local), temp_allocator,
+            cz::path::make_absolute(parse_program.in_file, get_wd(node->local), temp_allocator,
                                     &path);
             if (!stdio.in.open(path.buffer))
                 return Error_InvalidPath;
@@ -385,7 +384,7 @@ static Error start_execute_pipeline(Shell_State* shell,
         if (parse_program.out_file.buffer) {
             stdio.out_type = File_Type_File;
             path.len = 0;
-            cz::path::make_absolute(parse_program.out_file, get_wd(&node->local), temp_allocator,
+            cz::path::make_absolute(parse_program.out_file, get_wd(node->local), temp_allocator,
                                     &path);
             if (!stdio.out.open(path.buffer))
                 return Error_InvalidPath;
@@ -399,7 +398,7 @@ static Error start_execute_pipeline(Shell_State* shell,
         if (parse_program.err_file.buffer) {
             stdio.err_type = File_Type_File;
             path.len = 0;
-            cz::path::make_absolute(parse_program.err_file, get_wd(&node->local), temp_allocator,
+            cz::path::make_absolute(parse_program.err_file, get_wd(node->local), temp_allocator,
                                     &path);
             if (!stdio.err.open(path.buffer))
                 return Error_InvalidPath;
@@ -435,7 +434,7 @@ static Error start_execute_pipeline(Shell_State* shell,
 
         Running_Program running_program = {};
 
-        Error error = run_program(shell, &node->local, allocator, tty, &running_program,
+        Error error = run_program(shell, node->local, allocator, tty, &running_program,
                                   parse_program, stdio, backlog);
         if (error != Error_Success)
             return error;
@@ -481,6 +480,9 @@ static Error run_program(Shell_State* shell,
         program->type = Running_Program::SUB;
         program->v.sub = {};
         program->v.sub.stdio = stdio;
+        program->v.sub.local = allocator.alloc<Shell_Local>();
+        *program->v.sub.local = {};
+        program->v.sub.local->parent = local;
         return start_execute_node(shell, tty, backlog, &program->v.sub, parse.v.sub);
     }
 
