@@ -416,10 +416,10 @@ static Error run_program(Shell_State* shell,
                          Backlog_State* backlog,
                          const Pseudo_Terminal& tty) {
     cz::Vector<cz::Str> args = {};
+    CZ_DEFER(args.drop(cz::heap_allocator()));
     for (size_t i = 0; i < parse.args.len; ++i) {
         expand_arg_split(shell, parse.args[i], allocator, &args);
     }
-    cz::change_allocator(cz::heap_allocator(), allocator, &args);
     parse.args = args;
 
     {
@@ -489,7 +489,7 @@ static Error run_program(Shell_State* shell,
             program->v.builtin.err_count = stdio.err_count;
         }
 
-        program->v.builtin.args = parse.args;
+        program->v.builtin.args = args.clone(allocator);
         program->v.builtin.working_directory =
             shell->working_directory.clone_null_terminate(allocator);
         return Error_Success;
