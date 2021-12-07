@@ -193,6 +193,9 @@ struct Running_Node {
     cz::Vector<Running_Pipeline> bg;
     Running_Pipeline fg;
     bool fg_finished;
+    cz::Input_File in;
+    cz::Output_File out;
+    cz::Output_File err;
 };
 
 struct Running_Script {
@@ -207,7 +210,12 @@ struct Running_Script {
 struct Parse_Program {
     cz::Vector<cz::Str> variable_names;
     cz::Vector<cz::Str> variable_values;
-    cz::Vector<cz::Str> args;
+
+    bool is_sub;
+    union {
+        cz::Vector<cz::Str> args;
+        Shell_Node* sub;
+    } v;
 
     /// Note: `Str::buffer == null` means not present.
     cz::Str in_file;
@@ -222,7 +230,6 @@ struct Shell_Node {
         PIPELINE,
         AND,
         OR,
-        PAREN,
     };
     Type type : 7;
     uint8_t async : 1;
@@ -234,7 +241,6 @@ struct Shell_Node {
             Shell_Node* left;
             Shell_Node* right;
         } binary;
-        Shell_Node* paren;
     } v;
 };
 

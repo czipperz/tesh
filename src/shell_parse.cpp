@@ -45,7 +45,7 @@ static Error parse_program(const Shell_State* shell,
                            cz::Slice<cz::Str> tokens,
                            Shell_Node* node,
                            size_t* index);
-static void deal_with_token(cz::Allocator allocator, Parse_Program* program, cz::Str token);
+static Error deal_with_token(cz::Allocator allocator, Parse_Program* program, cz::Str token);
 
 static cz::Str deref_var_at_point(const Shell_State* shell, cz::Str text, size_t* index);
 
@@ -518,12 +518,11 @@ static Error parse_program(const Shell_State* shell,
                            size_t* index) {
     Parse_Program program = {};
 
-    size_t start = *index;
     for (; *index < tokens.len;) {
         cz::Str token = tokens[*index];
         if (get_precedence(token)) {
             if (token == "(") {
-                if (*index > start) {
+                if (program.is_sub || program.v.args.len > 0) {
                     return Error_Parse_UnterminatedProgram;
                 } else {
                     ++*index;
@@ -534,10 +533,10 @@ static Error parse_program(const Shell_State* shell,
                     if (*index >= tokens.len || tokens[*index] != ")")
                         return Error_Parse_UnterminatedParen;
 
-                    node->type = Shell_Node::PAREN;
-                    node->v.paren = allocator.clone(inner);
+                    program.is_sub = true;
+                    program.v.sub = allocator.clone(inner);
                     ++*index;
-                    return Error_Success;
+                    continue;
                 }
             }
 
@@ -564,15 +563,18 @@ static Error parse_program(const Shell_State* shell,
             continue;
         }
 
-        deal_with_token(allocator, &program, token);
+        Error error = deal_with_token(allocator, &program, token);
+        if (error != Error_Success)
+            return error;
         ++*index;
     }
 
-    if (program.args.len == 0 && program.variable_names.len == 0) {
+    if (!program.is_sub && program.v.args.len == 0 && program.variable_names.len == 0) {
         return Error_Parse_EmptyProgram;
     }
 
-    cz::change_allocator(cz::heap_allocator(), allocator, &program.args);
+    if (!program.is_sub)
+        cz::change_allocator(cz::heap_allocator(), allocator, &program.v.args);
     cz::change_allocator(cz::heap_allocator(), allocator, &program.variable_names);
     cz::change_allocator(cz::heap_allocator(), allocator, &program.variable_values);
 
@@ -581,7 +583,7 @@ static Error parse_program(const Shell_State* shell,
     return Error_Success;
 }
 
-static void deal_with_token(cz::Allocator allocator, Parse_Program* program, cz::Str token) {
+static Error deal_with_token(cz::Allocator allocator, Parse_Program* program, cz::Str token) {
     bool any_special = false;
     for (size_t index = 0; index < token.len;) {
         switch (token[index]) {
@@ -604,7 +606,7 @@ static void deal_with_token(cz::Allocator allocator, Parse_Program* program, cz:
         } break;
 
         case '=': {
-            if (any_special || program->args.len > 0)
+            if (any_special || program->is_sub || program->v.args.len > 0)
                 goto def;
 
             cz::Str key = token.slice_end(index);
@@ -613,7 +615,7 @@ static void deal_with_token(cz::Allocator allocator, Parse_Program* program, cz:
             program->variable_values.reserve(cz::heap_allocator(), 1);
             program->variable_names.push(key);
             program->variable_values.push(value);
-            return;
+            return Error_Success;
         }
 
         def:
@@ -623,8 +625,14 @@ static void deal_with_token(cz::Allocator allocator, Parse_Program* program, cz:
         }
     }
 
-    program->args.reserve(cz::heap_allocator(), 1);
-    program->args.push(token);
+    if (program->is_sub) {
+        // '(inner) outer' invalid.
+        return Error_Parse_UnterminatedProgram;
+    }
+
+    program->v.args.reserve(cz::heap_allocator(), 1);
+    program->v.args.push(token);
+    return Error_Success;
 }
 
 ///////////////////////////////////////////////////////////////////////////////

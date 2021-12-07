@@ -18,9 +18,14 @@ static void append_node(cz::Allocator allocator,
             append(allocator, string, cz::many(' ', (depth + 1) * spd), "val", i, ": ",
                    program->variable_values[i], '\n');
         }
-        for (size_t i = 0; i < program->args.len; ++i) {
-            append(allocator, string, cz::many(' ', (depth + 1) * spd), "arg", i, ": ",
-                   program->args[i], '\n');
+        if (program->is_sub) {
+            append(allocator, string, cz::many(' ', (depth + 1) * spd), "sub:\n");
+            append_node(allocator, string, program->v.sub, depth + 2);
+        } else {
+            for (size_t i = 0; i < program->v.args.len; ++i) {
+                append(allocator, string, cz::many(' ', (depth + 1) * spd), "arg", i, ": ",
+                       program->v.args[i], '\n');
+            }
         }
         if (program->in_file.buffer) {
             append(allocator, string, cz::many(' ', (depth + 1) * spd),
@@ -59,11 +64,6 @@ static void append_node(cz::Allocator allocator,
         for (size_t i = 0; i < node->v.sequence.len; ++i) {
             append_node(allocator, string, &node->v.sequence[i], depth);
         }
-        break;
-
-    case Shell_Node::PAREN:
-        append(allocator, string, cz::many(' ', depth * spd), "paren:\n");
-        append_node(allocator, string, node->v.paren, depth + 1);
         break;
 
     default:
@@ -598,15 +598,17 @@ TEST_CASE("parse_script ()") {
     CHECK(string.as_str() ==
           "\
 and:\n\
-    paren:\n\
-        program:\n\
-            arg0: a\n\
-        program:\n\
-            arg0: b\n\
-    paren:\n\
-        or:\n\
+    program:\n\
+        sub:\n\
             program:\n\
-                arg0: c\n\
+                arg0: a\n\
             program:\n\
-                arg0: d\n");
+                arg0: b\n\
+    program:\n\
+        sub:\n\
+            or:\n\
+                program:\n\
+                    arg0: c\n\
+                program:\n\
+                    arg0: d\n");
 }

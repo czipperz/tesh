@@ -32,6 +32,12 @@ struct Stdio_State {
 
 ///////////////////////////////////////////////////////////////////////////////
 
+static Error start_execute_node(Shell_State* shell,
+                                Running_Script* script,
+                                Backlog_State* backlog,
+                                Running_Node* node,
+                                Shell_Node* root);
+
 static Error start_execute_line(Shell_State* shell,
                                 Running_Script* script,
                                 Backlog_State* backlog,
@@ -81,17 +87,19 @@ Error start_execute_script(Shell_State* shell,
     if (!create_pseudo_terminal(&running.tty, shell->width, shell->height))
         return Error_IO;
 
-    running.root.fg.arena = alloc_arena(shell);
+#ifdef _WIN32
+    running.root.in = running.tty.child_in;
+    running.root.out = running.tty.child_out;
+#else
+    running.root.in.handle = running.tty.child_bi;
+    running.root.out.handle = running.tty.child_bi;
+#endif
+    running.root.err = running.root.out;  // stderr = stdout at top level
 
-    bool found_first_pipeline = descend_to_first_pipeline(&running.root.fg.path, root);
-    if (found_first_pipeline) {
-        const bool background = false;
-        Error error = start_execute_line(shell, &running, backlog, &running.root.fg, background);
-        if (error != Error_Success) {
-            recycle_arena(shell, running.root.fg.arena);
-            destroy_pseudo_terminal(&running.tty);
-            return error;
-        }
+    Error error = start_execute_node(shell, &running, backlog, &running.root, root);
+    if (error != Error_Success) {
+        destroy_pseudo_terminal(&running.tty);
+        return error;
     }
 
     shell->scripts.reserve(cz::heap_allocator(), 1);
@@ -100,6 +108,26 @@ Error start_execute_script(Shell_State* shell,
     if (cfg.on_spawn_attach) {
         shell->attached_process = running.id;
         shell->selected_process = running.id;
+    }
+
+    return Error_Success;
+}
+
+static Error start_execute_node(Shell_State* shell,
+                                Running_Script* script,
+                                Backlog_State* backlog,
+                                Running_Node* node,
+                                Shell_Node* root) {
+    node->fg.arena = alloc_arena(shell);
+
+    bool found_first_pipeline = descend_to_first_pipeline(&node->fg.path, root);
+    if (found_first_pipeline) {
+        const bool background = false;
+        Error error = start_execute_line(shell, script, backlog, &node->fg, background);
+        if (error != Error_Success) {
+            recycle_arena(shell, node->fg.arena);
+            return error;
+        }
     }
 
     return Error_Success;
@@ -368,25 +396,28 @@ static Error start_execute_pipeline(Shell_State* shell,
         }
 
         // Make pipes for the next iteration.
-        if (stdio.out_type == File_Type_Pipe || stdio.err_type == File_Type_Pipe) {
-            // if (p + 1 < program_nodes.len && !program_nodes[p + 1].in_file.buffer) {
-            cz::Output_File pipe_out;
-            if (!cz::create_pipe(&pipe_in, &pipe_out))
-                return Error_IO;
+        if ((stdio.out_type == File_Type_Pipe || stdio.err_type == File_Type_Pipe) &&
+            (p + 1 < program_nodes.len)) {
+            Shell_Node* next = &program_nodes[p + 1];
+            CZ_ASSERT(next->type == Shell_Node::PROGRAM);  // TODO
+            if (!next->v.program->in_file.buffer) {
+                cz::Output_File pipe_out;
+                if (!cz::create_pipe(&pipe_in, &pipe_out))
+                    return Error_IO;
 
-            size_t* count = allocator.alloc<size_t>();
-            *count = 0;
-            if (stdio.out_type == File_Type_Pipe) {
-                stdio.out = pipe_out;
-                stdio.out_count = count;
-                ++*count;
+                size_t* count = allocator.alloc<size_t>();
+                *count = 0;
+                if (stdio.out_type == File_Type_Pipe) {
+                    stdio.out = pipe_out;
+                    stdio.out_count = count;
+                    ++*count;
+                }
+                if (stdio.err_type == File_Type_Pipe) {
+                    stdio.err = pipe_out;
+                    stdio.err_count = count;
+                    ++*count;
+                }
             }
-            if (stdio.err_type == File_Type_Pipe) {
-                stdio.err = pipe_out;
-                stdio.err_count = count;
-                ++*count;
-            }
-            // }
         }
 
         Running_Program running_program = {};
@@ -420,13 +451,6 @@ static Error run_program(Shell_State* shell,
                          Stdio_State stdio,
                          Backlog_State* backlog,
                          const Pseudo_Terminal& tty) {
-    cz::Vector<cz::Str> args = {};
-    CZ_DEFER(args.drop(cz::heap_allocator()));
-    for (size_t i = 0; i < parse.args.len; ++i) {
-        expand_arg_split(shell, parse.args[i], allocator, &args);
-    }
-    parse.args = args;
-
     {
         cz::Vector<cz::Str> variable_values = {};
         variable_values.reserve(allocator, parse.variable_values.len);
@@ -453,6 +477,18 @@ static Error run_program(Shell_State* shell,
         expand_arg_single(shell, parse.err_file, allocator, &file);
         parse.err_file = file;
     }
+
+    if (parse.is_sub) {
+        CZ_PANIC("todo");
+        return Error_Success;
+    }
+
+    cz::Vector<cz::Str> args = {};
+    CZ_DEFER(args.drop(cz::heap_allocator()));
+    for (size_t i = 0; i < parse.v.args.len; ++i) {
+        expand_arg_split(shell, parse.v.args[i], allocator, &args);
+    }
+    parse.v.args = args;
 
     recognize_builtins(program, parse, allocator);
 
@@ -655,7 +691,7 @@ static void recognize_builtins(Running_Program* program,
     program->type = Running_Program::PROCESS;
 
     // Line that only assigns to variables runs as special builtin.
-    if (parse.args.len == 0) {
+    if (parse.v.args.len == 0) {
         CZ_ASSERT(parse.variable_names.len > 0);
         program->type = Running_Program::VARIABLES;
         program->v.builtin.st.variables = {};
@@ -666,56 +702,56 @@ static void recognize_builtins(Running_Program* program,
 
     // Strictly necessary builtins.
     if (cfg.builtin_level >= 0) {
-        if (parse.args[0] == "exit") {
+        if (parse.v.args[0] == "exit") {
             program->type = Running_Program::EXIT;
-        } else if (parse.args[0] == "return") {
+        } else if (parse.v.args[0] == "return") {
             program->type = Running_Program::RETURN;
-        } else if (parse.args[0] == "cd") {
+        } else if (parse.v.args[0] == "cd") {
             program->type = Running_Program::CD;
-        } else if (parse.args[0] == "alias") {
+        } else if (parse.v.args[0] == "alias") {
             program->type = Running_Program::ALIAS;
-        } else if (parse.args[0] == "export") {
+        } else if (parse.v.args[0] == "export") {
             program->type = Running_Program::EXPORT;
-        } else if (parse.args[0] == "clear") {
+        } else if (parse.v.args[0] == "clear") {
             program->type = Running_Program::CLEAR;
-        } else if (parse.args[0] == "." || parse.args[0] == "source") {
+        } else if (parse.v.args[0] == "." || parse.v.args[0] == "source") {
             program->type = Running_Program::SOURCE;
-        } else if (parse.args[0] == "sleep") {
+        } else if (parse.v.args[0] == "sleep") {
             program->type = Running_Program::SLEEP;
             program->v.builtin.st.sleep = {};
             program->v.builtin.st.sleep.start = std::chrono::high_resolution_clock::now();
-        } else if (parse.args[0] == "configure") {
+        } else if (parse.v.args[0] == "configure") {
             program->type = Running_Program::CONFIGURE;
-        } else if (parse.args[0] == "attach") {
+        } else if (parse.v.args[0] == "attach") {
             program->type = Running_Program::ATTACH;
         }
     }
 
     // Compromise builtins.
     if (cfg.builtin_level >= 1) {
-        if (parse.args[0] == "echo") {
+        if (parse.v.args[0] == "echo") {
             program->type = Running_Program::ECHO;
             program->v.builtin.st.echo = {};
             program->v.builtin.st.echo.outer = 1;
-        } else if (parse.args[0] == "pwd") {
+        } else if (parse.v.args[0] == "pwd") {
             program->type = Running_Program::PWD;
-        } else if (parse.args[0] == "which") {
+        } else if (parse.v.args[0] == "which") {
             program->type = Running_Program::WHICH;
-        } else if (parse.args[0] == "true") {
+        } else if (parse.v.args[0] == "true") {
             program->type = Running_Program::TRUE_;
-        } else if (parse.args[0] == "false") {
+        } else if (parse.v.args[0] == "false") {
             program->type = Running_Program::FALSE_;
         }
     }
 
     // All builtins.
     if (cfg.builtin_level >= 2) {
-        if (parse.args[0] == "cat") {
+        if (parse.v.args[0] == "cat") {
             program->type = Running_Program::CAT;
             program->v.builtin.st.cat = {};
             program->v.builtin.st.cat.buffer = (char*)allocator.alloc({4096, 1});
             program->v.builtin.st.cat.outer = 0;
-        } else if (parse.args[0] == "ls") {
+        } else if (parse.v.args[0] == "ls") {
             program->type = Running_Program::LS;
         }
     }
