@@ -581,3 +581,23 @@ program:\n\
 
     REQUIRE(expand(&shell, "${aa}") == "arg0: bb\n");
 }
+
+TEST_CASE("parse_script ()") {
+    Shell_State shell = {};
+    cz::String string = {};
+    Error error = parse_and_emit(&shell, &string, "(a ; b) && (c || d)");
+    REQUIRE(error == Error_Success);
+    CHECK(string.as_str() ==
+          "\
+and:\n\
+    program:\n\
+        arg0: a\n\
+    program:\n\
+        arg0: b\n\
+    or:\n\
+        program:\n\
+            arg0: c\n\
+        program:\n\
+            arg0: d\n");
+
+}

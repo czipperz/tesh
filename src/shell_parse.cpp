@@ -40,9 +40,10 @@ static Error parse_pipeline(const Shell_State* shell,
                             Shell_Node* node,
                             size_t* index);
 
-static Error parse_program(cz::Allocator allocator,
+static Error parse_program(const Shell_State* shell,
+                           cz::Allocator allocator,
                            cz::Slice<cz::Str> tokens,
-                           Parse_Program* program,
+                           Shell_Node* node,
                            size_t* index);
 static void deal_with_token(cz::Allocator allocator, Parse_Program* program, cz::Str token);
 
@@ -180,6 +181,17 @@ static Error advance_through_token(cz::Str text,
                 *has_curlies = true;
             break;
 #endif
+
+            ///////////////////////////////////////////////
+
+        case '(':
+        case ')':
+            if (*index == *token_start) {
+                *any_special = true;
+                *program_break = true;
+                ++*index;
+            }
+            return Error_Success;
 
             ///////////////////////////////////////////////
 
@@ -455,14 +467,10 @@ static Error parse_pipeline(const Shell_State* shell,
     const int max_precedence = 4;
 
     for (size_t iterations = 0;; ++iterations) {
-        Parse_Program program = {};
-        Error error = parse_program(allocator, tokens, &program, index);
+        Shell_Node pnode;
+        Error error = parse_program(shell, allocator, tokens, &pnode, index);
         if (error != Error_Success)
             return error;
-
-        Shell_Node pnode;
-        pnode.type = Shell_Node::PROGRAM;
-        pnode.v.program = allocator.clone(program);
 
         // Delay making the program into a pipeline.
         if (iterations == 0) {
@@ -503,25 +511,45 @@ static Error parse_pipeline(const Shell_State* shell,
 // Parse program
 ///////////////////////////////////////////////////////////////////////////////
 
-static Error parse_program(cz::Allocator allocator,
+static Error parse_program(const Shell_State* shell,
+                           cz::Allocator allocator,
                            cz::Slice<cz::Str> tokens,
-                           Parse_Program* program,
+                           Shell_Node* node,
                            size_t* index) {
+    Parse_Program program = {};
+
+    size_t start = *index;
     for (; *index < tokens.len;) {
         cz::Str token = tokens[*index];
-        if (get_precedence(token))
-            break;  // TODO special handling for (???
+        if (get_precedence(token)) {
+            if (token == "(") {
+                if (*index > start) {
+                    return Error_Parse_UnterminatedProgram;
+                } else {
+                    ++*index;
+                    Error error = parse_sequence(shell, allocator, tokens, node, index);
+                    if (error != Error_Success)
+                        return error;
+                    if (*index >= tokens.len || tokens[*index] != ")")
+                        return Error_Parse_UnterminatedParen;
+                    ++*index;
+                    return Error_Success;
+                }
+            }
+
+            break;
+        }
 
         if (token == "<" || token == ">" || token == "1>" || token == "2>") {
             if (*index + 1 == tokens.len)
                 return Error_Parse_NothingToIndirect;
             cz::Str* slot;
             if (token == "<") {
-                slot = &program->in_file;
+                slot = &program.in_file;
             } else if (token == ">" || token == "1>") {
-                slot = &program->out_file;
+                slot = &program.out_file;
             } else if (token == "2>") {
-                slot = &program->err_file;
+                slot = &program.err_file;
             } else {
                 CZ_PANIC("unreachable");
             }
@@ -532,17 +560,20 @@ static Error parse_program(cz::Allocator allocator,
             continue;
         }
 
-        deal_with_token(allocator, program, token);
+        deal_with_token(allocator, &program, token);
         ++*index;
     }
 
-    if (program->args.len == 0 && program->variable_names.len == 0) {
+    if (program.args.len == 0 && program.variable_names.len == 0) {
         return Error_Parse_EmptyProgram;
     }
 
-    cz::change_allocator(cz::heap_allocator(), allocator, &program->args);
-    cz::change_allocator(cz::heap_allocator(), allocator, &program->variable_names);
-    cz::change_allocator(cz::heap_allocator(), allocator, &program->variable_values);
+    cz::change_allocator(cz::heap_allocator(), allocator, &program.args);
+    cz::change_allocator(cz::heap_allocator(), allocator, &program.variable_names);
+    cz::change_allocator(cz::heap_allocator(), allocator, &program.variable_values);
+
+    node->type = Shell_Node::PROGRAM;
+    node->v.program = allocator.clone(program);
     return Error_Success;
 }
 
