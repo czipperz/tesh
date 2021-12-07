@@ -145,6 +145,13 @@ void cleanup_processes(Shell_State* shell) {
     }
 }
 
+void cleanup_local(Shell_Local* local) {
+    local->variable_names.drop(cz::heap_allocator());
+    local->variable_values.drop(cz::heap_allocator());
+    local->alias_names.drop(cz::heap_allocator());
+    local->alias_values.drop(cz::heap_allocator());
+}
+
 cz::Buffer_Array alloc_arena(Shell_State* shell) {
     if (shell->arenas.len > 0)
         return shell->arenas.pop();

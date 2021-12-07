@@ -54,6 +54,8 @@ void recycle_process(Shell_State* shell, Running_Script* script);
 void cleanup_pipeline(Running_Pipeline* script);
 void recycle_pipeline(Shell_State* shell, Running_Pipeline* script);
 
+void cleanup_local(Shell_Local* local);
+
 cz::Buffer_Array alloc_arena(Shell_State* shell);
 void recycle_arena(Shell_State* shell, cz::Buffer_Array arena);
 

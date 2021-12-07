@@ -186,6 +186,7 @@ static bool tick_program(Shell_State* shell,
         // TODO merge bg jobs up???
         if (node->fg_finished && node->bg.len == 0) {
             *exit_code = program->v.sub.fg.last_exit_code;
+            cleanup_local(program->v.sub.local);
             return true;
         }
     } break;
