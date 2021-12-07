@@ -263,7 +263,7 @@ static bool tick_program(Shell_State* shell,
                     st.file = builtin.in;
                 } else {
                     cz::String path = {};
-                    cz::path::make_absolute(arg, shell->working_directory, temp_allocator, &path);
+                    cz::path::make_absolute(arg, get_wd(shell), temp_allocator, &path);
                     st.file.polling = false;
                     if (!st.file.file.open(path.buffer)) {
                         builtin.exit_code = 1;
@@ -316,7 +316,7 @@ static bool tick_program(Shell_State* shell,
 
     case Running_Program::PWD: {
         auto& builtin = program->v.builtin;
-        (void)builtin.out.write(cz::format(temp_allocator, shell->working_directory, '\n'));
+        (void)builtin.out.write(cz::format(temp_allocator, get_wd(shell), '\n'));
         goto finish_builtin;
     } break;
 
@@ -333,10 +333,7 @@ static bool tick_program(Shell_State* shell,
         }
         standardize_arg(shell, arg, temp_allocator, &new_wd, /*make_absolute=*/true);
         if (cz::file::is_directory(new_wd.buffer)) {
-            shell->working_directory.len = 0;
-            shell->working_directory.reserve(cz::heap_allocator(), new_wd.len + 1);
-            shell->working_directory.append(new_wd);
-            shell->working_directory.null_terminate();
+            set_wd(shell, new_wd);
         } else {
             builtin.exit_code = 1;
             (void)builtin.err.write("cd: ");
@@ -351,14 +348,14 @@ static bool tick_program(Shell_State* shell,
         cz::String temp = {};
         CZ_DEFER(temp.drop(temp_allocator));
         if (builtin.args.len == 1) {
-            int result = run_ls(builtin.out, &temp, shell->working_directory, ".");
+            int result = run_ls(builtin.out, &temp, get_wd(shell), ".");
             if (result < 0) {
                 builtin.exit_code = 1;
                 (void)builtin.err.write("ls: error\n");
             }
         } else {
             for (size_t i = 1; i < builtin.args.len; ++i) {
-                int result = run_ls(builtin.out, &temp, shell->working_directory, builtin.args[i]);
+                int result = run_ls(builtin.out, &temp, get_wd(shell), builtin.args[i]);
                 if (result < 0) {
                     builtin.exit_code = 1;
                     (void)builtin.err.write("ls: error\n");
@@ -501,7 +498,7 @@ static bool tick_program(Shell_State* shell,
         }
 
         cz::String path = {};
-        cz::path::make_absolute(builtin.args[1], shell->working_directory, temp_allocator, &path);
+        cz::path::make_absolute(builtin.args[1], get_wd(shell), temp_allocator, &path);
         cz::Input_File file;
         if (!file.open(path.buffer)) {
             builtin.exit_code = 1;
@@ -585,7 +582,7 @@ static void standardize_arg(const Shell_State* shell,
                             cz::String* new_wd,
                             bool make_absolute) {
     if (make_absolute) {
-        cz::path::make_absolute(arg, shell->working_directory, allocator, new_wd);
+        cz::path::make_absolute(arg, get_wd(shell), allocator, new_wd);
     } else {
         new_wd->reserve_exact(allocator, arg.len);
         new_wd->append(arg);

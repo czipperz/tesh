@@ -362,8 +362,7 @@ static Error start_execute_pipeline(Shell_State* shell,
         if (parse_program.in_file.buffer) {
             stdio.in_type = File_Type_File;
             path.len = 0;
-            cz::path::make_absolute(parse_program.in_file, shell->working_directory, temp_allocator,
-                                    &path);
+            cz::path::make_absolute(parse_program.in_file, get_wd(shell), temp_allocator, &path);
             if (!stdio.in.open(path.buffer))
                 return Error_InvalidPath;
             stdio.in_count = allocator.alloc<size_t>();
@@ -381,8 +380,7 @@ static Error start_execute_pipeline(Shell_State* shell,
         if (parse_program.out_file.buffer) {
             stdio.out_type = File_Type_File;
             path.len = 0;
-            cz::path::make_absolute(parse_program.out_file, shell->working_directory,
-                                    temp_allocator, &path);
+            cz::path::make_absolute(parse_program.out_file, get_wd(shell), temp_allocator, &path);
             if (!stdio.out.open(path.buffer))
                 return Error_InvalidPath;
             path.len = 0;
@@ -395,8 +393,7 @@ static Error start_execute_pipeline(Shell_State* shell,
         if (parse_program.err_file.buffer) {
             stdio.err_type = File_Type_File;
             path.len = 0;
-            cz::path::make_absolute(parse_program.err_file, shell->working_directory,
-                                    temp_allocator, &path);
+            cz::path::make_absolute(parse_program.err_file, get_wd(shell), temp_allocator, &path);
             if (!stdio.err.open(path.buffer))
                 return Error_InvalidPath;
             path.len = 0;
@@ -526,8 +523,7 @@ static Error run_program(Shell_State* shell,
         }
 
         program->v.builtin.args = args.clone(allocator);
-        program->v.builtin.working_directory =
-            shell->working_directory.clone_null_terminate(allocator);
+        program->v.builtin.working_directory = get_wd(shell).clone_null_terminate(allocator);
         return Error_Success;
     }
 
@@ -585,7 +581,7 @@ static Error run_program(Shell_State* shell,
     }
 #endif
 
-    options.working_directory = shell->working_directory.buffer;
+    options.working_directory = get_wd(shell).buffer;
     generate_environment(&options.environment, shell, parse.variable_names, parse.variable_values);
 
     program->v.process = {};

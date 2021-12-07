@@ -33,13 +33,13 @@ struct Shell_State {
     uint64_t attached_process = ~0ull;
 
     cz::Vector<cz::Buffer_Array> arenas;
-
-    cz::String working_directory;
 };
 
 bool get_var(const Shell_State* shell, cz::Str key, cz::Str* value);
 void set_var(Shell_State* shell, cz::Str key, cz::Str value);
 void make_env_var(Shell_State* shell, cz::Str key);
+cz::Str get_wd(const Shell_State* shell);
+void set_wd(Shell_State* shell, cz::Str value);
 bool get_alias(const Shell_State* shell, cz::Str key, cz::Str* value);
 void set_alias(Shell_State* shell, cz::Str key, cz::Str value);
 

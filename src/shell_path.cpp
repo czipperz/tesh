@@ -59,9 +59,10 @@ bool find_in_path(Shell_State* shell,
     // Relative paths are only looked up relative to the working directory.
     if (is_relative(abbreviation)) {
         // First try just running the exact path.
+        cz::Str working_directory = get_wd(shell);
         full_path->len = 0;
-        full_path->reserve(allocator, shell->working_directory.len + abbreviation.len + 2);
-        full_path->append(shell->working_directory);
+        full_path->reserve(allocator, working_directory.len + abbreviation.len + 2);
+        full_path->append(working_directory);
         full_path->push(PATHSEP);
         full_path->append(abbreviation);
 #ifdef _WIN32

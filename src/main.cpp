@@ -357,8 +357,8 @@ static void render_prompt(SDL_Surface* window_surface,
     uint32_t background = SDL_MapRGB(window_surface->format, bg_color.r, bg_color.g, bg_color.b);
 
     if (shell->attached_process == -1) {
-        render_string(window_surface, rend, &point, background, cfg.info_fg_color,
-                      shell->working_directory, true);
+        render_string(window_surface, rend, &point, background, cfg.info_fg_color, get_wd(shell),
+                      true);
         render_string(window_surface, rend, &point, background, cfg.backlog_fg_color,
                       prompt->prefix, true);
     } else {
@@ -588,7 +588,7 @@ static bool read_process_data(Shell_State* shell,
                               force_quit)) {
             if (*force_quit)
                 return true;
-            --i; // TODO rate limit
+            --i;  // TODO rate limit
         }
 
         if (script->root.fg_finished && script->root.bg.len == 0) {
@@ -1036,7 +1036,7 @@ static void start_completing(Prompt_State* prompt, Shell_State* shell) {
         }
     }
 
-    cz::path::make_absolute(query_path, shell->working_directory, temp_allocator, &path);
+    cz::path::make_absolute(query_path, get_wd(shell), temp_allocator, &path);
 skip_absolute:
 
     cz::Directory_Iterator iterator;
@@ -1432,7 +1432,7 @@ static void set_clipboard_contents_to_selection(Render_State* rend,
                 clip.push(backlog->get(inner_end));
         } else {
             size_t inner_start = 0;
-            size_t inner_end = shell->working_directory.len + prompt->prefix.len + prompt->text.len;
+            size_t inner_end = get_wd(shell).len + prompt->prefix.len + prompt->text.len;
             if (outer == rend->selection.start.outer)
                 inner_start = rend->selection.start.inner;
             if (outer == rend->selection.end.outer)
@@ -1440,7 +1440,7 @@ static void set_clipboard_contents_to_selection(Render_State* rend,
 
             clip.reserve(temp_allocator, inner_end - inner_start + 2);
             size_t off = 0;
-            append_piece(&clip, &off, inner_start, inner_end, shell->working_directory);
+            append_piece(&clip, &off, inner_start, inner_end, get_wd(shell));
             append_piece(&clip, &off, inner_start, inner_end, prompt->prefix);
             append_piece(&clip, &off, inner_start, inner_end, prompt->text);
         }
@@ -1473,7 +1473,7 @@ static void expand_selection(Selection* selection,
 
     if (selection->start.outer - 1 == backlogs.len || selection->end.outer - 1 == backlogs.len) {
         if (shell->attached_process == -1) {
-            cz::append(temp_allocator, &prompt_buffer, shell->working_directory, prompt->prefix);
+            cz::append(temp_allocator, &prompt_buffer, get_wd(shell), prompt->prefix);
         } else {
             cz::append(temp_allocator, &prompt_buffer, "> ");
         }
@@ -1706,7 +1706,7 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
                 } else {
                     backlog = push_backlog(backlogs, process_id);
                     push_backlog_event(backlog, BACKLOG_EVENT_START_DIRECTORY);
-                    append_text(backlog, shell->working_directory);
+                    append_text(backlog, get_wd(shell));
                     push_backlog_event(backlog, BACKLOG_EVENT_START_PROCESS);
                     append_text(backlog, prompt->prefix);
                 }
@@ -1986,7 +1986,7 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
 
             if (tile.outer == 0) {
                 tile.outer = backlogs->len + 1;
-                tile.inner = shell->working_directory.len + prompt->prefix.len + prompt->text.len;
+                tile.inner = get_wd(shell).len + prompt->prefix.len + prompt->text.len;
             }
 
             rend->selection.type = SELECT_REGION;
@@ -2227,9 +2227,13 @@ int actual_main(int argc, char** argv) {
 
     rend.font_size = cfg.default_font_size;
 
-    if (!cz::get_working_directory(cz::heap_allocator(), &shell.working_directory)) {
-        fprintf(stderr, "Failed to get working directory\n");
-        return 1;
+    {
+        cz::String working_directory = {};
+        if (!cz::get_working_directory(temp_allocator, &working_directory)) {
+            fprintf(stderr, "Failed to get working directory\n");
+            return 1;
+        }
+        set_wd(&shell, working_directory);
     }
 
     load_environment_variables(&shell);

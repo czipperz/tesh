@@ -40,6 +40,18 @@ void set_var(Shell_State* shell, cz::Str key, cz::Str value) {
     shell->variable_values.push(value.clone_null_terminate(cz::heap_allocator()));
 }
 
+#define SPECIAL_WD_VAR "__tesh_wd"
+
+cz::Str get_wd(const Shell_State* shell) {
+    cz::Str wd;
+    if (get_var(shell, SPECIAL_WD_VAR, &wd))
+        return wd;
+    return "";
+}
+void set_wd(Shell_State* shell, cz::Str value) {
+    set_var(shell, SPECIAL_WD_VAR, value);
+}
+
 void make_env_var(Shell_State* shell, cz::Str key) {
     key = canonical_var(key);
 
