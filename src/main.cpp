@@ -584,7 +584,7 @@ static bool read_process_data(Shell_State* shell,
         Backlog_State* backlog = backlogs[script->id];
         size_t starting_length = backlog->length;
 
-        if (tick_running_node(shell, &shell->local, backlogs, rend, &script->root, &script->tty,
+        if (tick_running_node(shell, backlogs, rend, &script->root, &script->tty,
                               backlog, force_quit)) {
             if (*force_quit)
                 return true;

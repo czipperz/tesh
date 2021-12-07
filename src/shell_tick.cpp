@@ -55,7 +55,6 @@ void clear_screen(Render_State* rend, Shell_State* shell, cz::Slice<Backlog_Stat
 ///////////////////////////////////////////////////////////////////////////////
 
 bool tick_running_node(Shell_State* shell,
-                       Shell_Local* local,
                        cz::Slice<Backlog_State*> backlogs,
                        Render_State* rend,
                        Running_Node* node,
@@ -179,7 +178,7 @@ static bool tick_program(Shell_State* shell,
     case Running_Program::SUB: {
         Running_Node* node = &program->v.sub;
         while (1) {
-            if (!tick_running_node(shell, &node->local, backlogs, rend, node, tty, backlog, force_quit)) {
+            if (!tick_running_node(shell, backlogs, rend, node, tty, backlog, force_quit)) {
                 break;  // TODO rate limit
             }
         }
@@ -329,9 +328,9 @@ static bool tick_program(Shell_State* shell,
         auto& builtin = program->v.builtin;
         cz::String new_wd = {};
         cz::Str arg;
-        if (builtin.args.len >= 2)
+        if (builtin.args.len >= 2) {
             arg = builtin.args[1];
-        else if (!get_var(local, "HOME", &arg)) {
+        } else if (!get_var(local, "HOME", &arg)) {
             builtin.exit_code = 1;
             (void)builtin.err.write("cd: No home directory.\n");
             goto finish_builtin;

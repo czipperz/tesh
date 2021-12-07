@@ -73,6 +73,9 @@ Error start_execute_script(Shell_State* shell,
     if (!create_pseudo_terminal(&running.tty, shell->width, shell->height))
         return Error_IO;
 
+    // TODO this should be a direct pointer not parent.
+    running.root.local.parent = &shell->local;
+
 #ifdef _WIN32
     running.root.stdio.in = running.tty.child_in;
     running.root.stdio.out = running.tty.child_out;
@@ -588,7 +591,8 @@ static Error run_program(Shell_State* shell,
 #endif
 
     options.working_directory = get_wd(local).buffer;
-    generate_environment(&options.environment, shell, local, parse.variable_names, parse.variable_values);
+    generate_environment(&options.environment, shell, local, parse.variable_names,
+                         parse.variable_values);
 
     program->v.process = {};
     bool result = program->v.process.launch_program(args, options);
