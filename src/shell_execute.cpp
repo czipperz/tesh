@@ -179,6 +179,8 @@ static void do_descend_to_first_pipeline(cz::Vector<Shell_Node*>* path, Shell_No
         case Shell_Node::OR:
             child = child->v.binary.left;
             break;
+        default:
+            CZ_PANIC("Invalid Shell_Node type");
         }
     }
 }
@@ -230,6 +232,9 @@ static bool walk_to_next_pipeline(cz::Vector<Shell_Node*>* path, Walk_Status sta
         case Shell_Node::PROGRAM:
         case Shell_Node::PIPELINE:
             CZ_PANIC("invalid");
+
+        default:
+            CZ_PANIC("Invalid Shell_Node type");
         }
     }
 }
