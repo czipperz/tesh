@@ -644,7 +644,7 @@ static bool read_process_data(Shell_State* shell,
             Running_Pipeline* line = &script->root.bg[b];
             tick_pipeline(shell, rend, backlogs, backlog, script, line, force_quit);
             if (line->programs.len == 0) {
-                finish_line(shell, script, backlog, line, /*background=*/true);
+                finish_line(shell, script, &script->root, backlog, line, /*background=*/true);
                 --b;
             }
         }
@@ -658,7 +658,7 @@ static bool read_process_data(Shell_State* shell,
 
         if (script->root.fg.programs.len == 0 && !script->root.fg_finished) {
             bool started =
-                finish_line(shell, script, backlog, &script->root.fg, /*background=*/false);
+                finish_line(shell, script, &script->root, backlog, &script->root.fg, /*background=*/false);
             if (started) {
                 // Rerun to prevent long scripts from only doing one command per frame.
                 // TODO: rate limit to prevent big scripts (with all builtins) from hanging.

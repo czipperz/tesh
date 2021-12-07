@@ -10,26 +10,7 @@
 #include "global.hpp"
 
 ///////////////////////////////////////////////////////////////////////////////
-
-enum File_Type {
-    File_Type_Terminal,
-    File_Type_File,
-    File_Type_Pipe,
-    File_Type_None,
-};
-
-struct Stdio_State {
-    File_Type in_type = File_Type_Terminal;
-    File_Type out_type = File_Type_Terminal;
-    File_Type err_type = File_Type_Terminal;
-    cz::Input_File in;
-    cz::Output_File out;
-    cz::Output_File err;
-    size_t* in_count;
-    size_t* out_count;
-    size_t* err_count;
-};
-
+// Forward declarationss
 ///////////////////////////////////////////////////////////////////////////////
 
 static Error start_execute_node(Shell_State* shell,
@@ -40,27 +21,31 @@ static Error start_execute_node(Shell_State* shell,
 
 static Error start_execute_line(Shell_State* shell,
                                 Running_Script* script,
+                                Running_Node* node,
                                 Backlog_State* backlog,
                                 Running_Pipeline* pipeline,
                                 bool background);
 
 static Error start_execute_pipeline(Shell_State* shell,
                                     Running_Script* script,
+                                    Running_Node* node,
                                     Backlog_State* backlog,
                                     Running_Pipeline* pipeline,
                                     bool bind_stdin);
 
 static Error run_program(Shell_State* shell,
                          cz::Allocator allocator,
+                         Running_Script* script,
                          Running_Program* program,
                          Parse_Program parse,
                          Stdio_State stdio,
-                         Backlog_State* backlog,
-                         const Pseudo_Terminal& tty);
+                         Backlog_State* backlog);
 
 static void recognize_builtins(Running_Program* program,
                                const Parse_Program& parse,
                                cz::Allocator allocator);
+
+///////////////////////////////////////////////////////////////////////////////
 
 enum Walk_Status {
     WALK_FAILURE = 0,
@@ -88,13 +73,13 @@ Error start_execute_script(Shell_State* shell,
         return Error_IO;
 
 #ifdef _WIN32
-    running.root.in = running.tty.child_in;
-    running.root.out = running.tty.child_out;
+    running.root.stdio.in = running.tty.child_in;
+    running.root.stdio.out = running.tty.child_out;
 #else
-    running.root.in.handle = running.tty.child_bi;
-    running.root.out.handle = running.tty.child_bi;
+    running.root.stdio.in.handle = running.tty.child_bi;
+    running.root.stdio.out.handle = running.tty.child_bi;
 #endif
-    running.root.err = running.root.out;  // stderr = stdout at top level
+    running.root.stdio.err = running.root.stdio.out;  // stderr = stdout at top level
 
     Error error = start_execute_node(shell, &running, backlog, &running.root, root);
     if (error != Error_Success) {
@@ -123,7 +108,7 @@ static Error start_execute_node(Shell_State* shell,
     bool found_first_pipeline = descend_to_first_pipeline(&node->fg.path, root);
     if (found_first_pipeline) {
         const bool background = false;
-        Error error = start_execute_line(shell, script, backlog, &node->fg, background);
+        Error error = start_execute_line(shell, script, node, backlog, &node->fg, background);
         if (error != Error_Success) {
             recycle_arena(shell, node->fg.arena);
             return error;
@@ -139,6 +124,7 @@ static Error start_execute_node(Shell_State* shell,
 
 bool finish_line(Shell_State* shell,
                  Running_Script* script,
+                 Running_Node* node,
                  Backlog_State* backlog,
                  Running_Pipeline* line,
                  bool background) {
@@ -156,15 +142,15 @@ bool finish_line(Shell_State* shell,
             backlog->exit_code = line->last_exit_code;
         recycle_pipeline(shell, line);
         if (background) {
-            script->root.bg.remove(line - script->root.bg.elems);
+            node->bg.remove(line - node->bg.elems);
         } else {
-            script->root.fg_finished = true;
+            node->fg_finished = true;
         }
         return false;
     }
 
     cleanup_pipeline(line);
-    Error error = start_execute_line(shell, script, backlog, line, background);
+    Error error = start_execute_line(shell, script, node, backlog, line, background);
     if (error != Error_Success) {
         append_text(backlog, "Error: failed to execute continuation\n");
     }
@@ -273,6 +259,7 @@ static bool walk_to_next_pipeline(cz::Vector<Shell_Node*>* path, Walk_Status sta
 
 static Error start_execute_line(Shell_State* shell,
                                 Running_Script* script,
+                                Running_Node* node,
                                 Backlog_State* backlog,
                                 Running_Pipeline* pipeline,
                                 bool background) {
@@ -284,13 +271,13 @@ static Error start_execute_line(Shell_State* shell,
             Running_Pipeline line = {};
             line.arena = alloc_arena(shell);
             line.path = pipeline->path.clone(cz::heap_allocator());
-            script->root.bg.reserve(cz::heap_allocator(), 1);
-            script->root.bg.push(line);
-            pipeline = &script->root.bg.last();
+            node->bg.reserve(cz::heap_allocator(), 1);
+            node->bg.push(line);
+            pipeline = &node->bg.last();
         }
 
         bool bind_stdin = !(background || async);
-        Error error = start_execute_pipeline(shell, script, backlog, pipeline, bind_stdin);
+        Error error = start_execute_pipeline(shell, script, node, backlog, pipeline, bind_stdin);
         if (error != Error_Success)
             return error;
 
@@ -303,9 +290,9 @@ static Error start_execute_line(Shell_State* shell,
             // No node so stop.
             recycle_pipeline(shell, pipeline_orig);
             if (background) {
-                script->root.bg.remove(pipeline_orig - script->root.bg.elems);
+                node->bg.remove(pipeline_orig - node->bg.elems);
             } else {
-                script->root.fg_finished = true;
+                node->fg_finished = true;
             }
             return Error_Success;
         }
@@ -318,6 +305,7 @@ static Error start_execute_line(Shell_State* shell,
 
 static Error start_execute_pipeline(Shell_State* shell,
                                     Running_Script* script,
+                                    Running_Node* node,
                                     Backlog_State* backlog,
                                     Running_Pipeline* pipeline,
                                     bool bind_stdin) {
@@ -445,8 +433,8 @@ static Error start_execute_pipeline(Shell_State* shell,
 
         Running_Program running_program = {};
 
-        Error error = run_program(shell, allocator, &running_program, parse_program, stdio, backlog,
-                                  script->tty);
+        Error error =
+            run_program(shell, allocator, script, &running_program, parse_program, stdio, backlog);
         if (error != Error_Success)
             return error;
 
@@ -469,11 +457,11 @@ static void generate_environment(void* out,
 
 static Error run_program(Shell_State* shell,
                          cz::Allocator allocator,
+                         Running_Script* script,
                          Running_Program* program,
                          Parse_Program parse,
                          Stdio_State stdio,
-                         Backlog_State* backlog,
-                         const Pseudo_Terminal& tty) {
+                         Backlog_State* backlog) {
     {
         cz::Vector<cz::Str> variable_values = {};
         variable_values.reserve(allocator, parse.variable_values.len);
@@ -486,8 +474,9 @@ static Error run_program(Shell_State* shell,
     }
 
     if (parse.is_sub) {
-        CZ_PANIC("todo");
-        return Error_Success;
+        Running_Node sub = {};
+        sub.stdio = stdio;
+        return start_execute_node(shell, script, backlog, &sub, parse.v.sub);
     }
 
     cz::Vector<cz::Str> args = {};
@@ -511,9 +500,9 @@ static Error run_program(Shell_State* shell,
         if (stdio.in_type == File_Type_Terminal) {
             program->v.builtin.in.polling = true;
 #ifdef _WIN32
-            program->v.builtin.in.file = tty.child_in;
+            program->v.builtin.in.file = script->tty.child_in;
 #else
-            program->v.builtin.in.file.handle = tty.child_bi;
+            program->v.builtin.in.file.handle = script->tty.child_bi;
 #endif
         } else {
             program->v.builtin.in.polling = false;
@@ -561,37 +550,37 @@ static Error run_program(Shell_State* shell,
     if (stdio.in_type == File_Type_Terminal && stdio.out_type == File_Type_Terminal &&
         stdio.err_type == File_Type_Terminal) {
         // TODO: test pseudo console + stdio.
-        options.pseudo_console = tty.pseudo_console;
+        options.pseudo_console = script->tty.pseudo_console;
     } else {
         if (stdio.in_type == File_Type_Terminal) {
-            options.std_in = tty.child_in;
+            options.std_in = script->tty.child_in;
         } else {
             options.std_in = stdio.in;
         }
         if (stdio.out_type == File_Type_Terminal) {
-            options.std_out = tty.child_out;
+            options.std_out = script->tty.child_out;
         } else {
             options.std_out = stdio.out;
         }
         if (stdio.err_type == File_Type_Terminal) {
-            options.std_err = tty.child_out;  // yes, out!
+            options.std_err = script->tty.child_out;  // yes, out!
         } else {
             options.std_err = stdio.err;
         }
     }
 #else
     if (stdio.in_type == File_Type_Terminal) {
-        options.std_in.handle = tty.child_bi;
+        options.std_in.handle = script->tty.child_bi;
     } else {
         options.std_in = stdio.in;
     }
     if (stdio.out_type == File_Type_Terminal) {
-        options.std_out.handle = tty.child_bi;
+        options.std_out.handle = script->tty.child_bi;
     } else {
         options.std_out = stdio.out;
     }
     if (stdio.err_type == File_Type_Terminal) {
-        options.std_err.handle = tty.child_bi;
+        options.std_err.handle = script->tty.child_bi;
     } else {
         options.std_err = stdio.err;
     }
