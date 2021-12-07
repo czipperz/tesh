@@ -357,8 +357,8 @@ static void render_prompt(SDL_Surface* window_surface,
     uint32_t background = SDL_MapRGB(window_surface->format, bg_color.r, bg_color.g, bg_color.b);
 
     if (shell->attached_process == -1) {
-        render_string(window_surface, rend, &point, background, cfg.info_fg_color, get_wd(shell),
-                      true);
+        render_string(window_surface, rend, &point, background, cfg.info_fg_color,
+                      get_wd(&shell->local), true);
         render_string(window_surface, rend, &point, background, cfg.backlog_fg_color,
                       prompt->prefix, true);
     } else {
@@ -536,7 +536,7 @@ static bool run_script(Shell_State* shell, Backlog_State* backlog, cz::Str text)
     Shell_Node* root = arena.allocator().alloc<Shell_Node>();
     *root = {};
 
-    Error error = parse_script(shell, arena.allocator(), root, text);
+    Error error = parse_script(arena.allocator(), root, text);
     if (error != Error_Success)
         goto fail;
 
@@ -560,7 +560,7 @@ fail:;
 
 static void run_rc(Shell_State* shell, Backlog_State* backlog) {
     cz::Str home;
-    if (!get_var(shell, "HOME", &home))
+    if (!get_var(&shell->local, "HOME", &home))
         return;
 
     cz::Input_File file;
@@ -584,8 +584,8 @@ static bool read_process_data(Shell_State* shell,
         Backlog_State* backlog = backlogs[script->id];
         size_t starting_length = backlog->length;
 
-        if (tick_running_node(shell, backlogs, rend, &script->root, &script->tty, backlog,
-                              force_quit)) {
+        if (tick_running_node(shell, &shell->local, backlogs, rend, &script->root, &script->tty,
+                              backlog, force_quit)) {
             if (*force_quit)
                 return true;
             --i;  // TODO rate limit
@@ -1025,7 +1025,7 @@ static void start_completing(Prompt_State* prompt, Shell_State* shell) {
     if (query_path == "~" ||
         (query_path.len >= 2 && query_path[0] == '~' && is_path_sep(query_path[1]))) {
         cz::Str home;
-        if (get_var(shell, "HOME", &home)) {
+        if (get_var(&shell->local, "HOME", &home)) {
             if (home.len > 0 && is_path_sep(home.last()))
                 home.len--;
             path.reserve(cz::heap_allocator(), home.len + query_path.len - 1 + 1);
@@ -1036,7 +1036,7 @@ static void start_completing(Prompt_State* prompt, Shell_State* shell) {
         }
     }
 
-    cz::path::make_absolute(query_path, get_wd(shell), temp_allocator, &path);
+    cz::path::make_absolute(query_path, get_wd(&shell->local), temp_allocator, &path);
 skip_absolute:
 
     cz::Directory_Iterator iterator;
@@ -1431,8 +1431,9 @@ static void set_clipboard_contents_to_selection(Render_State* rend,
             } else
                 clip.push(backlog->get(inner_end));
         } else {
+            cz::Str working_directory = get_wd(&shell->local);
             size_t inner_start = 0;
-            size_t inner_end = get_wd(shell).len + prompt->prefix.len + prompt->text.len;
+            size_t inner_end = working_directory.len + prompt->prefix.len + prompt->text.len;
             if (outer == rend->selection.start.outer)
                 inner_start = rend->selection.start.inner;
             if (outer == rend->selection.end.outer)
@@ -1440,7 +1441,7 @@ static void set_clipboard_contents_to_selection(Render_State* rend,
 
             clip.reserve(temp_allocator, inner_end - inner_start + 2);
             size_t off = 0;
-            append_piece(&clip, &off, inner_start, inner_end, get_wd(shell));
+            append_piece(&clip, &off, inner_start, inner_end, working_directory);
             append_piece(&clip, &off, inner_start, inner_end, prompt->prefix);
             append_piece(&clip, &off, inner_start, inner_end, prompt->text);
         }
@@ -1473,7 +1474,7 @@ static void expand_selection(Selection* selection,
 
     if (selection->start.outer - 1 == backlogs.len || selection->end.outer - 1 == backlogs.len) {
         if (shell->attached_process == -1) {
-            cz::append(temp_allocator, &prompt_buffer, get_wd(shell), prompt->prefix);
+            cz::append(temp_allocator, &prompt_buffer, get_wd(&shell->local), prompt->prefix);
         } else {
             cz::append(temp_allocator, &prompt_buffer, "> ");
         }
@@ -1706,7 +1707,7 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
                 } else {
                     backlog = push_backlog(backlogs, process_id);
                     push_backlog_event(backlog, BACKLOG_EVENT_START_DIRECTORY);
-                    append_text(backlog, get_wd(shell));
+                    append_text(backlog, get_wd(&shell->local));
                     push_backlog_event(backlog, BACKLOG_EVENT_START_PROCESS);
                     append_text(backlog, prompt->prefix);
                 }
@@ -1986,7 +1987,7 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
 
             if (tile.outer == 0) {
                 tile.outer = backlogs->len + 1;
-                tile.inner = get_wd(shell).len + prompt->prefix.len + prompt->text.len;
+                tile.inner = get_wd(&shell->local).len + prompt->prefix.len + prompt->text.len;
             }
 
             rend->selection.type = SELECT_REGION;
@@ -2018,7 +2019,7 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
 
 static void load_history(Prompt_State* prompt, Shell_State* shell) {
     cz::Str home = {};
-    if (!get_var(shell, "HOME", &home))
+    if (!get_var(&shell->local, "HOME", &home))
         return;
 
     cz::String path = cz::format(temp_allocator, home, "/.tesh_history");
@@ -2064,7 +2065,7 @@ static void load_history(Prompt_State* prompt, Shell_State* shell) {
 
 static void save_history(Prompt_State* prompt, Shell_State* shell) {
     cz::Str home = {};
-    if (!get_var(shell, "HOME", &home))
+    if (!get_var(&shell->local, "HOME", &home))
         return;
 
     cz::String path = cz::format(temp_allocator, home, "/.tesh_history");
@@ -2162,7 +2163,7 @@ static void load_environment_variables(Shell_State* shell) {
                 // Windows special environment variables have
                 // a = as the first character so ignore those.
                 if (key.len > 0) {
-                    set_var(shell, key, value);
+                    set_var(&shell->local, key, value);
                     make_env_var(shell, key);
                 }
             }
@@ -2171,10 +2172,10 @@ static void load_environment_variables(Shell_State* shell) {
 
     // Set HOME to the user home directory.
     cz::Str temp;
-    if (!get_var(shell, "HOME", &temp)) {
+    if (!get_var(&shell->local, "HOME", &temp)) {
         cz::String home = {};
         if (cz::env::get_home(cz::heap_allocator(), &home)) {
-            set_var(shell, "HOME", home);
+            set_var(&shell->local, "HOME", home);
             make_env_var(shell, "HOME");
         }
     }
@@ -2185,7 +2186,7 @@ static void load_environment_variables(Shell_State* shell) {
         cz::Str key, value;
         if (line.split_excluding('=', &key, &value)) {
             if (key.len > 0) {
-                set_var(shell, key, value);
+                set_var(&shell->local, key, value);
                 make_env_var(shell, key);
             }
         }
@@ -2233,7 +2234,7 @@ int actual_main(int argc, char** argv) {
             fprintf(stderr, "Failed to get working directory\n");
             return 1;
         }
-        set_wd(&shell, working_directory);
+        set_wd(&shell.local, working_directory);
     }
 
     load_environment_variables(&shell);

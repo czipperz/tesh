@@ -7,10 +7,7 @@
 // Forward declarations
 ///////////////////////////////////////////////////////////////////////////////
 
-static Error tokenize(const Shell_State* shell,
-                      cz::Allocator allocator,
-                      cz::Vector<cz::Str>* tokens,
-                      cz::Str text);
+static Error tokenize(cz::Allocator allocator, cz::Vector<cz::Str>* tokens, cz::Str text);
 
 static Error advance_through_token(cz::Str text,
                                    size_t* token_start,
@@ -21,60 +18,50 @@ static Error advance_through_single_quote_string(cz::Str text, size_t* index);
 static Error advance_through_double_quote_string(cz::Str text, size_t* index);
 static Error advance_through_dollar_sign(cz::Str text, size_t* index);
 
-static Error parse_sequence(const Shell_State* shell,
-                            cz::Allocator allocator,
+static Error parse_sequence(cz::Allocator allocator,
                             cz::Slice<cz::Str> tokens,
                             Shell_Node* node,
                             size_t* index);
 
-static Error parse_binary(const Shell_State* shell,
-                          cz::Allocator allocator,
+static Error parse_binary(cz::Allocator allocator,
                           cz::Slice<cz::Str> tokens,
                           int max_precedence,
                           Shell_Node* node,
                           size_t* index);
 
-static Error parse_pipeline(const Shell_State* shell,
-                            cz::Allocator allocator,
+static Error parse_pipeline(cz::Allocator allocator,
                             cz::Slice<cz::Str> tokens,
                             Shell_Node* node,
                             size_t* index);
 
-static Error parse_program(const Shell_State* shell,
-                           cz::Allocator allocator,
+static Error parse_program(cz::Allocator allocator,
                            cz::Slice<cz::Str> tokens,
                            Shell_Node* node,
                            size_t* index);
 static Error deal_with_token(cz::Allocator allocator, Parse_Program* program, cz::Str token);
 
-static cz::Str deref_var_at_point(const Shell_State* shell, cz::Str text, size_t* index);
+static cz::Str deref_var_at_point(const Shell_Local* local, cz::Str text, size_t* index);
 
 ///////////////////////////////////////////////////////////////////////////////
 // Driver
 ///////////////////////////////////////////////////////////////////////////////
 
-Error parse_script(const Shell_State* shell,
-                   cz::Allocator allocator,
-                   Shell_Node* root,
-                   cz::Str text) {
+Error parse_script(cz::Allocator allocator, Shell_Node* root, cz::Str text) {
     cz::Vector<cz::Str> tokens = {};
     CZ_DEFER(tokens.drop(cz::heap_allocator()));
-    Error error = tokenize(shell, allocator, &tokens, text);
+    Error error = tokenize(allocator, &tokens, text);
     if (error != Error_Success)
         return error;
 
     size_t index = 0;
-    return parse_sequence(shell, allocator, tokens, root, &index);
+    return parse_sequence(allocator, tokens, root, &index);
 }
 
 ///////////////////////////////////////////////////////////////////////////////
 // Tokenization
 ///////////////////////////////////////////////////////////////////////////////
 
-static Error tokenize(const Shell_State* shell,
-                      cz::Allocator allocator,
-                      cz::Vector<cz::Str>* tokens,
-                      cz::Str text) {
+static Error tokenize(cz::Allocator allocator, cz::Vector<cz::Str>* tokens, cz::Str text) {
     size_t index = 0;
     bool at_start_of_program = true;
     while (1) {
@@ -90,17 +77,6 @@ static Error tokenize(const Shell_State* shell,
             break;
 
         cz::Str token = text.slice(token_start, token_end);
-        if (!any_special && at_start_of_program) {
-            cz::Str alias;
-            if (get_alias(shell, token, &alias)) {
-                // Aliases need to be parsed and merged into the text.  I'm thinking
-                // I'll parse tokens in the ALIAS command and just append the tokens.
-                // This won't handle `alias="'"`
-                CZ_PANIC("todo");
-                continue;
-            }
-        }
-
         tokens->reserve(cz::heap_allocator(), 1);
         tokens->push(token);
         index = token_end;
@@ -348,8 +324,7 @@ static int get_precedence(cz::Str token) {
 // Parse sequence
 ///////////////////////////////////////////////////////////////////////////////
 
-static Error parse_sequence(const Shell_State* shell,
-                            cz::Allocator allocator,
+static Error parse_sequence(cz::Allocator allocator,
                             cz::Slice<cz::Str> tokens,
                             Shell_Node* node,
                             size_t* index) {
@@ -380,7 +355,7 @@ static Error parse_sequence(const Shell_State* shell,
         }
 
         Shell_Node step;
-        Error error = parse_binary(shell, allocator, tokens, 8, &step, index);
+        Error error = parse_binary(allocator, tokens, 8, &step, index);
         if (error != Error_Success)
             return error;
 
@@ -401,8 +376,7 @@ static Error parse_sequence(const Shell_State* shell,
 // Parse binary
 ///////////////////////////////////////////////////////////////////////////////
 
-static Error parse_binary(const Shell_State* shell,
-                          cz::Allocator allocator,
+static Error parse_binary(cz::Allocator allocator,
                           cz::Slice<cz::Str> tokens,
                           int max_precedence,
                           Shell_Node* node,
@@ -413,9 +387,9 @@ static Error parse_binary(const Shell_State* shell,
     Shell_Node sub;
     Error error;
     if (max_precedence == 6) {
-        error = parse_pipeline(shell, allocator, tokens, &sub, index);
+        error = parse_pipeline(allocator, tokens, &sub, index);
     } else {
-        error = parse_binary(shell, allocator, tokens, max_precedence - 2, &sub, index);
+        error = parse_binary(allocator, tokens, max_precedence - 2, &sub, index);
     }
     if (error != Error_Success)
         return error;
@@ -446,9 +420,9 @@ static Error parse_binary(const Shell_State* shell,
         // Since we're doing LTR loop here, there's no point in
         // having a child do it as well at the same precedence.
         if (precedence == max_precedence) {
-            error = parse_pipeline(shell, allocator, tokens, &sub, index);
+            error = parse_pipeline(allocator, tokens, &sub, index);
         } else {
-            error = parse_binary(shell, allocator, tokens, precedence, &sub, index);
+            error = parse_binary(allocator, tokens, precedence, &sub, index);
         }
         if (error != Error_Success)
             return error;
@@ -459,8 +433,7 @@ static Error parse_binary(const Shell_State* shell,
 // Parse pipeline
 ///////////////////////////////////////////////////////////////////////////////
 
-static Error parse_pipeline(const Shell_State* shell,
-                            cz::Allocator allocator,
+static Error parse_pipeline(cz::Allocator allocator,
                             cz::Slice<cz::Str> tokens,
                             Shell_Node* node,
                             size_t* index) {
@@ -468,7 +441,7 @@ static Error parse_pipeline(const Shell_State* shell,
 
     for (size_t iterations = 0;; ++iterations) {
         Shell_Node pnode;
-        Error error = parse_program(shell, allocator, tokens, &pnode, index);
+        Error error = parse_program(allocator, tokens, &pnode, index);
         if (error != Error_Success)
             return error;
 
@@ -511,8 +484,7 @@ static Error parse_pipeline(const Shell_State* shell,
 // Parse program
 ///////////////////////////////////////////////////////////////////////////////
 
-static Error parse_program(const Shell_State* shell,
-                           cz::Allocator allocator,
+static Error parse_program(cz::Allocator allocator,
                            cz::Slice<cz::Str> tokens,
                            Shell_Node* node,
                            size_t* index) {
@@ -527,7 +499,7 @@ static Error parse_program(const Shell_State* shell,
                 } else {
                     ++*index;
                     Shell_Node inner;
-                    Error error = parse_sequence(shell, allocator, tokens, &inner, index);
+                    Error error = parse_sequence(allocator, tokens, &inner, index);
                     if (error != Error_Success)
                         return error;
                     if (*index >= tokens.len || tokens[*index] != ")")
@@ -639,7 +611,7 @@ static Error deal_with_token(cz::Allocator allocator, Parse_Program* program, cz
 // Argument expansion
 ///////////////////////////////////////////////////////////////////////////////
 
-void expand_arg(const Shell_State* shell,
+void expand_arg(const Shell_Local* local,
                 cz::Str text,
                 cz::Allocator allocator,
                 cz::Vector<cz::Str>* words,
@@ -678,7 +650,7 @@ void expand_arg(const Shell_State* shell,
                     ++index;
                     break;
                 } else if (text[index] == '$') {
-                    cz::Str value = deref_var_at_point(shell, text, &index);
+                    cz::Str value = deref_var_at_point(local, text, &index);
                     word->reserve(allocator, value.len);
                     word->append(value);
                     continue;
@@ -713,7 +685,7 @@ void expand_arg(const Shell_State* shell,
         } break;
 
         case '$': {
-            cz::Str value = deref_var_at_point(shell, text, &index);
+            cz::Str value = deref_var_at_point(local, text, &index);
             if (words) {
                 size_t i = 0;
                 while (i < value.len) {
@@ -747,7 +719,7 @@ void expand_arg(const Shell_State* shell,
         case '~': {
             if (index == 0) {
                 cz::Str value;
-                if (get_var(shell, "HOME", &value)) {
+                if (get_var(local, "HOME", &value)) {
                     word->reserve(allocator, value.len);
                     word->append(value);
                 }
@@ -795,22 +767,22 @@ void expand_arg(const Shell_State* shell,
     }
 }
 
-void expand_arg_single(const Shell_State* shell,
+void expand_arg_single(const Shell_Local* local,
                        cz::Str text,
                        cz::Allocator allocator,
                        cz::String* word) {
-    expand_arg(shell, text, allocator, nullptr, word);
+    expand_arg(local, text, allocator, nullptr, word);
 }
 
-void expand_arg_split(const Shell_State* shell,
+void expand_arg_split(const Shell_Local* local,
                       cz::Str text,
                       cz::Allocator allocator,
                       cz::Vector<cz::Str>* output) {
     cz::String word = {};
-    expand_arg(shell, text, allocator, output, &word);
+    expand_arg(local, text, allocator, output, &word);
 }
 
-static cz::Str deref_var_at_point(const Shell_State* shell, cz::Str text, size_t* index) {
+static cz::Str deref_var_at_point(const Shell_Local* local, cz::Str text, size_t* index) {
     ++*index;
     if (*index == text.len)
         return "$";
@@ -827,7 +799,7 @@ static cz::Str deref_var_at_point(const Shell_State* shell, cz::Str text, size_t
             ++*index;
         }
         cz::Str value = "";
-        get_var(shell, text.slice(start, *index), &value);
+        get_var(local, text.slice(start, *index), &value);
         return value;
     } break;
 
@@ -845,7 +817,7 @@ static cz::Str deref_var_at_point(const Shell_State* shell, cz::Str text, size_t
         }
 
         cz::Str value = "";
-        get_var(shell, text.slice(start, *index), &value);
+        get_var(local, text.slice(start, *index), &value);
         ++*index;
         return value;
     } break;

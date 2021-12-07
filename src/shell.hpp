@@ -18,15 +18,21 @@ struct Pseudo_Terminal;
 
 ///////////////////////////////////////////////////////////////////////////////
 
-struct Shell_State {
-    int width, height;
+struct Shell_Local {
+    Shell_Local* parent;
 
-    cz::Vector<cz::String> exported_vars;
     cz::Vector<cz::String> variable_names;
     cz::Vector<cz::String> variable_values;
 
     cz::Vector<cz::Str> alias_names;
     cz::Vector<cz::Str> alias_values;
+};
+
+struct Shell_State {
+    int width, height;
+
+    cz::Vector<cz::String> exported_vars;
+    Shell_Local local;
 
     cz::Vector<Running_Script> scripts;
     uint64_t selected_process = ~0ull;
@@ -35,13 +41,13 @@ struct Shell_State {
     cz::Vector<cz::Buffer_Array> arenas;
 };
 
-bool get_var(const Shell_State* shell, cz::Str key, cz::Str* value);
-void set_var(Shell_State* shell, cz::Str key, cz::Str value);
+bool get_var(const Shell_Local* local, cz::Str key, cz::Str* value);
+void set_var(Shell_Local* local, cz::Str key, cz::Str value);
 void make_env_var(Shell_State* shell, cz::Str key);
-cz::Str get_wd(const Shell_State* shell);
-void set_wd(Shell_State* shell, cz::Str value);
-bool get_alias(const Shell_State* shell, cz::Str key, cz::Str* value);
-void set_alias(Shell_State* shell, cz::Str key, cz::Str value);
+cz::Str get_wd(const Shell_Local* local);
+void set_wd(Shell_Local* local, cz::Str value);
+bool get_alias(const Shell_Local* local, cz::Str key, cz::Str* value);
+void set_alias(Shell_Local* local, cz::Str key, cz::Str value);
 
 void cleanup_processes(Shell_State* shell);
 void recycle_process(Shell_State* shell, Running_Script* script);
@@ -59,7 +65,7 @@ Running_Script* selected_process(Shell_State* shell);
 /// Find a process by id, or `nullptr` if no matches.
 Running_Script* lookup_process(Shell_State* shell, uint64_t id);
 
-bool find_in_path(Shell_State* shell,
+bool find_in_path(Shell_Local* local,
                   cz::Str abbreviation,
                   cz::Allocator allocator,
                   cz::String* full_path);
@@ -155,6 +161,7 @@ struct Running_Node {
     Running_Pipeline fg;
     bool fg_finished;
     Stdio_State stdio;
+    Shell_Local local;
 };
 
 struct Running_Program {
@@ -263,16 +270,13 @@ struct Shell_Node {
 };
 
 /// Parse a string into a `Shell_Node` tree.  Does not do variable expansion.
-Error parse_script(const Shell_State* shell,
-                   cz::Allocator allocator,
-                   Shell_Node* root,
-                   cz::Str text);
+Error parse_script(cz::Allocator allocator, Shell_Node* root, cz::Str text);
 
-void expand_arg_single(const Shell_State* shell,
+void expand_arg_single(const Shell_Local* local,
                        cz::Str arg,
                        cz::Allocator allocator,
                        cz::String* output);
-void expand_arg_split(const Shell_State* shell,
+void expand_arg_split(const Shell_Local* local,
                       cz::Str arg,
                       cz::Allocator allocator,
                       cz::Vector<cz::Str>* output);
@@ -294,6 +298,7 @@ bool finish_line(Shell_State* shell,
 ///////////////////////////////////////////////////////////////////////////////
 
 bool tick_running_node(Shell_State* shell,
+                       Shell_Local* local,
                        cz::Slice<Backlog_State*> backlogs,
                        Render_State* rend,
                        Running_Node* node,

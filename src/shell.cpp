@@ -10,46 +10,48 @@ static cz::Str canonical_var(cz::Str key) {
     return key;
 }
 
-bool get_var(const Shell_State* shell, cz::Str key, cz::Str* value) {
+bool get_var(const Shell_Local* local, cz::Str key, cz::Str* value) {
     key = canonical_var(key);
 
-    for (size_t i = 0; i < shell->variable_names.len; ++i) {
-        if (key == shell->variable_names[i]) {
-            *value = shell->variable_values[i];
-            return true;
+    for (; local; local = local->parent) {
+        for (size_t i = 0; i < local->variable_names.len; ++i) {
+            if (key == local->variable_names[i]) {
+                *value = local->variable_values[i];
+                return true;
+            }
         }
     }
 
     return false;
 }
 
-void set_var(Shell_State* shell, cz::Str key, cz::Str value) {
+void set_var(Shell_Local* local, cz::Str key, cz::Str value) {
     key = canonical_var(key);
 
-    for (size_t i = 0; i < shell->variable_names.len; ++i) {
-        if (key == shell->variable_names[i]) {
-            shell->variable_values[i].drop(cz::heap_allocator());
-            shell->variable_values[i] = value.clone_null_terminate(cz::heap_allocator());
+    for (size_t i = 0; i < local->variable_names.len; ++i) {
+        if (key == local->variable_names[i]) {
+            local->variable_values[i].drop(cz::heap_allocator());
+            local->variable_values[i] = value.clone_null_terminate(cz::heap_allocator());
             return;
         }
     }
 
-    shell->variable_names.reserve(cz::heap_allocator(), 1);
-    shell->variable_values.reserve(cz::heap_allocator(), 1);
-    shell->variable_names.push(key.clone(cz::heap_allocator()));
-    shell->variable_values.push(value.clone_null_terminate(cz::heap_allocator()));
+    local->variable_names.reserve(cz::heap_allocator(), 1);
+    local->variable_values.reserve(cz::heap_allocator(), 1);
+    local->variable_names.push(key.clone(cz::heap_allocator()));
+    local->variable_values.push(value.clone_null_terminate(cz::heap_allocator()));
 }
 
 #define SPECIAL_WD_VAR "__tesh_wd"
 
-cz::Str get_wd(const Shell_State* shell) {
+cz::Str get_wd(const Shell_Local* local) {
     cz::Str wd;
-    if (get_var(shell, SPECIAL_WD_VAR, &wd))
+    if (get_var(local, SPECIAL_WD_VAR, &wd))
         return wd;
     return "";
 }
-void set_wd(Shell_State* shell, cz::Str value) {
-    set_var(shell, SPECIAL_WD_VAR, value);
+void set_wd(Shell_Local* local, cz::Str value) {
+    set_var(local, SPECIAL_WD_VAR, value);
 }
 
 void make_env_var(Shell_State* shell, cz::Str key) {
@@ -64,30 +66,32 @@ void make_env_var(Shell_State* shell, cz::Str key) {
     shell->exported_vars.push(key.clone(cz::heap_allocator()));
 }
 
-bool get_alias(const Shell_State* shell, cz::Str key, cz::Str* value) {
-    for (size_t i = 0; i < shell->alias_names.len; ++i) {
-        if (shell->alias_names[i] == key) {
-            *value = shell->alias_values[i];
-            return true;
+bool get_alias(const Shell_Local* local, cz::Str key, cz::Str* value) {
+    for (; local; local = local->parent) {
+        for (size_t i = 0; i < local->alias_names.len; ++i) {
+            if (local->alias_names[i] == key) {
+                *value = local->alias_values[i];
+                return true;
+            }
         }
     }
     return false;
 }
 
-void set_alias(Shell_State* shell, cz::Str key, cz::Str value) {
-    for (size_t i = 0; i < shell->alias_names.len; ++i) {
-        if (shell->alias_names[i] == key) {
-            cz::Str* slot = &shell->alias_values[i];
+void set_alias(Shell_Local* local, cz::Str key, cz::Str value) {
+    for (size_t i = 0; i < local->alias_names.len; ++i) {
+        if (local->alias_names[i] == key) {
+            cz::Str* slot = &local->alias_values[i];
             cz::heap_allocator().dealloc({(void*)slot->buffer, slot->len});
             *slot = value.clone(cz::heap_allocator());
         }
     }
 
-    shell->alias_names.reserve(cz::heap_allocator(), 1);
-    shell->alias_values.reserve(cz::heap_allocator(), 1);
+    local->alias_names.reserve(cz::heap_allocator(), 1);
+    local->alias_values.reserve(cz::heap_allocator(), 1);
     // TODO: garbage collect / ref count?
-    shell->alias_names.push(key.clone(cz::heap_allocator()));
-    shell->alias_values.push(value.clone(cz::heap_allocator()));
+    local->alias_names.push(key.clone(cz::heap_allocator()));
+    local->alias_values.push(value.clone(cz::heap_allocator()));
 }
 
 void close_rc_file(size_t* count, cz::File_Descriptor file) {

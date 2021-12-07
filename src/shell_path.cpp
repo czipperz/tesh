@@ -32,7 +32,7 @@ static bool is_executable_ext(cz::Str path_ext, cz::Allocator allocator, cz::Str
 
 ///////////////////////////////////////////////////////////////////////////////
 
-bool find_in_path(Shell_State* shell,
+bool find_in_path(Shell_Local* local,
                   cz::Str abbreviation,
                   cz::Allocator allocator,
                   cz::String* full_path) {
@@ -40,7 +40,7 @@ bool find_in_path(Shell_State* shell,
 
 #ifdef _WIN32
     cz::Str path_ext = ".EXE";
-    (void)get_var(shell, "PATHEXT", &path_ext);
+    (void)get_var(local, "PATHEXT", &path_ext);
 #endif
 
     // Absolute paths are only looked up verbatim.
@@ -59,7 +59,7 @@ bool find_in_path(Shell_State* shell,
     // Relative paths are only looked up relative to the working directory.
     if (is_relative(abbreviation)) {
         // First try just running the exact path.
-        cz::Str working_directory = get_wd(shell);
+        cz::Str working_directory = get_wd(local);
         full_path->len = 0;
         full_path->reserve(allocator, working_directory.len + abbreviation.len + 2);
         full_path->append(working_directory);
@@ -74,7 +74,7 @@ bool find_in_path(Shell_State* shell,
     }
 
     cz::Str path;
-    if (!get_var(shell, "PATH", &path))
+    if (!get_var(local, "PATH", &path))
         return false;
 
     while (1) {

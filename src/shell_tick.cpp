@@ -18,6 +18,7 @@
 static void read_tty_output(Backlog_State* backlog, Pseudo_Terminal* tty, bool cap_read_calls);
 
 static void tick_pipeline(Shell_State* shell,
+                          Shell_Local* local,
                           Render_State* rend,
                           cz::Slice<Backlog_State*> backlogs,
                           Backlog_State* backlog,
@@ -26,6 +27,7 @@ static void tick_pipeline(Shell_State* shell,
                           bool* force_quit);
 
 static bool tick_program(Shell_State* shell,
+                         Shell_Local* local,
                          Render_State* rend,
                          cz::Slice<Backlog_State*> backlogs,
                          Backlog_State* backlog,
@@ -35,7 +37,7 @@ static bool tick_program(Shell_State* shell,
                          int* exit_code,
                          bool* force_quit);
 
-static void standardize_arg(const Shell_State* shell,
+static void standardize_arg(const Shell_Local* local,
                             cz::Str arg,
                             cz::Allocator allocator,
                             cz::String* new_wd,
@@ -53,6 +55,7 @@ void clear_screen(Render_State* rend, Shell_State* shell, cz::Slice<Backlog_Stat
 ///////////////////////////////////////////////////////////////////////////////
 
 bool tick_running_node(Shell_State* shell,
+                       Shell_Local* local,
                        cz::Slice<Backlog_State*> backlogs,
                        Render_State* rend,
                        Running_Node* node,
@@ -62,14 +65,14 @@ bool tick_running_node(Shell_State* shell,
     size_t starting_length = backlog->length;
     for (size_t b = 0; b < node->bg.len; ++b) {
         Running_Pipeline* line = &node->bg[b];
-        tick_pipeline(shell, rend, backlogs, backlog, line, tty, force_quit);
+        tick_pipeline(shell, &node->local, rend, backlogs, backlog, line, tty, force_quit);
         if (line->programs.len == 0) {
             finish_line(shell, *tty, node, backlog, line, /*background=*/true);
             --b;
         }
     }
 
-    tick_pipeline(shell, rend, backlogs, backlog, &node->fg, tty, force_quit);
+    tick_pipeline(shell, &node->local, rend, backlogs, backlog, &node->fg, tty, force_quit);
 
     if (*force_quit)
         return true;
@@ -93,6 +96,7 @@ bool tick_running_node(Shell_State* shell,
 ///////////////////////////////////////////////////////////////////////////////
 
 static void tick_pipeline(Shell_State* shell,
+                          Shell_Local* local,
                           Render_State* rend,
                           cz::Slice<Backlog_State*> backlogs,
                           Backlog_State* backlog,
@@ -103,7 +107,7 @@ static void tick_pipeline(Shell_State* shell,
     for (size_t p = 0; p < pipeline->programs.len; ++p) {
         Running_Program* program = &pipeline->programs[p];
         int exit_code = 1;
-        if (tick_program(shell, rend, backlogs, backlog, allocator, program, tty, &exit_code,
+        if (tick_program(shell, local, rend, backlogs, backlog, allocator, program, tty, &exit_code,
                          force_quit)) {
             if (!pipeline->has_exit_code && p + 1 == pipeline->programs.len) {
                 pipeline->has_exit_code = true;
@@ -157,6 +161,7 @@ static void read_tty_output(Backlog_State* backlog, Pseudo_Terminal* tty, bool c
 ///////////////////////////////////////////////////////////////////////////////
 
 static bool tick_program(Shell_State* shell,
+                         Shell_Local* local,
                          Render_State* rend,
                          cz::Slice<Backlog_State*> backlogs,
                          Backlog_State* backlog,
@@ -174,7 +179,7 @@ static bool tick_program(Shell_State* shell,
     case Running_Program::SUB: {
         Running_Node* node = &program->v.sub;
         while (1) {
-            if (!tick_running_node(shell, backlogs, rend, node, tty, backlog, force_quit)) {
+            if (!tick_running_node(shell, &node->local, backlogs, rend, node, tty, backlog, force_quit)) {
                 break;  // TODO rate limit
             }
         }
@@ -263,7 +268,7 @@ static bool tick_program(Shell_State* shell,
                     st.file = builtin.in;
                 } else {
                     cz::String path = {};
-                    cz::path::make_absolute(arg, get_wd(shell), temp_allocator, &path);
+                    cz::path::make_absolute(arg, get_wd(local), temp_allocator, &path);
                     st.file.polling = false;
                     if (!st.file.file.open(path.buffer)) {
                         builtin.exit_code = 1;
@@ -316,7 +321,7 @@ static bool tick_program(Shell_State* shell,
 
     case Running_Program::PWD: {
         auto& builtin = program->v.builtin;
-        (void)builtin.out.write(cz::format(temp_allocator, get_wd(shell), '\n'));
+        (void)builtin.out.write(cz::format(temp_allocator, get_wd(local), '\n'));
         goto finish_builtin;
     } break;
 
@@ -326,14 +331,14 @@ static bool tick_program(Shell_State* shell,
         cz::Str arg;
         if (builtin.args.len >= 2)
             arg = builtin.args[1];
-        else if (!get_var(shell, "HOME", &arg)) {
+        else if (!get_var(local, "HOME", &arg)) {
             builtin.exit_code = 1;
             (void)builtin.err.write("cd: No home directory.\n");
             goto finish_builtin;
         }
-        standardize_arg(shell, arg, temp_allocator, &new_wd, /*make_absolute=*/true);
+        standardize_arg(local, arg, temp_allocator, &new_wd, /*make_absolute=*/true);
         if (cz::file::is_directory(new_wd.buffer)) {
-            set_wd(shell, new_wd);
+            set_wd(local, new_wd);
         } else {
             builtin.exit_code = 1;
             (void)builtin.err.write("cd: ");
@@ -348,14 +353,14 @@ static bool tick_program(Shell_State* shell,
         cz::String temp = {};
         CZ_DEFER(temp.drop(temp_allocator));
         if (builtin.args.len == 1) {
-            int result = run_ls(builtin.out, &temp, get_wd(shell), ".");
+            int result = run_ls(builtin.out, &temp, get_wd(local), ".");
             if (result < 0) {
                 builtin.exit_code = 1;
                 (void)builtin.err.write("ls: error\n");
             }
         } else {
             for (size_t i = 1; i < builtin.args.len; ++i) {
-                int result = run_ls(builtin.out, &temp, get_wd(shell), builtin.args[i]);
+                int result = run_ls(builtin.out, &temp, get_wd(local), builtin.args[i]);
                 if (result < 0) {
                     builtin.exit_code = 1;
                     (void)builtin.err.write("ls: error\n");
@@ -380,20 +385,20 @@ static bool tick_program(Shell_State* shell,
 
             cz::Str key, value;
             if (arg.split_excluding('=', &key, &value)) {
-                set_alias(shell, key, value);
+                set_alias(local, key, value);
             } else {
                 size_t i = 0;
-                for (; i < shell->alias_names.len; ++i) {
-                    if (arg == shell->alias_names[i]) {
+                for (; i < local->alias_names.len; ++i) {
+                    if (arg == local->alias_names[i]) {
                         (void)builtin.out.write("alias ");
-                        (void)builtin.out.write(shell->alias_names[i]);
+                        (void)builtin.out.write(local->alias_names[i]);
                         (void)builtin.out.write("=");
-                        (void)builtin.out.write(shell->alias_values[i]);
+                        (void)builtin.out.write(local->alias_values[i]);
                         (void)builtin.out.write("\n");
                         break;
                     }
                 }
-                if (i == shell->alias_names.len) {
+                if (i == local->alias_names.len) {
                     builtin.exit_code = 1;
                     (void)builtin.err.write(
                         cz::format(temp_allocator, "alias: ", arg, ": unbound alias\n"));
@@ -433,7 +438,7 @@ static bool tick_program(Shell_State* shell,
     case Running_Program::VARIABLES: {
         auto& st = program->v.builtin.st.variables;
         for (size_t i = 0; i < st.names.len; ++i) {
-            set_var(shell, st.names[i], st.values[i]);
+            set_var(local, st.names[i], st.values[i]);
         }
         goto finish_builtin;
     } break;
@@ -444,7 +449,7 @@ static bool tick_program(Shell_State* shell,
         for (size_t i = 1; i < builtin.args.len; ++i) {
             cz::Str arg = builtin.args[i];
             path.len = 0;
-            if (find_in_path(shell, arg, temp_allocator, &path)) {
+            if (find_in_path(local, arg, temp_allocator, &path)) {
                 path.push('\n');
                 (void)builtin.out.write(path);
             } else {
@@ -476,7 +481,7 @@ static bool tick_program(Shell_State* shell,
                     (void)builtin.err.write("\n");
                     continue;
                 }
-                set_var(shell, key, value);
+                set_var(local, key, value);
             }
             make_env_var(shell, key);
         }
@@ -498,7 +503,7 @@ static bool tick_program(Shell_State* shell,
         }
 
         cz::String path = {};
-        cz::path::make_absolute(builtin.args[1], get_wd(shell), temp_allocator, &path);
+        cz::path::make_absolute(builtin.args[1], get_wd(local), temp_allocator, &path);
         cz::Input_File file;
         if (!file.open(path.buffer)) {
             builtin.exit_code = 1;
@@ -576,13 +581,13 @@ finish_builtin:
 
 ///////////////////////////////////////////////////////////////////////////////
 
-static void standardize_arg(const Shell_State* shell,
+static void standardize_arg(const Shell_Local* local,
                             cz::Str arg,
                             cz::Allocator allocator,
                             cz::String* new_wd,
                             bool make_absolute) {
     if (make_absolute) {
-        cz::path::make_absolute(arg, get_wd(shell), allocator, new_wd);
+        cz::path::make_absolute(arg, get_wd(local), allocator, new_wd);
     } else {
         new_wd->reserve_exact(allocator, arg.len);
         new_wd->append(arg);

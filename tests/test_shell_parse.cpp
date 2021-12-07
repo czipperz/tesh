@@ -73,7 +73,7 @@ static void append_node(cz::Allocator allocator,
 
 static Error parse_and_emit(const Shell_State* shell, cz::String* string, cz::Str text) {
     Shell_Node root = {};
-    Error error = parse_script(shell, cz::heap_allocator(), &root, text);
+    Error error = parse_script(cz::heap_allocator(), &root, text);
     if (error == Error_Success)
         append_node(cz::heap_allocator(), string, &root, 0);
     return error;
@@ -81,7 +81,7 @@ static Error parse_and_emit(const Shell_State* shell, cz::String* string, cz::St
 
 static cz::Str expand(const Shell_State* shell, cz::Str arg) {
     cz::Vector<cz::Str> vec = {};
-    expand_arg_split(shell, arg, cz::heap_allocator(), &vec);
+    expand_arg_split(&shell->local, arg, cz::heap_allocator(), &vec);
 
     cz::String string = {};
     for (size_t i = 0; i < vec.len; ++i) {
@@ -287,13 +287,13 @@ program:\n\
 
 TEST_CASE("parse_script variable expand simple") {
     Shell_State shell = {};
-    set_var(&shell, "var", "$value");
+    set_var(&shell.local, "var", "$value");
     REQUIRE(expand(&shell, "$var$var") == "arg0: $value$value\n");
 }
 
 TEST_CASE("parse_script variable expand inside quotes") {
     Shell_State shell = {};
-    set_var(&shell, "var", "$value");
+    set_var(&shell.local, "var", "$value");
     REQUIRE(expand(&shell, "\"$var$var\"") == "arg0: $value$value\n");
 }
 
@@ -304,7 +304,7 @@ TEST_CASE("parse_script 'echo $hi' hi is undefined") {
 
 TEST_CASE("parse_script multi word variable expanded") {
     Shell_State shell = {};
-    set_var(&shell, "var", "a b");
+    set_var(&shell.local, "var", "a b");
     REQUIRE(expand(&shell, "$var") == "arg0: a\narg1: b\n");
 }
 
@@ -453,7 +453,7 @@ TEST_CASE("parse_script tilde not expanded after start of word") {
 
 TEST_CASE("parse_script tilde expanded simple") {
     Shell_State shell = {};
-    set_var(&shell, "HOME", "/path/to/my/home");
+    set_var(&shell.local, "HOME", "/path/to/my/home");
     CHECK(expand(&shell, "~") == "arg0: /path/to/my/home\n");
     CHECK(expand(&shell, "~/") == "arg0: /path/to/my/home/\n");
     CHECK(expand(&shell, "~/abc/123") == "arg0: /path/to/my/home/abc/123\n");
@@ -544,7 +544,7 @@ TEST_CASE("parse_script alias simple") {
 TEST_CASE("parse_script alias not expanded when value of variable") {
     Shell_State shell = {};
     set_alias(&shell, "aa", "bb");
-    set_var(&shell, "x", "aa");
+    set_var(&shell.local, "x", "aa");
     Parse_Script script = {};
     Error error = tokenize(&shell, cz::heap_allocator(), &script, "$x cc");
     REQUIRE(error == Error_Success);
@@ -577,7 +577,7 @@ TEST_CASE("parse_script alias not expanded when quoted") {
 
 TEST_CASE("parse_script expand ${x}") {
     Shell_State shell = {};
-    set_var(&shell, "aa", "bb");
+    set_var(&shell.local, "aa", "bb");
     cz::String string = {};
     Error error = parse_and_emit(&shell, &string, "${aa} cc");
     REQUIRE(error == Error_Success);

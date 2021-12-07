@@ -34,6 +34,7 @@ static Error start_execute_pipeline(Shell_State* shell,
                                     bool bind_stdin);
 
 static Error run_program(Shell_State* shell,
+                         Shell_Local* local,
                          cz::Allocator allocator,
                          const Pseudo_Terminal& tty,
                          Running_Program* program,
@@ -338,21 +339,21 @@ static Error start_execute_pipeline(Shell_State* shell,
         // Expand file arguments.
         if (parse_program.in_file.buffer) {
             cz::String file = {};
-            expand_arg_single(shell, parse_program.in_file, allocator, &file);
+            expand_arg_single(&node->local, parse_program.in_file, allocator, &file);
             // Reallocate to ensure the file isn't null and also don't waste space.
             file.realloc_null_terminate(allocator);
             parse_program.in_file = file;
         }
         if (parse_program.out_file.buffer) {
             cz::String file = {};
-            expand_arg_single(shell, parse_program.out_file, allocator, &file);
+            expand_arg_single(&node->local, parse_program.out_file, allocator, &file);
             // Reallocate to ensure the file isn't null and also don't waste space.
             file.realloc_null_terminate(allocator);
             parse_program.out_file = file;
         }
         if (parse_program.err_file.buffer) {
             cz::String file = {};
-            expand_arg_single(shell, parse_program.err_file, allocator, &file);
+            expand_arg_single(&node->local, parse_program.err_file, allocator, &file);
             // Reallocate to ensure the file isn't null and also don't waste space.
             file.realloc_null_terminate(allocator);
             parse_program.err_file = file;
@@ -362,7 +363,8 @@ static Error start_execute_pipeline(Shell_State* shell,
         if (parse_program.in_file.buffer) {
             stdio.in_type = File_Type_File;
             path.len = 0;
-            cz::path::make_absolute(parse_program.in_file, get_wd(shell), temp_allocator, &path);
+            cz::path::make_absolute(parse_program.in_file, get_wd(&node->local), temp_allocator,
+                                    &path);
             if (!stdio.in.open(path.buffer))
                 return Error_InvalidPath;
             stdio.in_count = allocator.alloc<size_t>();
@@ -380,7 +382,8 @@ static Error start_execute_pipeline(Shell_State* shell,
         if (parse_program.out_file.buffer) {
             stdio.out_type = File_Type_File;
             path.len = 0;
-            cz::path::make_absolute(parse_program.out_file, get_wd(shell), temp_allocator, &path);
+            cz::path::make_absolute(parse_program.out_file, get_wd(&node->local), temp_allocator,
+                                    &path);
             if (!stdio.out.open(path.buffer))
                 return Error_InvalidPath;
             path.len = 0;
@@ -393,7 +396,8 @@ static Error start_execute_pipeline(Shell_State* shell,
         if (parse_program.err_file.buffer) {
             stdio.err_type = File_Type_File;
             path.len = 0;
-            cz::path::make_absolute(parse_program.err_file, get_wd(shell), temp_allocator, &path);
+            cz::path::make_absolute(parse_program.err_file, get_wd(&node->local), temp_allocator,
+                                    &path);
             if (!stdio.err.open(path.buffer))
                 return Error_InvalidPath;
             path.len = 0;
@@ -428,8 +432,8 @@ static Error start_execute_pipeline(Shell_State* shell,
 
         Running_Program running_program = {};
 
-        Error error =
-            run_program(shell, allocator, tty, &running_program, parse_program, stdio, backlog);
+        Error error = run_program(shell, &node->local, allocator, tty, &running_program,
+                                  parse_program, stdio, backlog);
         if (error != Error_Success)
             return error;
 
@@ -446,11 +450,13 @@ static Error start_execute_pipeline(Shell_State* shell,
 ///////////////////////////////////////////////////////////////////////////////
 
 static void generate_environment(void* out,
-                                 Shell_State* shell,
+                                 const Shell_State* shell,
+                                 const Shell_Local* local,
                                  cz::Slice<const cz::Str> variable_names,
                                  cz::Slice<const cz::Str> variable_values);
 
 static Error run_program(Shell_State* shell,
+                         Shell_Local* local,
                          cz::Allocator allocator,
                          const Pseudo_Terminal& tty,
                          Running_Program* program,
@@ -462,7 +468,7 @@ static Error run_program(Shell_State* shell,
         variable_values.reserve(allocator, parse.variable_values.len);
         for (size_t i = 0; i < parse.variable_values.len; ++i) {
             cz::String value = {};
-            expand_arg_single(shell, parse.variable_values[i], allocator, &value);
+            expand_arg_single(local, parse.variable_values[i], allocator, &value);
             variable_values.push(value);
         }
         parse.variable_values = variable_values;
@@ -478,7 +484,7 @@ static Error run_program(Shell_State* shell,
     cz::Vector<cz::Str> args = {};
     CZ_DEFER(args.drop(cz::heap_allocator()));
     for (size_t i = 0; i < parse.v.args.len; ++i) {
-        expand_arg_split(shell, parse.v.args[i], allocator, &args);
+        expand_arg_split(local, parse.v.args[i], allocator, &args);
     }
     parse.v.args = args;
 
@@ -523,12 +529,12 @@ static Error run_program(Shell_State* shell,
         }
 
         program->v.builtin.args = args.clone(allocator);
-        program->v.builtin.working_directory = get_wd(shell).clone_null_terminate(allocator);
+        program->v.builtin.working_directory = get_wd(local).clone_null_terminate(allocator);
         return Error_Success;
     }
 
     cz::String full_path = {};
-    if (!find_in_path(shell, args[0], allocator, &full_path)) {
+    if (!find_in_path(local, args[0], allocator, &full_path)) {
         return Error_InvalidProgram;
     }
     args[0] = full_path;
@@ -581,8 +587,8 @@ static Error run_program(Shell_State* shell,
     }
 #endif
 
-    options.working_directory = get_wd(shell).buffer;
-    generate_environment(&options.environment, shell, parse.variable_names, parse.variable_values);
+    options.working_directory = get_wd(local).buffer;
+    generate_environment(&options.environment, shell, local, parse.variable_names, parse.variable_values);
 
     program->v.process = {};
     bool result = program->v.process.launch_program(args, options);
@@ -623,7 +629,8 @@ static void push_environment(cz::Vector<char*>* table, cz::Str key, cz::Str valu
 #endif
 
 static void generate_environment(void* out_arg,
-                                 Shell_State* shell,
+                                 const Shell_State* shell,
+                                 const Shell_Local* local,
                                  cz::Slice<const cz::Str> variable_names,
                                  cz::Slice<const cz::Str> variable_values) {
 #ifdef _WIN32
@@ -654,7 +661,7 @@ static void generate_environment(void* out_arg,
                 goto skip2;
         }
         cz::Str value;
-        if (!get_var(shell, key, &value))
+        if (!get_var(local, key, &value))
             value = {};
         push_environment(&table, key, value);
     skip2:;
