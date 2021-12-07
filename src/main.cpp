@@ -588,7 +588,7 @@ static bool read_process_data(Shell_State* shell,
                               force_quit)) {
             if (*force_quit)
                 return true;
-            --i;
+            --i; // TODO rate limit
         }
 
         if (script->root.fg_finished && script->root.bg.len == 0) {

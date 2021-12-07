@@ -172,7 +172,15 @@ static bool tick_program(Shell_State* shell,
         return program->v.process.try_join(exit_code);
 
     case Running_Program::SUB: {
-        if (tick_running_node(shell, backlogs, rend, &program->v.sub, tty, backlog, force_quit)) {
+        Running_Node* node = &program->v.sub;
+        while (1) {
+            if (!tick_running_node(shell, backlogs, rend, node, tty, backlog, force_quit)) {
+                break;  // TODO rate limit
+            }
+        }
+
+        // TODO merge bg jobs up???
+        if (node->fg_finished && node->bg.len == 0) {
             *exit_code = program->v.sub.fg.last_exit_code;
             return true;
         }
