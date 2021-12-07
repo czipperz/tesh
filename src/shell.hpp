@@ -291,11 +291,10 @@ bool finish_line(Shell_State* shell,
 
 ///////////////////////////////////////////////////////////////////////////////
 
-bool tick_program(Shell_State* shell,
-                  Render_State* rend,
-                  cz::Slice<Backlog_State*> backlogs,
-                  Backlog_State* backlog,
-                  Running_Script* script,
-                  Running_Program* program,
-                  int* exit_code,
-                  bool* force_quit);
+bool tick_running_node(Shell_State* shell,
+                       cz::Slice<Backlog_State*> backlogs,
+                       Render_State* rend,
+                       Running_Node* node,
+                       Pseudo_Terminal* tty,
+                       Backlog_State* backlog,
+                       bool* force_quit);

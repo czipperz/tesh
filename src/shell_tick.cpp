@@ -11,6 +11,28 @@
 #include <cz/path.hpp>
 #include "global.hpp"
 
+///////////////////////////////////////////////////////////////////////////////
+// Forward declarations
+///////////////////////////////////////////////////////////////////////////////
+
+static void read_tty_output(Backlog_State* backlog, Pseudo_Terminal* tty, bool cap_read_calls);
+
+static void tick_pipeline(Shell_State* shell,
+                          Render_State* rend,
+                          cz::Slice<Backlog_State*> backlogs,
+                          Backlog_State* backlog,
+                          Running_Pipeline* pipeline,
+                          bool* force_quit);
+
+static bool tick_program(Shell_State* shell,
+                         Render_State* rend,
+                         cz::Slice<Backlog_State*> backlogs,
+                         Backlog_State* backlog,
+                         cz::Allocator allocator,
+                         Running_Program* program,
+                         int* exit_code,
+                         bool* force_quit);
+
 static void standardize_arg(const Shell_State* shell,
                             cz::Str arg,
                             cz::Allocator allocator,
@@ -25,15 +47,120 @@ static int run_ls(Process_Output out,
 void clear_screen(Render_State* rend, Shell_State* shell, cz::Slice<Backlog_State*> backlogs);
 
 ///////////////////////////////////////////////////////////////////////////////
+// Tick running node
+///////////////////////////////////////////////////////////////////////////////
 
-bool tick_program(Shell_State* shell,
-                  Render_State* rend,
-                  cz::Slice<Backlog_State*> backlogs,
-                  Backlog_State* backlog,
-                  Running_Script* script,
-                  Running_Program* program,
-                  int* exit_code,
-                  bool* force_quit) {
+bool tick_running_node(Shell_State* shell,
+                       cz::Slice<Backlog_State*> backlogs,
+                       Render_State* rend,
+                       Running_Node* node,
+                       Pseudo_Terminal* tty,
+                       Backlog_State* backlog,
+                       bool* force_quit) {
+    size_t starting_length = backlog->length;
+    for (size_t b = 0; b < node->bg.len; ++b) {
+        Running_Pipeline* line = &node->bg[b];
+        tick_pipeline(shell, rend, backlogs, backlog, line, force_quit);
+        if (line->programs.len == 0) {
+            finish_line(shell, *tty, node, backlog, line, /*background=*/true);
+            --b;
+        }
+    }
+
+    tick_pipeline(shell, rend, backlogs, backlog, &node->fg, force_quit);
+
+    if (*force_quit)
+        return true;
+
+    read_tty_output(backlog, tty, /*cap_read_calls=*/true);
+
+    if (node->fg.programs.len == 0 && !node->fg_finished) {
+        bool started = finish_line(shell, *tty, node, backlog, &node->fg,
+                                   /*background=*/false);
+        if (!started)
+            node->fg_finished = true;
+
+        // Rerun to prevent long scripts from only doing one command per frame.
+        // TODO: rate limit to prevent big scripts (with all builtins) from hanging.
+        return true;
+    }
+
+    return false;
+}
+
+///////////////////////////////////////////////////////////////////////////////
+
+static void tick_pipeline(Shell_State* shell,
+                          Render_State* rend,
+                          cz::Slice<Backlog_State*> backlogs,
+                          Backlog_State* backlog,
+                          Running_Pipeline* pipeline,
+                          bool* force_quit) {
+    cz::Allocator allocator = pipeline->arena.allocator();
+    for (size_t p = 0; p < pipeline->programs.len; ++p) {
+        Running_Program* program = &pipeline->programs[p];
+        int exit_code = 1;
+        if (tick_program(shell, rend, backlogs, backlog, allocator, program, &exit_code,
+                         force_quit)) {
+            if (!pipeline->has_exit_code && p + 1 == pipeline->programs.len) {
+                pipeline->has_exit_code = true;
+                pipeline->last_exit_code = exit_code;
+            }
+            backlog->end = std::chrono::high_resolution_clock::now();
+            pipeline->programs.remove(p);
+            --p;
+            if (pipeline->programs.len == 0)
+                return;
+        }
+        if (*force_quit)
+            return;
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////
+
+static void read_tty_output(Backlog_State* backlog, Pseudo_Terminal* tty, bool cap_read_calls) {
+    static char buffer[4096];
+
+#ifdef _WIN32
+    cz::Input_File parent_out = tty->out;
+#else
+    cz::Input_File parent_out;
+    parent_out.handle = tty->parent_bi;
+#endif
+    if (parent_out.is_open()) {
+        int64_t result = 0;
+        for (int rounds = 0;; ++rounds) {
+            if (cap_read_calls && rounds == 1024)
+                break;
+
+            // Even strip carriage returns on linux because
+            // some programs (ex. 'git status') use CRLF.
+            result =
+                parent_out.read_strip_carriage_returns(buffer, sizeof(buffer), &tty->out_carry);
+            if (result <= 0)
+                break;
+
+            // TODO: allow expanding max dynamically (don't close script->out here)
+            result = append_text(backlog, {buffer, (size_t)result});
+            if (result <= 0)
+                break;
+        }
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// Tick program
+///////////////////////////////////////////////////////////////////////////////
+
+static bool tick_program(Shell_State* shell,
+                         Render_State* rend,
+                         cz::Slice<Backlog_State*> backlogs,
+                         Backlog_State* backlog,
+                         cz::Allocator allocator,
+                         Running_Program* program,
+                         int* exit_code,
+                         bool* force_quit) {
     ZoneScoped;
 
     switch (program->type) {
@@ -366,12 +493,12 @@ bool tick_program(Shell_State* shell,
         CZ_DEFER(file.close());
 
         cz::String contents = {};
-        read_to_string(file, script->arena.allocator(), &contents);
+        read_to_string(file, allocator, &contents);
 
 #if 0
         Parse_Script subscript = {};
         Error error =
-            parse_script(shell, script->arena.allocator(), &subscript, line->on, contents);
+            parse_script(shell, allocator, &subscript, line->on, contents);
         if (error != Error_Success) {
             builtin.exit_code = 1;
             (void)builtin.err.write(
@@ -379,7 +506,7 @@ bool tick_program(Shell_State* shell,
             goto finish_builtin;
         }
 
-        Parse_Line* first = script->arena.allocator().clone(subscript.first);
+        Parse_Line* first = allocator.clone(subscript.first);
         CZ_ASSERT(first);
         line->on = {};
         line->on.success = first;
