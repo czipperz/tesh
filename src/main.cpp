@@ -600,14 +600,14 @@ static void tick_pipeline(Shell_State* shell,
     }
 }
 
-static void read_tty_output(Backlog_State* backlog, Running_Script* script, bool cap_read_calls) {
+static void read_tty_output(Backlog_State* backlog, Pseudo_Terminal* tty, bool cap_read_calls) {
     static char buffer[4096];
 
 #ifdef _WIN32
-    cz::Input_File parent_out = script->tty.out;
+    cz::Input_File parent_out = tty->out;
 #else
     cz::Input_File parent_out;
-    parent_out.handle = script->tty.parent_bi;
+    parent_out.handle = tty->parent_bi;
 #endif
     if (parent_out.is_open()) {
         int64_t result = 0;
@@ -617,8 +617,8 @@ static void read_tty_output(Backlog_State* backlog, Running_Script* script, bool
 
             // Even strip carriage returns on linux because
             // some programs (ex. 'git status') use CRLF.
-            result = parent_out.read_strip_carriage_returns(buffer, sizeof(buffer),
-                                                            &script->tty.out_carry);
+            result =
+                parent_out.read_strip_carriage_returns(buffer, sizeof(buffer), &tty->out_carry);
             if (result <= 0)
                 break;
 
@@ -644,7 +644,7 @@ static bool read_process_data(Shell_State* shell,
             Running_Pipeline* line = &script->root.bg[b];
             tick_pipeline(shell, rend, backlogs, backlog, script, line, force_quit);
             if (line->programs.len == 0) {
-                finish_line(shell, script, &script->root, backlog, line, /*background=*/true);
+                finish_line(shell, script->tty, &script->root, backlog, line, /*background=*/true);
                 --b;
             }
         }
@@ -654,11 +654,11 @@ static bool read_process_data(Shell_State* shell,
         if (*force_quit)
             return true;
 
-        read_tty_output(backlog, script, /*cap_read_calls=*/true);
+        read_tty_output(backlog, &script->tty, /*cap_read_calls=*/true);
 
         if (script->root.fg.programs.len == 0 && !script->root.fg_finished) {
-            bool started =
-                finish_line(shell, script, &script->root, backlog, &script->root.fg, /*background=*/false);
+            bool started = finish_line(shell, script->tty, &script->root, backlog, &script->root.fg,
+                                       /*background=*/false);
             if (started) {
                 // Rerun to prevent long scripts from only doing one command per frame.
                 // TODO: rate limit to prevent big scripts (with all builtins) from hanging.

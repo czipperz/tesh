@@ -283,7 +283,7 @@ Error start_execute_script(Shell_State* shell,
                            Shell_Node* root);
 
 bool finish_line(Shell_State* shell,
-                 Running_Script* script,
+                 const Pseudo_Terminal& tty,
                  Running_Node* node,
                  Backlog_State* backlog,
                  Running_Pipeline* line,
