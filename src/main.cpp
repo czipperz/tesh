@@ -1109,6 +1109,10 @@ static bool handle_prompt_manipulation_commands(Shell_State* shell,
         size_t end = prompt->cursor;
         prompt->cursor = 0;
         prompt->text.remove_range(prompt->cursor, end);
+    } else if (mod == KMOD_SHIFT && key == SDLK_RETURN) {
+        prompt->text.reserve(cz::heap_allocator(), 1);
+        prompt->text.insert(prompt->cursor, '\n');
+        prompt->cursor++;
     } else if (mod == KMOD_ALT && key == SDLK_CARET) {
         const char* ptr = prompt->text.slice_start(prompt->cursor).find('\n');
         if (ptr)
