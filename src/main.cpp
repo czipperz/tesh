@@ -1631,11 +1631,15 @@ static bool write_selected_backlog_to_file(Shell_State* shell,
             int64_t result = file.write(buffer);
             if (result != buffer.len)
                 return false;
+            if (backlog->get(backlog->length - 1) != '\n')
+                file.write("\n");
         }
     } else {
         int64_t result = file.write(prompt->text);
         if (result != prompt->text.len)
             return false;
+        if (prompt->text.len > 0 && prompt->text.last() != '\n')
+            file.write("\n");
     }
 
     return true;
