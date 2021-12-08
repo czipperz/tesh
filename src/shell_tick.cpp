@@ -385,7 +385,18 @@ static bool tick_program(Shell_State* shell,
 
             cz::Str key, value;
             if (arg.split_excluding('=', &key, &value)) {
-                set_alias(local, key, value);
+                // TODO: not permanent but close...
+                cz::Str script = cz::format(permanent_allocator, value, " \"$@\"");
+
+                Shell_Node* node = permanent_allocator.alloc<Shell_Node>();
+                *node = {};
+                Error error = parse_script(permanent_allocator, node, script);
+                if (error != Error_Success) {
+                    (void)builtin.err.write("alias: Failed to parse alias value\n");
+                    continue;
+                }
+
+                set_alias(local, key, node);
             } else {
                 size_t i = 0;
                 for (; i < local->alias_names.len; ++i) {
@@ -393,7 +404,8 @@ static bool tick_program(Shell_State* shell,
                         (void)builtin.out.write("alias ");
                         (void)builtin.out.write(local->alias_names[i]);
                         (void)builtin.out.write("=");
-                        (void)builtin.out.write(local->alias_values[i]);
+                        CZ_PANIC("todo");
+                        // (void)builtin.out.write(local->alias_values[i]);
                         (void)builtin.out.write("\n");
                         break;
                     }

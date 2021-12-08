@@ -66,7 +66,7 @@ void make_env_var(Shell_State* shell, cz::Str key) {
     shell->exported_vars.push(key.clone(cz::heap_allocator()));
 }
 
-bool get_alias(const Shell_Local* local, cz::Str key, cz::Str* value) {
+bool get_alias(const Shell_Local* local, cz::Str key, Shell_Node** value) {
     for (; local; local = local->parent) {
         for (size_t i = 0; i < local->alias_names.len; ++i) {
             if (local->alias_names[i] == key) {
@@ -78,12 +78,12 @@ bool get_alias(const Shell_Local* local, cz::Str key, cz::Str* value) {
     return false;
 }
 
-void set_alias(Shell_Local* local, cz::Str key, cz::Str value) {
+void set_alias(Shell_Local* local, cz::Str key, Shell_Node* node) {
     for (size_t i = 0; i < local->alias_names.len; ++i) {
         if (local->alias_names[i] == key) {
-            cz::Str* slot = &local->alias_values[i];
-            cz::heap_allocator().dealloc({(void*)slot->buffer, slot->len});
-            *slot = value.clone(cz::heap_allocator());
+            // TODO: deallocate old node.
+            local->alias_values[i] = node;
+            return;
         }
     }
 
@@ -91,7 +91,7 @@ void set_alias(Shell_Local* local, cz::Str key, cz::Str value) {
     local->alias_values.reserve(cz::heap_allocator(), 1);
     // TODO: garbage collect / ref count?
     local->alias_names.push(key.clone(cz::heap_allocator()));
-    local->alias_values.push(value.clone(cz::heap_allocator()));
+    local->alias_values.push(node);
 }
 
 void close_rc_file(size_t* count, cz::File_Descriptor file) {

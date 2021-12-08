@@ -15,6 +15,7 @@ struct Running_Pipeline;
 struct Running_Script;
 struct Parse_Line;
 struct Pseudo_Terminal;
+struct Shell_Node;
 
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -25,7 +26,9 @@ struct Shell_Local {
     cz::Vector<cz::String> variable_values;
 
     cz::Vector<cz::Str> alias_names;
-    cz::Vector<cz::Str> alias_values;
+    cz::Vector<Shell_Node*> alias_values;
+
+    cz::Vector<cz::Str> args;
 };
 
 struct Shell_State {
@@ -46,8 +49,8 @@ void set_var(Shell_Local* local, cz::Str key, cz::Str value);
 void make_env_var(Shell_State* shell, cz::Str key);
 cz::Str get_wd(const Shell_Local* local);
 void set_wd(Shell_Local* local, cz::Str value);
-bool get_alias(const Shell_Local* local, cz::Str key, cz::Str* value);
-void set_alias(Shell_Local* local, cz::Str key, cz::Str value);
+bool get_alias(const Shell_Local* local, cz::Str key, Shell_Node** value);
+void set_alias(Shell_Local* local, cz::Str key, Shell_Node* node);
 
 void cleanup_processes(Shell_State* shell);
 void recycle_process(Shell_State* shell, Running_Script* script);
@@ -148,7 +151,6 @@ struct Stdio_State {
 
 struct Running_Node;
 struct Running_Program;
-struct Shell_Node;
 
 struct Running_Pipeline {
     cz::Buffer_Array arena;

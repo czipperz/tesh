@@ -3,6 +3,8 @@
 #include <cz/defer.hpp>
 #include <cz/heap.hpp>
 
+#include "global.hpp"
+
 ///////////////////////////////////////////////////////////////////////////////
 // Forward declarations
 ///////////////////////////////////////////////////////////////////////////////
@@ -310,6 +312,10 @@ static Error advance_through_dollar_sign(cz::Str text, size_t* index) {
             // TODO handle cases like ${a:b}
             return Error_Parse_UnterminatedVariable;
         }
+        ++*index;
+    } break;
+
+    case '@': {
         ++*index;
     } break;
 
@@ -842,6 +848,16 @@ static cz::Str deref_var_at_point(const Shell_Local* local, cz::Str text, size_t
         get_var(local, text.slice(start, *index), &value);
         ++*index;
         return value;
+    } break;
+
+    case '@': {
+        ++*index;
+        cz::String string = {};
+        for (size_t i = 1; i < local->args.len; ++i) {
+            string.reserve(temp_allocator, local->args[i].len);
+            string.append(local->args[i]);
+        }
+        return string;
     } break;
 
     default:

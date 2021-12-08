@@ -490,12 +490,29 @@ static Error run_program(Shell_State* shell,
         return start_execute_node(shell, tty, backlog, &program->v.sub, parse.v.sub);
     }
 
+    // Lookup aliases before expanding.  Thus the user can type 'alias' and get around the alias.
+    Shell_Node* alias_value;
+    bool is_alias = (parse.v.args.len > 0 && get_alias(local, parse.v.args[0], &alias_value));
+
+    // Expand arguments.
     cz::Vector<cz::Str> args = {};
     CZ_DEFER(args.drop(cz::heap_allocator()));
     for (size_t i = 0; i < parse.v.args.len; ++i) {
         expand_arg_split(local, parse.v.args[i], allocator, &args);
     }
     parse.v.args = args;
+
+    // Handle alias.
+    if (is_alias) {
+        program->type = Running_Program::SUB;
+        program->v.sub = {};
+        program->v.sub.stdio = stdio;
+        program->v.sub.local = allocator.alloc<Shell_Local>();
+        *program->v.sub.local = {};
+        program->v.sub.local->parent = local;
+        program->v.sub.local->args = args.clone(allocator);
+        return start_execute_node(shell, tty, backlog, &program->v.sub, alias_value);
+    }
 
     recognize_builtins(program, parse, allocator);
 
