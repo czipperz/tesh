@@ -4,7 +4,6 @@
 #include <cz/parse.hpp>
 #include "global.hpp"
 
-#define BUFFER_SIZE 4096
 #define OUTER_INDEX(index) ((index) >> 12)
 #define INNER_INDEX(index) ((index)&0xfff)
 
@@ -33,7 +32,7 @@ static int64_t append_chunk(Backlog_State* backlog, cz::Str text) {
         }
 
         backlog->buffers.reserve(cz::heap_allocator(), 1);
-        char* buffer = (char*)cz::heap_allocator().alloc({BUFFER_SIZE, 1});
+        char* buffer = (char*)cz::heap_allocator().alloc({BACKLOG_BUFFER_SIZE, 1});
         CZ_ASSERT(buffer);
         backlog->buffers.push(buffer);
 
@@ -515,7 +514,7 @@ static void truncate_to(Backlog_State* backlog, uint64_t new_length) {
     size_t outer_before = OUTER_INDEX(backlog->length);
     backlog->length = new_length;
     for (size_t i = outer_before + 1; i-- > OUTER_INDEX(backlog->length) + 1;) {
-        cz::heap_allocator().dealloc({backlog->buffers.last(), BUFFER_SIZE});
+        cz::heap_allocator().dealloc({backlog->buffers.last(), BACKLOG_BUFFER_SIZE});
         backlog->buffers.pop();
     }
 }

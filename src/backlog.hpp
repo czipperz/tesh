@@ -9,6 +9,8 @@ struct Backlog_Event;
 
 ///////////////////////////////////////////////////////////////////////////////
 
+#define BACKLOG_BUFFER_SIZE 4096
+
 struct Backlog_State {
     uint64_t id;
 

@@ -584,8 +584,8 @@ static bool read_process_data(Shell_State* shell,
         Backlog_State* backlog = backlogs[script->id];
         size_t starting_length = backlog->length;
 
-        if (tick_running_node(shell, backlogs, rend, &script->root, &script->tty,
-                              backlog, force_quit)) {
+        if (tick_running_node(shell, backlogs, rend, &script->root, &script->tty, backlog,
+                              force_quit)) {
             if (*force_quit)
                 return true;
             --i;  // TODO rate limit
@@ -1607,6 +1607,101 @@ static void expand_selection(Selection* selection,
     }
 }
 
+static bool write_selected_backlog_to_file(Shell_State* shell,
+                                           Prompt_State* prompt,
+                                           cz::Slice<Backlog_State*> backlogs,
+                                           const char* path) {
+    cz::Output_File file;
+    CZ_DEFER(file.close());
+    if (!file.open(path))
+        return false;
+
+    if (shell->selected_process != -1) {
+        Backlog_State* backlog = backlogs[shell->selected_process];
+        for (size_t i = 0; i + 1 < backlog->buffers.len; ++i) {
+            cz::Str buffer = {backlog->buffers[i], BACKLOG_BUFFER_SIZE};
+            int64_t result = file.write(buffer);
+            if (result != buffer.len)
+                return false;
+        }
+        if (backlog->buffers.len > 0) {
+            cz::Str buffer = {backlog->buffers.last(), backlog->length % BACKLOG_BUFFER_SIZE};
+            int64_t result = file.write(buffer);
+            if (result != buffer.len)
+                return false;
+        }
+    } else {
+        int64_t result = file.write(prompt->text);
+        if (result != prompt->text.len)
+            return false;
+    }
+
+    return true;
+}
+
+static void submit_prompt(Shell_State* shell,
+                          cz::Vector<Backlog_State*>* backlogs,
+                          Prompt_State* prompt,
+                          bool submit) {
+    {
+        cz::Vector<cz::Str>* history = prompt_history(prompt, shell->attached_process != -1);
+        resolve_history_searching(prompt, history);
+    }
+
+    Running_Script* script = attached_process(shell);
+    uint64_t process_id = (script ? script->id : prompt->process_id);
+    Backlog_State* backlog;
+    if (script) {
+        backlog = (*backlogs)[process_id];
+    } else {
+        backlog = push_backlog(backlogs, process_id);
+        push_backlog_event(backlog, BACKLOG_EVENT_START_DIRECTORY);
+        append_text(backlog, get_wd(&shell->local));
+        push_backlog_event(backlog, BACKLOG_EVENT_START_PROCESS);
+        append_text(backlog, prompt->prefix);
+    }
+    push_backlog_event(backlog, BACKLOG_EVENT_START_INPUT);
+    append_text(backlog, prompt->text);
+    push_backlog_event(backlog, BACKLOG_EVENT_START_PROCESS);
+    append_text(backlog, "\n");
+
+    if (submit) {
+        if (script) {
+            cz::Str message = cz::format(temp_allocator, prompt->text, '\n');
+            (void)tty_write(&script->tty, message);
+        } else {
+            if (!run_script(shell, backlog, prompt->text)) {
+                append_text(backlog, "Error: failed to execute\n");
+                backlog->done = true;
+                backlog->end = std::chrono::high_resolution_clock::now();
+            }
+            shell->selected_process = backlog->id;
+        }
+    } else {
+        if (script) {
+#ifdef TRACY_ENABLE
+            cz::String message =
+                cz::format(temp_allocator, "End: ", script->root.fg.pipeline.command_line);
+            TracyMessage(message.buffer, message.len);
+#endif
+
+            backlog->exit_code = -1;
+            backlog->done = true;
+            backlog->end = std::chrono::high_resolution_clock::now();
+            recycle_process(shell, script);
+        } else {
+            backlog->done = true;
+            backlog->cancelled = true;
+        }
+    }
+
+    if (!script)
+        ++prompt->process_id;
+
+    cz::Vector<cz::Str>* history = prompt_history(prompt, shell->attached_process != -1);
+    prompt->history_counter = history->len;
+}
+
 static int process_events(cz::Vector<Backlog_State*>* backlogs,
                           Prompt_State* prompt,
                           Render_State* rend,
@@ -1693,62 +1788,16 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
                 event.key.keysym.sym == SDLK_RETURN) {
                 rend->scroll_mode = AUTO_SCROLL;
 
-                {
+                bool submit = (event.key.keysym.sym == SDLK_RETURN);
+                if (submit && shell->attached_process == -1)
+                    rend->scroll_mode = cfg.on_spawn_scroll_mode;
+
+                submit_prompt(shell, backlogs, prompt, submit);
+
+                // Push the history entry to either the stdin or the shell history list.
+                if (prompt->text.len > 0) {
                     cz::Vector<cz::Str>* history =
                         prompt_history(prompt, shell->attached_process != -1);
-                    resolve_history_searching(prompt, history);
-                }
-
-                Running_Script* script = attached_process(shell);
-                uint64_t process_id = (script ? script->id : prompt->process_id);
-                Backlog_State* backlog;
-                if (script) {
-                    backlog = (*backlogs)[process_id];
-                } else {
-                    backlog = push_backlog(backlogs, process_id);
-                    push_backlog_event(backlog, BACKLOG_EVENT_START_DIRECTORY);
-                    append_text(backlog, get_wd(&shell->local));
-                    push_backlog_event(backlog, BACKLOG_EVENT_START_PROCESS);
-                    append_text(backlog, prompt->prefix);
-                }
-                push_backlog_event(backlog, BACKLOG_EVENT_START_INPUT);
-                append_text(backlog, prompt->text);
-                push_backlog_event(backlog, BACKLOG_EVENT_START_PROCESS);
-                append_text(backlog, "\n");
-
-                if (event.key.keysym.sym == SDLK_RETURN) {
-                    if (script) {
-                        cz::Str message = cz::format(temp_allocator, prompt->text, '\n');
-                        (void)tty_write(&script->tty, message);
-                    } else {
-                        rend->scroll_mode = cfg.on_spawn_scroll_mode;
-                        if (!run_script(shell, backlog, prompt->text)) {
-                            append_text(backlog, "Error: failed to execute\n");
-                            backlog->done = true;
-                            backlog->end = std::chrono::high_resolution_clock::now();
-                        }
-                        shell->selected_process = backlog->id;
-                    }
-                } else {
-                    if (script) {
-#ifdef TRACY_ENABLE
-                        cz::String message = cz::format(
-                            temp_allocator, "End: ", script->root.fg.pipeline.command_line);
-                        TracyMessage(message.buffer, message.len);
-#endif
-
-                        backlog->exit_code = -1;
-                        backlog->done = true;
-                        backlog->end = std::chrono::high_resolution_clock::now();
-                        recycle_process(shell, script);
-                    } else {
-                        backlog->done = true;
-                        backlog->cancelled = true;
-                    }
-                }
-
-                if (prompt->text.len > 0) {
-                    cz::Vector<cz::Str>* history = prompt_history(prompt, script);
                     if (history->len == 0 || history->last() != prompt->text) {
                         history->reserve(cz::heap_allocator(), 1);
                         history->push(prompt->text.clone(prompt->history_arena.allocator()));
@@ -1758,13 +1807,6 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
                 stop_completing(prompt);
                 prompt->text.len = 0;
                 prompt->cursor = 0;
-                if (!script)
-                    ++prompt->process_id;
-                {
-                    cz::Vector<cz::Str>* history =
-                        prompt_history(prompt, shell->attached_process != -1);
-                    prompt->history_counter = history->len;
-                }
 
                 ensure_prompt_on_screen(rend, *backlogs);
                 ++num_events;
@@ -1815,6 +1857,28 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
             if (mod == KMOD_CTRL && key == SDLK_l) {
                 clear_screen(rend, shell, *backlogs);
                 ++num_events;
+            }
+
+            // Ctrl + Shift + E - save the selected backlog to a file and open it in $EDITOR.
+            if (mod == (KMOD_CTRL | KMOD_SHIFT) && key == SDLK_e) {
+                char temp_path[L_tmpnam];
+                if (tmpnam(temp_path)) {
+                    if (write_selected_backlog_to_file(shell, prompt, *backlogs, temp_path)) {
+                        cz::String old_text = prompt->text;
+                        uint64_t old_attached = shell->attached_process;
+                        uint64_t old_selected = shell->selected_process;
+
+                        prompt->text = cz::format(temp_allocator, "$TESH_EDITOR '", temp_path, "'");
+                        shell->attached_process = -1;
+                        shell->selected_process = -1;
+
+                        submit_prompt(shell, backlogs, prompt, true);
+
+                        prompt->text = old_text;
+                        shell->attached_process = old_attached;
+                        shell->selected_process = old_selected;
+                    }
+                }
             }
 
             if (mod == KMOD_ALT && key == SDLK_GREATER) {
