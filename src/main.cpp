@@ -522,9 +522,10 @@ static void render_frame(SDL_Window* window,
 // Process control
 ///////////////////////////////////////////////////////////////////////////////
 
-static bool run_script(Shell_State* shell, Backlog_State* backlog, cz::Str text) {
-    cz::Buffer_Array arena = alloc_arena(shell);
-
+static bool run_script(Shell_State* shell,
+                       Backlog_State* backlog,
+                       cz::Buffer_Array arena,
+                       cz::Str text) {
 #ifdef TRACY_ENABLE
     {
         cz::String message = cz::format(temp_allocator, "Start: ", text);
@@ -553,8 +554,6 @@ fail:;
         TracyMessage(message.buffer, message.len);
     }
 #endif
-
-    recycle_arena(shell, arena);
     return false;
 }
 
@@ -568,10 +567,13 @@ static void run_rc(Shell_State* shell, Backlog_State* backlog) {
         return;
     CZ_DEFER(file.close());
 
-    cz::String contents = {};
-    read_to_string(file, temp_allocator, &contents);
+    cz::Buffer_Array arena = alloc_arena(shell);
 
-    run_script(shell, backlog, contents);
+    cz::String contents = {};
+    read_to_string(file, arena.allocator(), &contents);
+
+    if (!run_script(shell, backlog, arena, contents))
+        recycle_arena(shell, arena);
 }
 
 static bool read_process_data(Shell_State* shell,
@@ -1670,7 +1672,9 @@ static void submit_prompt(Shell_State* shell,
             cz::Str message = cz::format(temp_allocator, prompt->text, '\n');
             (void)tty_write(&script->tty, message);
         } else {
-            if (!run_script(shell, backlog, prompt->text)) {
+            cz::Buffer_Array arena = alloc_arena(shell);
+            cz::String script = prompt->text.clone_null_terminate(arena.allocator());
+            if (!run_script(shell, backlog, arena, script)) {
                 append_text(backlog, "Error: failed to execute\n");
                 backlog->done = true;
                 backlog->end = std::chrono::high_resolution_clock::now();
