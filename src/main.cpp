@@ -1697,9 +1697,6 @@ static void submit_prompt(Shell_State* shell,
 
     if (!script)
         ++prompt->process_id;
-
-    cz::Vector<cz::Str>* history = prompt_history(prompt, shell->attached_process != -1);
-    prompt->history_counter = history->len;
 }
 
 static int process_events(cz::Vector<Backlog_State*>* backlogs,
@@ -1795,14 +1792,15 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
                 submit_prompt(shell, backlogs, prompt, submit);
 
                 // Push the history entry to either the stdin or the shell history list.
+                cz::Vector<cz::Str>* history =
+                    prompt_history(prompt, shell->attached_process != -1);
                 if (prompt->text.len > 0) {
-                    cz::Vector<cz::Str>* history =
-                        prompt_history(prompt, shell->attached_process != -1);
                     if (history->len == 0 || history->last() != prompt->text) {
                         history->reserve(cz::heap_allocator(), 1);
                         history->push(prompt->text.clone(prompt->history_arena.allocator()));
                     }
                 }
+                prompt->history_counter = history->len;
 
                 stop_completing(prompt);
                 prompt->text.len = 0;
