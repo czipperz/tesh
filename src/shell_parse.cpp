@@ -1,7 +1,10 @@
 #include "shell.hpp"
 
+#include <cz/char_type.hpp>
 #include <cz/defer.hpp>
+#include <cz/format.hpp>
 #include <cz/heap.hpp>
+#include <cz/parse.hpp>
 
 #include "global.hpp"
 
@@ -816,7 +819,7 @@ static cz::Str deref_var_at_point(const Shell_Local* local, cz::Str text, size_t
         return "$";
 
     switch (text[*index]) {
-    case CZ_ALNUM_CASES:
+    case CZ_ALPHA_CASES:
     case '_': {
         size_t start = *index;
         ++*index;
@@ -829,7 +832,7 @@ static cz::Str deref_var_at_point(const Shell_Local* local, cz::Str text, size_t
         cz::Str value = "";
         get_var(local, text.slice(start, *index), &value);
         return value;
-    } break;
+    }
 
     case '{': {
         ++*index;
@@ -848,17 +851,36 @@ static cz::Str deref_var_at_point(const Shell_Local* local, cz::Str text, size_t
         get_var(local, text.slice(start, *index), &value);
         ++*index;
         return value;
-    } break;
+    }
 
     case '@': {
         ++*index;
         cz::String string = {};
         for (size_t i = 1; i < local->args.len; ++i) {
-            string.reserve(temp_allocator, local->args[i].len);
+            if (i >= 2)
+                string.push(' ');
+            string.reserve(temp_allocator, local->args[i].len + 1);
             string.append(local->args[i]);
         }
         return string;
-    } break;
+    }
+
+    case '#':
+        return cz::format(temp_allocator, cz::max(local->args.len, (size_t)1) - 1);
+
+    case CZ_DIGIT_CASES: {
+        size_t i = 0;
+        int64_t eat = cz::parse(text.slice_start(*index), &i);
+        if (eat < 0) {
+            eat = -eat;
+            i = local->args.len;
+        }
+        *index += eat;
+
+        if (i < local->args.len)
+            return local->args[i];
+        return "";
+    }
 
     default:
         return "$";
