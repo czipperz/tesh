@@ -501,7 +501,7 @@ static Error parse_sequence(cz::Allocator allocator,
             break;
         }
 
-        Shell_Node step;
+        Shell_Node step = {};
         Error error = parse_binary(allocator, force_alloc, tokens, 8, &step, index);
         if (error != Error_Success)
             return error;
@@ -532,7 +532,7 @@ static Error parse_binary(cz::Allocator allocator,
     // Parse left to right: `a && b && c` -> `a && (b && c)`
     // Honor precedence:    `a && b || c` -> `(a && b) || c`
 
-    Shell_Node sub;
+    Shell_Node sub = {};
     Error error;
     if (max_precedence == 6) {
         error = parse_pipeline(allocator, force_alloc, tokens, &sub, index);
@@ -589,7 +589,7 @@ static Error parse_pipeline(cz::Allocator allocator,
     const int max_precedence = 4;
 
     for (size_t iterations = 0;; ++iterations) {
-        Shell_Node pnode;
+        Shell_Node pnode = {};
         Error error = parse_program(allocator, force_alloc, tokens, &pnode, index);
         if (error != Error_Success)
             return error;
@@ -660,7 +660,7 @@ static Error parse_program(cz::Allocator allocator,
                     return Error_Parse_UnterminatedProgram;
                 } else {
                     ++*index;
-                    Shell_Node inner;
+                    Shell_Node inner = {};
                     Error error = parse_sequence(allocator, force_alloc, tokens, &inner, index, {});
                     if (error != Error_Success)
                         return error;
@@ -1219,7 +1219,7 @@ static Error parse_function_declaration(cz::Allocator allocator,
     ++*index;
 
     cz::Str terminators[] = {"}"};
-    Shell_Node body;
+    Shell_Node body = {};
     Error error =
         parse_sequence(allocator, /*force_alloc=*/true, tokens, &body, index, terminators);
     if (error != Error_Success)
