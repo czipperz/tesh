@@ -129,7 +129,7 @@ static Error advance_through_token(cz::Str text,
         }
 
         case '&':
-        case '|':
+        case '|': {
             if (*index == *token_start) {
                 *any_special = true;
                 *program_break = true;
@@ -139,8 +139,30 @@ static Error advance_through_token(cz::Str text,
                 }
             }
             return Error_Success;
+        }
 
             ///////////////////////////////////////////////
+
+        case '#': {
+            // Treat '#' as normal character in middle of token.
+            if (*index != *token_start) {
+                ++*index;
+                break;
+            }
+
+            // Ignore to end of line.
+            for (++*index; *index < text.len; ++*index) {
+                if (text[*index] == '\n') {
+                    break;
+                }
+            }
+
+            // Look for the next token.
+            *token_start = *index;
+            break;
+        }
+
+        ///////////////////////////////////////////////
 
 #if 0  // TODO
         case '{':

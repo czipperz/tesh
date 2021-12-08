@@ -459,72 +459,52 @@ TEST_CASE("parse_script tilde expanded simple") {
     CHECK(expand(&shell, "~/abc/123") == "arg0: /path/to/my/home/abc/123\n");
 }
 
-#if 0
 TEST_CASE("parse_script comment basic") {
     Shell_State shell = {};
-    Parse_Script script = {};
-    Error error = tokenize(&shell, cz::heap_allocator(), &script, "# hi");
+    cz::String string = {};
+    Error error = parse_and_emit(&shell, &string, "# hi");
     REQUIRE(error == Error_Success);
-    size_t index = 0;
-    Parse_Pipeline pipeline;
-    error = parse_pipeline(script.tokens, &index, cz::heap_allocator(), &pipeline);
-    REQUIRE(error == Error_Success);
-    REQUIRE(pipeline.pipeline.len == 0);
+    CHECK(string.as_str() == "");
 }
 
 TEST_CASE("parse_script # after word isn't comment") {
     Shell_State shell = {};
-    Parse_Script script = {};
-    Error error = tokenize(&shell, cz::heap_allocator(), &script, "a# hi");
+    cz::String string = {};
+    Error error = parse_and_emit(&shell, &string, "a# hi");
     REQUIRE(error == Error_Success);
-    size_t index = 0;
-    Parse_Pipeline pipeline;
-    error = parse_pipeline(script.tokens, &index, cz::heap_allocator(), &pipeline);
-    REQUIRE(error == Error_Success);
-    REQUIRE(pipeline.pipeline.len == 1);
-    REQUIRE(pipeline.pipeline[0].args.len == 2);
-    CHECK(pipeline.pipeline[0].args[0] == "a#");
-    CHECK(pipeline.pipeline[0].args[1] == "hi");
+    CHECK(string.as_str() ==
+          "\
+program:\n\
+    arg0: a#\n\
+    arg1: hi\n");
 }
 
 TEST_CASE("parse_script # after empty string isn't comment") {
     Shell_State shell = {};
-    Parse_Script script = {};
-    Error error = tokenize(&shell, cz::heap_allocator(), &script, "''# \"\"#");
+    cz::String string = {};
+    Error error = parse_and_emit(&shell, &string, "''# \"\"#");
     REQUIRE(error == Error_Success);
-    size_t index = 0;
-    Parse_Pipeline pipeline;
-    error = parse_pipeline(script.tokens, &index, cz::heap_allocator(), &pipeline);
-    REQUIRE(error == Error_Success);
-    REQUIRE(pipeline.pipeline.len == 1);
-    REQUIRE(pipeline.pipeline[0].args.len == 2);
-    CHECK(pipeline.pipeline[0].args[0] == "#");
-    CHECK(pipeline.pipeline[0].args[1] == "#");
+    CHECK(string.as_str() ==
+          "\
+program:\n\
+    arg0: ''#\n\
+    arg1: \"\"#\n");
 }
 
 TEST_CASE("parse_script # doesn't honor '\\\\\\n'") {
     Shell_State shell = {};
-    Parse_Script script = {};
-    Error error = tokenize(&shell, cz::heap_allocator(), &script, "a #\\\nb");
+    cz::String string = {};
+    Error error = parse_and_emit(&shell, &string, "a #\\\nb");
     REQUIRE(error == Error_Success);
-
-    size_t index = 0;
-    Parse_Pipeline pipeline;
-    error = parse_pipeline(script.tokens, &index, cz::heap_allocator(), &pipeline);
-    REQUIRE(error == Error_Success);
-    REQUIRE(pipeline.pipeline.len == 1);
-    REQUIRE(pipeline.pipeline[0].args.len == 1);
-    CHECK(pipeline.pipeline[0].args[0] == "a");
-
-    CHECK(script.first.on.failure == script.first.on.success);
-    REQUIRE(script.first.on.success);
-
-    pipeline = script.first.on.success->pipeline;
-    REQUIRE(pipeline.pipeline.len == 1);
-    REQUIRE(pipeline.pipeline[0].args.len == 1);
-    CHECK(pipeline.pipeline[0].args[0] == "b");
+    CHECK(string.as_str() ==
+          "\
+program:\n\
+    arg0: a\n\
+program:\n\
+    arg0: b\n");
 }
 
+#if 0
 TEST_CASE("parse_script alias simple") {
     Shell_State shell = {};
     set_alias(&shell, "aa", "bb");
