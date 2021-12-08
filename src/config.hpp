@@ -5,6 +5,7 @@
 #include "render.hpp"
 
 struct Config_State {
+    bool escape_closes;
     bool on_spawn_attach;
     Scroll_Mode on_spawn_scroll_mode;
     bool on_select_auto_copy;

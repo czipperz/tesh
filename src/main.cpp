@@ -1780,7 +1780,7 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
             mod &= ~KMOD_GUI;
 
             SDL_Keycode key = event.key.keysym.sym;
-            if (key == SDLK_ESCAPE)
+            if (cfg.escape_closes && key == SDLK_ESCAPE)
                 return -1;
 
             if (handle_prompt_manipulation_commands(shell, prompt, backlogs, rend, mod, key)) {
@@ -2180,6 +2180,14 @@ static void save_history(Prompt_State* prompt, Shell_State* shell) {
 ///////////////////////////////////////////////////////////////////////////////
 
 static void load_default_configuration() {
+#ifndef NDEBUG
+    // Enable in debug builds for quick iteration purposes.
+    cfg.escape_closes = true;
+#else
+    // Disable in release builds to avoid accidental closes.
+    cfg.escape_closes = false;
+#endif
+
     cfg.on_spawn_attach = false;
     cfg.on_spawn_scroll_mode = AUTO_PAGE;
 
