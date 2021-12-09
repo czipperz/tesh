@@ -122,7 +122,6 @@ struct Pseudo_Terminal {
     /// The parent state.
     int parent_bi;
 #endif
-    cz::Carriage_Return_Carry out_carry;
 };
 
 bool create_pseudo_terminal(Pseudo_Terminal* tty, int width, int height);

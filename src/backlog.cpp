@@ -323,9 +323,36 @@ static bool process_escape_sequence(Backlog_State* backlog, cz::Str fresh, size_
 
     cz::String* text = &backlog->escape_backlog;
 
-    // ESC
     if (!ensure_char(backlog, 0, fresh, skip))
         return false;
+
+    if ((*text)[0] == '\r') {
+        while (1) {
+            if (!ensure_char(backlog, 1, fresh, skip))
+                return false;
+
+            // Ignore consecutive '\r's.
+            if ((*text)[1] == '\r') {
+                text->pop();
+                continue;
+            }
+
+            if ((*text)[1] == '\n') {
+                // '\r\n' -> '\n'
+                append_chunk(backlog, "\n");
+            } else {
+                // '\rX' -> '\r' then process 'X'
+                // TODO: this isn't right -- this should only move the cursor
+                // and not change the line.  But in practice this works.
+                uint64_t line_start = backlog->lines.len > 0 ? backlog->lines.last() : 0;
+                truncate_to(backlog, line_start);
+                --*skip;
+            }
+            return true;
+        }
+    }
+
+    CZ_DEBUG_ASSERT((*text)[0] == 0x1b);
 
     if (!ensure_char(backlog, 1, fresh, skip))
         return false;
@@ -559,15 +586,6 @@ uint64_t append_text(Backlog_State* backlog, cz::Str text) {
 
         // Handle the special character.
         switch (text[chunk_len]) {
-        case '\r': {
-            // TODO: this isn't right -- this should only move the cursor
-            // and not change the line.  But in practice this works.
-            uint64_t line_start = backlog->lines.len > 0 ? backlog->lines.last() : 0;
-            truncate_to(backlog, line_start);
-            text = text.slice_start(chunk_len + 1);
-            done++;
-        } break;
-
         case del: {
             // TODO: this isn't right -- this should only move the cursor
             // and not change the line.  But in practice this works.
@@ -578,6 +596,9 @@ uint64_t append_text(Backlog_State* backlog, cz::Str text) {
             done++;
         } break;
 
+            // We want to handle '\r\r\n' by ignoring the '\r's so we
+            // need to pull out the big guns: escape sequence parsing.
+        case '\r':
         case escape: {
             // Start processing an escape sequence.
             cz::Str remaining = text.slice_start(chunk_len);

@@ -140,10 +140,8 @@ static void read_tty_output(Backlog_State* backlog, Pseudo_Terminal* tty, bool c
             if (cap_read_calls && rounds == 1024)
                 break;
 
-            // Even strip carriage returns on linux because
-            // some programs (ex. 'git status') use CRLF.
-            result =
-                parent_out.read_strip_carriage_returns(buffer, sizeof(buffer), &tty->out_carry);
+            // Note: CRLF is stripped in append_text.
+            result = parent_out.read(buffer, sizeof(buffer));
             if (result <= 0)
                 break;
 
