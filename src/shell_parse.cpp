@@ -26,7 +26,8 @@ static Error advance_through_dollar_sign(cz::Str text, size_t* index);
 static Error parse_sequence(cz::Allocator allocator,
                             cz::Slice<cz::Str> tokens,
                             Shell_Node* node,
-                            size_t* index);
+                            size_t* index,
+                            cz::Slice<cz::Str> terminators);
 
 static Error parse_binary(cz::Allocator allocator,
                           cz::Slice<cz::Str> tokens,
@@ -45,6 +46,11 @@ static Error parse_program(cz::Allocator allocator,
                            size_t* index);
 static Error deal_with_token(cz::Allocator allocator, Parse_Program* program, cz::Str token);
 
+static Error parse_if(cz::Allocator allocator,
+                      cz::Slice<cz::Str> tokens,
+                      Shell_Node* node,
+                      size_t* index);
+
 static void deref_var_at_point(const Shell_Local* local,
                                cz::Str text,
                                size_t* index,
@@ -62,7 +68,7 @@ Error parse_script(cz::Allocator allocator, Shell_Node* root, cz::Str text) {
         return error;
 
     size_t index = 0;
-    return parse_sequence(allocator, tokens, root, &index);
+    return parse_sequence(allocator, tokens, root, &index, {});
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -361,7 +367,8 @@ static int get_precedence(cz::Str token) {
 static Error parse_sequence(cz::Allocator allocator,
                             cz::Slice<cz::Str> tokens,
                             Shell_Node* node,
-                            size_t* index) {
+                            size_t* index,
+                            cz::Slice<cz::Str> terminators) {
     const int max_precedence = 10;
 
     cz::Vector<Shell_Node> sequence = {};
@@ -386,6 +393,12 @@ static Error parse_sequence(cz::Allocator allocator,
             }
             sequence.last().async = true;
             ++*index;
+            continue;
+        }
+
+        // This is used for parsing 'if' / 'for' / 'while' statements.
+        if (terminators.contains(token)) {
+            break;
         }
 
         Shell_Node step;
@@ -522,6 +535,12 @@ static Error parse_program(cz::Allocator allocator,
                            cz::Slice<cz::Str> tokens,
                            Shell_Node* node,
                            size_t* index) {
+    if (*index < tokens.len) {
+        if (tokens[*index] == "if") {
+            return parse_if(allocator, tokens, node, index);
+        }
+    }
+
     Parse_Program program = {};
 
     for (; *index < tokens.len;) {
@@ -533,7 +552,7 @@ static Error parse_program(cz::Allocator allocator,
                 } else {
                     ++*index;
                     Shell_Node inner;
-                    Error error = parse_sequence(allocator, tokens, &inner, index);
+                    Error error = parse_sequence(allocator, tokens, &inner, index, {});
                     if (error != Error_Success)
                         return error;
                     if (*index >= tokens.len || tokens[*index] != ")")
@@ -944,4 +963,50 @@ static void deref_var_at_point(const Shell_Local* local,
         outputs->push("$");
         return;
     }
+}
+
+static Error parse_if(cz::Allocator allocator,
+                      cz::Slice<cz::Str> tokens,
+                      Shell_Node* node,
+                      size_t* index) {
+    ++*index;
+
+    Shell_Node cond = {};
+    Error error = parse_binary(allocator, tokens, 8, &cond, index);
+    if (error != Error_Success)
+        return error;
+
+    if (*index == tokens.len)
+        return Error_Parse_UnterminatedIf;
+    if (tokens[*index] == "&") {
+        cond.async = true;
+    } else {
+        CZ_DEBUG_ASSERT(tokens[*index] == ";" || tokens[*index] == "\n");
+    }
+    ++*index;
+
+    if (*index == tokens.len)
+        return Error_Parse_UnterminatedIf;
+    if (tokens[*index] != "then")
+        return Error_Parse_UnterminatedIf;
+    ++*index;
+
+    cz::Str terminators[] = {"fi"};
+    Shell_Node then = {};
+    error = parse_sequence(allocator, tokens, &then, index, terminators);
+    if (error != Error_Success)
+        return error;
+
+    if (*index == tokens.len)
+        return Error_Parse_UnterminatedIf;
+    CZ_DEBUG_ASSERT(tokens[*index] == "fi");
+    ++*index;
+
+    *node = {};
+    node->type = Shell_Node::IF;
+    node->v.if_.cond = allocator.clone(cond);
+    node->v.if_.then = allocator.clone(then);
+    node->v.if_.other = nullptr;
+
+    return Error_Success;
 }

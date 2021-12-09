@@ -3,9 +3,9 @@
 #include "shell.hpp"
 
 static void test_append_node(cz::Allocator allocator,
-                        cz::String* string,
-                        Shell_Node* node,
-                        size_t depth) {
+                             cz::String* string,
+                             Shell_Node* node,
+                             size_t depth) {
     static const size_t spd = 4;
     cz::Str async_str = (node->async ? " (async)" : "");
     switch (node->type) {
@@ -56,7 +56,7 @@ static void test_append_node(cz::Allocator allocator,
         test_append_node(allocator, string, node->v.binary.right, depth + 1);
     } break;
 
-    case Shell_Node::SEQUENCE:
+    case Shell_Node::SEQUENCE: {
         if (node->async) {
             append(allocator, string, cz::many(' ', depth * spd), "async:\n");
             depth++;
@@ -64,7 +64,19 @@ static void test_append_node(cz::Allocator allocator,
         for (size_t i = 0; i < node->v.sequence.len; ++i) {
             test_append_node(allocator, string, &node->v.sequence[i], depth);
         }
-        break;
+    } break;
+
+    case Shell_Node::IF: {
+        append(allocator, string, cz::many(' ', depth * spd), "if", async_str, ":\n");
+        append(allocator, string, cz::many(' ', (depth + 1) * spd), "cond:\n");
+        test_append_node(allocator, string, node->v.if_.cond, depth + 2);
+        append(allocator, string, cz::many(' ', (depth + 1) * spd), "then:\n");
+        test_append_node(allocator, string, node->v.if_.then, depth + 2);
+        if (node->v.if_.other) {
+            append(allocator, string, cz::many(' ', (depth + 1) * spd), "other:\n");
+            test_append_node(allocator, string, node->v.if_.other, depth + 2);
+        }
+    } break;
 
     default:
         CZ_PANIC("Invalid Shell_Node type");
@@ -591,4 +603,20 @@ and:\n\
                     arg0: c\n\
                 program:\n\
                     arg0: d\n");
+}
+
+TEST_CASE("parse_script if statement basic") {
+    Shell_State shell = {};
+    cz::String string = {};
+    Error error = parse_and_emit(&shell, &string, "if true; then echo; fi");
+    REQUIRE(error == Error_Success);
+    CHECK(string.as_str() ==
+          "\
+if:\n\
+    cond:\n\
+        program:\n\
+            arg0: true\n\
+    then:\n\
+        program:\n\
+            arg0: echo\n");
 }

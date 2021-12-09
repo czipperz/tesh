@@ -302,5 +302,8 @@ void append_node(cz::Allocator allocator,
         else if (append_semicolon)
             cz::append(allocator, string, ";");
     } break;
+
+    default:
+        CZ_PANIC("Invalid Shell_Node type");
     }
 }
