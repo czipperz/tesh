@@ -579,6 +579,30 @@ static bool tick_program(Shell_State* shell,
         goto finish_builtin;
     } break;
 
+    case Running_Program::ARGDUMP: {
+        auto& builtin = program->v.builtin;
+        for (size_t i = 0; i < builtin.args.len; ++i) {
+            (void)builtin.out.write(builtin.args[i]);
+            (void)builtin.out.write("\n");
+        }
+        goto finish_builtin;
+    } break;
+
+    case Running_Program::VARDUMP: {
+        auto& builtin = program->v.builtin;
+        for (Shell_Local* iter = local; iter; iter = iter->parent) {
+            if (iter != local)
+                (void)builtin.out.write("\n");
+            for (size_t i = 0; i < iter->variable_names.len; ++i) {
+                (void)builtin.out.write(iter->variable_names[i]);
+                (void)builtin.out.write("=");
+                (void)builtin.out.write(iter->variable_values[i]);
+                (void)builtin.out.write("\n");
+            }
+        }
+        goto finish_builtin;
+    } break;
+
     default:
         CZ_PANIC("unreachable");
     }

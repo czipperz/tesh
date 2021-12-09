@@ -192,6 +192,8 @@ struct Running_Program {
         SLEEP,
         CONFIGURE,
         ATTACH,
+        ARGDUMP,
+        VARDUMP,
     } type;
     union {
         cz::Process process;
