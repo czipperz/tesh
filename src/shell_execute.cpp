@@ -180,6 +180,7 @@ static void do_descend_to_first_pipeline(cz::Vector<Shell_Node*>* path, Shell_No
         switch (child->type) {
         case Shell_Node::PROGRAM:
         case Shell_Node::PIPELINE:
+        case Shell_Node::FUNCTION:
             return;
         case Shell_Node::SEQUENCE:
             if (child->v.sequence.len == 0) {
@@ -258,6 +259,7 @@ static bool walk_to_next_pipeline(cz::Vector<Shell_Node*>* path, Walk_Status sta
 
         case Shell_Node::PROGRAM:
         case Shell_Node::PIPELINE:
+        case Shell_Node::FUNCTION:
             CZ_PANIC("invalid");
 
         default:
@@ -349,6 +351,13 @@ static Error start_execute_pipeline(Shell_State* shell,
 
     for (size_t p = 0; p < program_nodes.len; ++p) {
         Shell_Node* program_node = &program_nodes[p];
+
+        if (program_node->type == Shell_Node::FUNCTION) {
+            // Declare the function and ignore all pipe and file indirection.
+            set_function(node->local, program_node->v.function.name, program_node->v.function.body);
+            continue;
+        }
+
         CZ_ASSERT(program_node->type == Shell_Node::PROGRAM);  // TODO
         Parse_Program parse_program = *program_node->v.program;
 
@@ -513,16 +522,22 @@ static Error run_program(Shell_State* shell,
         expand_arg_split(local, parse.v.args[i], allocator, &args);
     }
 
+    bool is_function = (!is_alias && (args.len > 0 && get_function(local, args[0], &alias_value)));
+
     // Handle alias.
-    if (is_alias) {
+    if (is_alias || is_function) {
         program->type = Running_Program::SUB;
         program->v.sub = {};
         program->v.sub.stdio = stdio;
         program->v.sub.local = allocator.alloc<Shell_Local>();
         *program->v.sub.local = {};
         program->v.sub.local->parent = local;
-        program->v.sub.local->args = args.clone(allocator);
-        program->v.sub.local->blocked_alias = parse.v.args[0];
+        if (is_alias) {
+            program->v.sub.local->args = args.clone(allocator);
+            program->v.sub.local->blocked_alias = parse.v.args[0];
+        } else {
+            program->v.sub.local->args = args.clone(allocator);
+        }
         return start_execute_node(shell, tty, backlog, &program->v.sub, alias_value);
     }
 

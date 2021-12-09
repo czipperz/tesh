@@ -100,6 +100,34 @@ void set_alias(Shell_Local* local, cz::Str key, Shell_Node* node) {
     local->alias_values.push(node);
 }
 
+bool get_function(const Shell_Local* local, cz::Str key, Shell_Node** value) {
+    for (; local; local = local->parent) {
+        for (size_t i = 0; i < local->function_names.len; ++i) {
+            if (local->function_names[i] == key) {
+                *value = local->function_values[i];
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+void set_function(Shell_Local* local, cz::Str key, Shell_Node* node) {
+    for (size_t i = 0; i < local->function_names.len; ++i) {
+        if (local->function_names[i] == key) {
+            // TODO: deallocate old node.
+            local->function_values[i] = node;
+            return;
+        }
+    }
+
+    local->function_names.reserve(cz::heap_allocator(), 1);
+    local->function_values.reserve(cz::heap_allocator(), 1);
+    // TODO: garbage collect / ref count?
+    local->function_names.push(key.clone(cz::heap_allocator()));
+    local->function_values.push(node);
+}
+
 void close_rc_file(size_t* count, cz::File_Descriptor file) {
     if (count) {
         --*count;

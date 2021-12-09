@@ -1,5 +1,6 @@
 #include <czt/test_base.hpp>
 
+#include "global.hpp"
 #include "shell.hpp"
 
 static void test_append_node(cz::Allocator allocator,
@@ -80,7 +81,8 @@ static void test_append_node(cz::Allocator allocator,
 
     case Shell_Node::FUNCTION: {
         append(allocator, string, cz::many(' ', depth * spd), "function", async_str, ":\n");
-        append(allocator, string, cz::many(' ', (depth + 1) * spd), "name: ", node->v.function.name, "\n");
+        append(allocator, string, cz::many(' ', (depth + 1) * spd), "name: ", node->v.function.name,
+               "\n");
         append(allocator, string, cz::many(' ', (depth + 1) * spd), "body:\n");
         test_append_node(allocator, string, node->v.function.body, depth + 2);
     } break;
@@ -629,6 +631,9 @@ if:\n\
 }
 
 TEST_CASE("parse_script function basic") {
+    // Temporary hack.
+    permanent_allocator = cz::heap_allocator();
+
     Shell_State shell = {};
     cz::String string = {};
     Error error = parse_and_emit(&shell, &string, "f() { echo }; }");

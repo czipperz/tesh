@@ -28,6 +28,9 @@ struct Shell_Local {
     cz::Vector<cz::Str> alias_names;
     cz::Vector<Shell_Node*> alias_values;
 
+    cz::Vector<cz::Str> function_names;
+    cz::Vector<Shell_Node*> function_values;
+
     cz::Vector<cz::Str> args;
 
     cz::Str blocked_alias;
@@ -53,6 +56,8 @@ cz::Str get_wd(const Shell_Local* local);
 void set_wd(Shell_Local* local, cz::Str value);
 bool get_alias(const Shell_Local* local, cz::Str key, Shell_Node** value);
 void set_alias(Shell_Local* local, cz::Str key, Shell_Node* node);
+bool get_function(const Shell_Local* local, cz::Str key, Shell_Node** value);
+void set_function(Shell_Local* local, cz::Str key, Shell_Node* node);
 
 void cleanup_processes(Shell_State* shell);
 void recycle_process(Shell_State* shell, Running_Script* script);
