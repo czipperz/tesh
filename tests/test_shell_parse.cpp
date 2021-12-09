@@ -674,6 +674,27 @@ if:\n\
             arg0: echo\n");
 }
 
+TEST_CASE("parse_script if else statement") {
+    Shell_State shell = {};
+    cz::String string = {};
+    Error error = parse_and_emit(&shell, &string, "if true; then echo hi; else echo bye; fi");
+    REQUIRE(error == Error_Success);
+    CHECK(string.as_str() ==
+          "\
+if:\n\
+    cond:\n\
+        program:\n\
+            arg0: true\n\
+    then:\n\
+        program:\n\
+            arg0: echo\n\
+            arg1: hi\n\
+    other:\n\
+        program:\n\
+            arg0: echo\n\
+            arg1: bye\n");
+}
+
 TEST_CASE("parse_script function basic") {
     // Temporary hack.
     permanent_allocator = cz::heap_allocator();

@@ -1029,11 +1029,25 @@ static Error parse_if(cz::Allocator allocator,
         return Error_Parse_UnterminatedIf;
     ++*index;
 
-    cz::Str terminators[] = {"fi"};
+    cz::Str terminators[] = {"fi", "else"};
     Shell_Node then = {};
     error = parse_sequence(allocator, force_alloc, tokens, &then, index, terminators);
     if (error != Error_Success)
         return error;
+
+    if (*index == tokens.len)
+        return Error_Parse_UnterminatedIf;
+
+    Shell_Node* other = nullptr;
+    if (tokens[*index] == "else") {
+        ++*index;
+        other = allocator.alloc<Shell_Node>();
+        *other = {};
+        cz::Str terminators2[] = {"fi"};
+        error = parse_sequence(allocator, force_alloc, tokens, other, index, terminators2);
+        if (error != Error_Success)
+            return error;
+    }
 
     if (*index == tokens.len)
         return Error_Parse_UnterminatedIf;
@@ -1044,7 +1058,7 @@ static Error parse_if(cz::Allocator allocator,
     node->type = Shell_Node::IF;
     node->v.if_.cond = allocator.clone(cond);
     node->v.if_.then = allocator.clone(then);
-    node->v.if_.other = nullptr;
+    node->v.if_.other = other;
 
     return Error_Success;
 }
