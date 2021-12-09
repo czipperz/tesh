@@ -972,6 +972,8 @@ static bool is_path_sep(char ch) {
 }
 
 static void start_completing(Prompt_State* prompt, Shell_State* shell) {
+    cz::Allocator path_allocator = prompt->completion.results_arena.allocator();
+
     /////////////////////////////////////////////
     // Get the query
     /////////////////////////////////////////////
@@ -979,8 +981,9 @@ static void start_completing(Prompt_State* prompt, Shell_State* shell) {
     size_t end = prompt->cursor;
     size_t start = end;
     while (start > 0) {
-        // TODO break on semicolons and handle strings???
-        if (cz::is_space(prompt->text[start - 1]))
+        // TODO handle strings???
+        char ch = prompt->text[start - 1];
+        if (cz::is_space(ch) || ch == ';' || ch == '$')
             break;
         --start;
     }
@@ -990,6 +993,21 @@ static void start_completing(Prompt_State* prompt, Shell_State* shell) {
     cz::Str query = prompt->text.slice(start, end);
 
     prompt->completion.is = true;
+
+    /////////////////////////////////////////////
+    // Get all variable names matching the prefix.
+    /////////////////////////////////////////////
+
+    if (start > 0 && prompt->text[start - 1] == '$') {
+        for (size_t i = 0; i < shell->local.variable_names.len; ++i) {
+            cz::Str result = shell->local.variable_names[i];
+            if (result.starts_with(query)) {
+                prompt->completion.results.reserve(cz::heap_allocator(), 1);
+                prompt->completion.results.push(result.clone_null_terminate(path_allocator));
+            }
+        }
+        return;
+    }
 
     /////////////////////////////////////////////
     // Split by last slash
@@ -1015,8 +1033,6 @@ static void start_completing(Prompt_State* prompt, Shell_State* shell) {
     /////////////////////////////////////////////
     // Get all files matching the prefix.
     /////////////////////////////////////////////
-
-    cz::Allocator path_allocator = prompt->completion.results_arena.allocator();
 
     // Put a dummy element at index 0 so we can tab through back to no completion as a form of undo.
     prompt->completion.results.reserve(cz::heap_allocator(), 1);
