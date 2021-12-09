@@ -486,7 +486,8 @@ TEST_CASE("parse_script argument expansion 1") {
     shell.local.args.push("program");
     shell.local.args.push("thearg1");
     shell.local.args.push("thearg2");
-    CHECK(expand(&shell, "\"$@\"") == "\
+    CHECK(expand(&shell, "\"$@\"") ==
+          "\
 arg0: thearg1\n\
 arg1: thearg2\n");
 }
@@ -497,7 +498,8 @@ TEST_CASE("parse_script argument expansion 2") {
     shell.local.args.push("program");
     shell.local.args.push("thearg1 has spaces");
     shell.local.args.push("thearg2");
-    CHECK(expand(&shell, "\"$@\"") == "\
+    CHECK(expand(&shell, "\"$@\"") ==
+          "\
 arg0: thearg1 has spaces\n\
 arg1: thearg2\n");
 }
@@ -508,7 +510,8 @@ TEST_CASE("parse_script argument expansion 3") {
     shell.local.args.push("program");
     shell.local.args.push("thearg1 has spaces");
     shell.local.args.push("thearg2");
-    CHECK(expand(&shell, "$@") == "\
+    CHECK(expand(&shell, "$@") ==
+          "\
 arg0: thearg1\n\
 arg1: has\n\
 arg2: spaces\n\
@@ -693,6 +696,33 @@ if:\n\
         program:\n\
             arg0: echo\n\
             arg1: bye\n");
+}
+
+TEST_CASE("parse_script if elif statement") {
+    Shell_State shell = {};
+    cz::String string = {};
+    Error error =
+        parse_and_emit(&shell, &string, "if true; then echo hi; elif cond2; then echo bye; fi");
+    REQUIRE(error == Error_Success);
+    CHECK(string.as_str() ==
+          "\
+if:\n\
+    cond:\n\
+        program:\n\
+            arg0: true\n\
+    then:\n\
+        program:\n\
+            arg0: echo\n\
+            arg1: hi\n\
+    other:\n\
+        if:\n\
+            cond:\n\
+                program:\n\
+                    arg0: cond2\n\
+            then:\n\
+                program:\n\
+                    arg0: echo\n\
+                    arg1: bye\n");
 }
 
 TEST_CASE("parse_script function basic") {
