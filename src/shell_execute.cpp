@@ -500,7 +500,6 @@ static Error run_program(Shell_State* shell,
     for (size_t i = 0; i < parse.v.args.len; ++i) {
         expand_arg_split(local, parse.v.args[i], allocator, &args);
     }
-    parse.v.args = args;
 
     // Handle alias.
     if (is_alias) {
@@ -511,9 +510,11 @@ static Error run_program(Shell_State* shell,
         *program->v.sub.local = {};
         program->v.sub.local->parent = local;
         program->v.sub.local->args = args.clone(allocator);
+        program->v.sub.local->blocked_alias = parse.v.args[0];
         return start_execute_node(shell, tty, backlog, &program->v.sub, alias_value);
     }
 
+    parse.v.args = args;
     recognize_builtins(program, parse, allocator);
 
     // If command is a builtin.

@@ -29,6 +29,8 @@ struct Shell_Local {
     cz::Vector<Shell_Node*> alias_values;
 
     cz::Vector<cz::Str> args;
+
+    cz::Str blocked_alias;
 };
 
 struct Shell_State {

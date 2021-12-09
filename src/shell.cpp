@@ -67,6 +67,11 @@ void make_env_var(Shell_State* shell, cz::Str key) {
 }
 
 bool get_alias(const Shell_Local* local, cz::Str key, Shell_Node** value) {
+    for (const Shell_Local* elem = local; elem; elem = elem->parent) {
+        if (key == elem->blocked_alias)
+            return false;
+    }
+
     for (; local; local = local->parent) {
         for (size_t i = 0; i < local->alias_names.len; ++i) {
             if (local->alias_names[i] == key) {
