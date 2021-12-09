@@ -1878,7 +1878,11 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
                         uint64_t old_attached = shell->attached_process;
                         uint64_t old_selected = shell->selected_process;
 
-                        prompt->text = cz::format(temp_allocator, "$TESH_EDITOR '", temp_path, "'");
+                        cz::Str tesh_editor;
+                        bool has_tesh_editor = get_var(&shell->local, "TESH_EDITOR", &tesh_editor);
+                        cz::Str editor = (has_tesh_editor ? "$EDITOR" : "$TESH_EDITOR");
+                        prompt->text = cz::format(temp_allocator, editor, " '", temp_path, "'");
+
                         shell->attached_process = -1;
                         shell->selected_process = -1;
 
