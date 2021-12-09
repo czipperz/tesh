@@ -50,6 +50,11 @@ static Error parse_if(cz::Allocator allocator,
                       cz::Slice<cz::Str> tokens,
                       Shell_Node* node,
                       size_t* index);
+static Error parse_function_declaration(cz::Allocator allocator,
+                                        cz::Slice<cz::Str> tokens,
+                                        Shell_Node* node,
+                                        size_t* index,
+                                        cz::Str name);
 
 static void deref_var_at_point(const Shell_Local* local,
                                cz::Str text,
@@ -68,6 +73,7 @@ Error parse_script(cz::Allocator allocator, Shell_Node* root, cz::Str text) {
         return error;
 
     size_t index = 0;
+
     return parse_sequence(allocator, tokens, root, &index, {});
 }
 
@@ -547,7 +553,11 @@ static Error parse_program(cz::Allocator allocator,
         cz::Str token = tokens[*index];
         if (get_precedence(token)) {
             if (token == "(") {
-                if (program.is_sub || program.v.args.len > 0) {
+                if (!program.is_sub && program.v.args.len == 1) {
+                    // Function declaration
+                    return parse_function_declaration(allocator, tokens, node, index,
+                                                      program.v.args[0]);
+                } else if (program.is_sub || program.v.args.len > 0) {
                     return Error_Parse_UnterminatedProgram;
                 } else {
                     ++*index;
@@ -1007,6 +1017,49 @@ static Error parse_if(cz::Allocator allocator,
     node->v.if_.cond = allocator.clone(cond);
     node->v.if_.then = allocator.clone(then);
     node->v.if_.other = nullptr;
+
+    return Error_Success;
+}
+
+static Error parse_function_declaration(cz::Allocator allocator,
+                                        cz::Slice<cz::Str> tokens,
+                                        Shell_Node* node,
+                                        size_t* index,
+                                        cz::Str name) {
+    if (*index == tokens.len)
+        return Error_Parse_UnterminatedFunctionDeclaration;
+    if (tokens[*index] != "(")
+        return Error_Parse_UnterminatedFunctionDeclaration;
+    ++*index;
+
+    if (*index == tokens.len)
+        return Error_Parse_UnterminatedFunctionDeclaration;
+    if (tokens[*index] != ")")
+        return Error_Parse_UnterminatedFunctionDeclaration;
+    ++*index;
+
+    if (*index == tokens.len)
+        return Error_Parse_UnterminatedFunctionDeclaration;
+    if (tokens[*index] != "{")
+        return Error_Parse_UnterminatedFunctionDeclaration;
+    ++*index;
+
+    cz::Str terminators[] = {"}"};
+    Shell_Node body;
+    Error error = parse_sequence(allocator, tokens, &body, index, terminators);
+    if (error != Error_Success)
+        return error;
+
+    if (*index == tokens.len)
+        return Error_Parse_UnterminatedFunctionDeclaration;
+    if (tokens[*index] != "}")
+        return Error_Parse_UnterminatedFunctionDeclaration;
+    ++*index;
+
+    *node = {};
+    node->type = Shell_Node::FUNCTION;
+    node->v.function.name = name;
+    node->v.function.body = allocator.clone(body);
 
     return Error_Success;
 }

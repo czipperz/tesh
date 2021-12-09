@@ -78,6 +78,13 @@ static void test_append_node(cz::Allocator allocator,
         }
     } break;
 
+    case Shell_Node::FUNCTION: {
+        append(allocator, string, cz::many(' ', depth * spd), "function", async_str, ":\n");
+        append(allocator, string, cz::many(' ', (depth + 1) * spd), "name: ", node->v.function.name, "\n");
+        append(allocator, string, cz::many(' ', (depth + 1) * spd), "body:\n");
+        test_append_node(allocator, string, node->v.function.body, depth + 2);
+    } break;
+
     default:
         CZ_PANIC("Invalid Shell_Node type");
     }
@@ -619,4 +626,19 @@ if:\n\
     then:\n\
         program:\n\
             arg0: echo\n");
+}
+
+TEST_CASE("parse_script function basic") {
+    Shell_State shell = {};
+    cz::String string = {};
+    Error error = parse_and_emit(&shell, &string, "f() { echo }; }");
+    REQUIRE(error == Error_Success);
+    CHECK(string.as_str() ==
+          "\
+function:\n\
+    name: f\n\
+    body:\n\
+        program:\n\
+            arg0: echo\n\
+            arg1: }\n");
 }

@@ -265,6 +265,7 @@ struct Shell_Node {
         AND,
         OR,
         IF,
+        FUNCTION,
     };
     Type type : 7;
     uint8_t async : 1;
@@ -281,6 +282,10 @@ struct Shell_Node {
             Shell_Node* then;
             Shell_Node* other;  // NULL if no else statement.
         } if_;
+        struct {
+            cz::Str name;
+            Shell_Node* body;
+        } function;
     } v;
 };
 

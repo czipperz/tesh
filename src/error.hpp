@@ -8,6 +8,7 @@ enum Error {
     Error_Parse_UnterminatedProgram,
     Error_Parse_UnterminatedParen,
     Error_Parse_UnterminatedIf,
+    Error_Parse_UnterminatedFunctionDeclaration,
     Error_Parse_EmptyProgram,
     Error_Parse_NothingToIndirect,
     Error_InvalidPath,
