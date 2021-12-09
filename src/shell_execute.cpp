@@ -194,6 +194,9 @@ static void do_descend_to_first_pipeline(cz::Vector<Shell_Node*>* path, Shell_No
         case Shell_Node::OR:
             child = child->v.binary.left;
             break;
+        case Shell_Node::IF:
+            child = child->v.if_.cond;
+            break;
         default:
             CZ_PANIC("Invalid Shell_Node type");
         }
@@ -243,6 +246,15 @@ static bool walk_to_next_pipeline(cz::Vector<Shell_Node*>* path, Walk_Status sta
             if (child == parent->v.binary.left && !success)
                 return descend_to_first_pipeline(path, parent->v.binary.right);
         } break;
+
+        case Shell_Node::IF:
+            if (child == parent->v.if_.cond) {
+                if (success)
+                    return descend_to_first_pipeline(path, parent->v.if_.then);
+                else if (parent->v.if_.other)
+                    return descend_to_first_pipeline(path, parent->v.if_.other);
+            }
+            break;
 
         case Shell_Node::PROGRAM:
         case Shell_Node::PIPELINE:
