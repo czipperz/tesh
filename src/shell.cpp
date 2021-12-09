@@ -164,6 +164,8 @@ void cleanup_pipeline(Running_Pipeline* pipeline) {
     for (size_t p = 0; p < pipeline->programs.len; ++p) {
         kill_program(&pipeline->programs[p]);
     }
+    pipeline->has_exit_code = false;
+    pipeline->last_exit_code = 0;
 }
 
 static void cleanup_script(Running_Script* script) {
