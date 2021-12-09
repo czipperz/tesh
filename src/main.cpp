@@ -1046,10 +1046,29 @@ skip_absolute:
     if (result <= 0)
         return;
 
+    cz::String temp_path = {};
+    CZ_DEFER(temp_path.drop(temp_allocator));
+    temp_path.reserve(temp_allocator, path.len + 16);
+    temp_path.append(path);
+    if (!temp_path.ends_with('/'))
+        temp_path.push('/');
+    size_t temp_path_orig_len = temp_path.len;
+
     while (1) {
         cz::Str name = iterator.str_name();
         if (name.starts_with(prefix)) {
-            cz::String file = name.clone_null_terminate(path_allocator);
+            temp_path.len = temp_path_orig_len;
+            temp_path.reserve(temp_allocator, name.len + 1);
+            temp_path.append(name);
+            temp_path.null_terminate();
+            bool is_dir = cz::file::is_directory(temp_path.buffer);
+
+            cz::String file = {};
+            file.reserve_exact(path_allocator, name.len + is_dir + 1);
+            file.append(name);
+            if (is_dir)
+                file.push('/');
+            file.null_terminate();
             prompt->completion.results.reserve(cz::heap_allocator(), 1);
             prompt->completion.results.push(file);
         }
