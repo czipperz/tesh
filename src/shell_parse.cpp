@@ -45,7 +45,10 @@ static Error parse_program(cz::Allocator allocator,
                            size_t* index);
 static Error deal_with_token(cz::Allocator allocator, Parse_Program* program, cz::Str token);
 
-static cz::Str deref_var_at_point(const Shell_Local* local, cz::Str text, size_t* index);
+static void deref_var_at_point(const Shell_Local* local,
+                               cz::Str text,
+                               size_t* index,
+                               cz::Vector<cz::Str>* outputs);
 
 ///////////////////////////////////////////////////////////////////////////////
 // Driver
@@ -681,9 +684,31 @@ void expand_arg(const Shell_Local* local,
                     ++index;
                     break;
                 } else if (text[index] == '$') {
-                    cz::Str value = deref_var_at_point(local, text, &index);
-                    word->reserve(allocator, value.len);
-                    word->append(value);
+                    size_t index_before = index;
+                    cz::Vector<cz::Str> values = {};
+                    CZ_DEFER(values.drop(cz::heap_allocator()));
+                    deref_var_at_point(local, text, &index, &values);
+
+                    if (words && index_before == 1 && text[index] == '"') {
+                        // "$@" -> "$1" "$2" "$3" ...
+                        CZ_DEBUG_ASSERT(word->len == 0);
+                        words->reserve(cz::heap_allocator(), values.len);
+                        words->append(values);
+                    } else if (values.len == 1) {
+                        // "$x" -> "$x"
+                        word->reserve(allocator, values[0].len);
+                        word->append(values[0]);
+                    } else {
+                        // "a$@" -> "a$1 $2 $3 ..."
+                        // x="$@" -> x="$1 $2 $3 ..."
+                        for (size_t i = 0; i < values.len; ++i) {
+                            if (i >= 1)
+                                word->push(' ');
+                            word->reserve(allocator, values[i].len + 1);
+                            word->append(values[i]);
+                        }
+                    }
+
                     continue;
                 } else if (text[index] == '\\') {
                     ++index;
@@ -716,34 +741,52 @@ void expand_arg(const Shell_Local* local,
         } break;
 
         case '$': {
-            cz::Str value = deref_var_at_point(local, text, &index);
+            cz::Vector<cz::Str> values = {};
+            CZ_DEFER(values.drop(cz::heap_allocator()));
+            deref_var_at_point(local, text, &index, &values);
+
             if (words) {
-                size_t i = 0;
-                while (i < value.len) {
-                    if (cz::is_blank(value[i])) {
-                        if (has_word || word->len > 0) {
-                            words->reserve(cz::heap_allocator(), 1);
-                            words->push(*word);
-                            *word = {};
-                            has_word = false;
-                        }
-                        ++i;
-                    }
-                    for (; i < value.len; ++i) {
-                        if (!cz::is_blank(value[i]))
-                            break;
+                for (size_t v = 0; v < values.len; ++v) {
+                    cz::Str value = values[v];
+
+                    // Break up arguments.
+                    if (v > 0 && (has_word || word->len > 0)) {
+                        words->reserve(cz::heap_allocator(), 1);
+                        words->push(*word);
+                        *word = {};
+                        has_word = false;
                     }
 
-                    for (; i < value.len; ++i) {
-                        if (cz::is_blank(value[i]))
-                            break;
-                        word->reserve(allocator, 1);
-                        word->push(value[i]);
+                    for (size_t i = 0; i < value.len;) {
+                        if (cz::is_blank(value[i])) {
+                            if (has_word || word->len > 0) {
+                                words->reserve(cz::heap_allocator(), 1);
+                                words->push(*word);
+                                *word = {};
+                                has_word = false;
+                            }
+                            ++i;
+                        }
+                        for (; i < value.len; ++i) {
+                            if (!cz::is_blank(value[i]))
+                                break;
+                        }
+
+                        for (; i < value.len; ++i) {
+                            if (cz::is_blank(value[i]))
+                                break;
+                            word->reserve(allocator, 1);
+                            word->push(value[i]);
+                        }
                     }
                 }
             } else {
-                word->reserve(allocator, value.len);
-                word->append(value);
+                for (size_t v = 0; v < values.len; ++v) {
+                    if (v >= 1)
+                        word->push(' ');
+                    word->reserve(allocator, values[v].len + 1);
+                    word->append(values[v]);
+                }
             }
         } break;
 
@@ -813,10 +856,17 @@ void expand_arg_split(const Shell_Local* local,
     expand_arg(local, text, allocator, output, &word);
 }
 
-static cz::Str deref_var_at_point(const Shell_Local* local, cz::Str text, size_t* index) {
+static void deref_var_at_point(const Shell_Local* local,
+                               cz::Str text,
+                               size_t* index,
+                               cz::Vector<cz::Str>* outputs) {
+    outputs->reserve(cz::heap_allocator(), 1);
+
     ++*index;
-    if (*index == text.len)
-        return "$";
+    if (*index == text.len) {
+        outputs->push("$");
+        return;
+    }
 
     switch (text[*index]) {
     case CZ_ALPHA_CASES:
@@ -831,8 +881,8 @@ static cz::Str deref_var_at_point(const Shell_Local* local, cz::Str text, size_t
         }
         cz::Str value = "";
         get_var(local, text.slice(start, *index), &value);
-        return value;
-    }
+        outputs->push(value);
+    } break;
 
     case '{': {
         ++*index;
@@ -850,11 +900,18 @@ static cz::Str deref_var_at_point(const Shell_Local* local, cz::Str text, size_t
         cz::Str value = "";
         get_var(local, text.slice(start, *index), &value);
         ++*index;
-        return value;
-    }
+        outputs->push(value);
+    } break;
 
     case '@': {
         ++*index;
+        if (local->args.len == 0)
+            break;
+        outputs->reserve(cz::heap_allocator(), local->args.len - 1);
+        outputs->append(local->args.slice_start(1));
+    } break;
+
+    case '*': {
         cz::String string = {};
         for (size_t i = 1; i < local->args.len; ++i) {
             if (i >= 2)
@@ -862,11 +919,12 @@ static cz::Str deref_var_at_point(const Shell_Local* local, cz::Str text, size_t
             string.reserve(temp_allocator, local->args[i].len + 1);
             string.append(local->args[i]);
         }
-        return string;
-    }
+        outputs->push(string);
+    } break;
 
-    case '#':
-        return cz::format(temp_allocator, cz::max(local->args.len, (size_t)1) - 1);
+    case '#': {
+        outputs->push(cz::format(temp_allocator, cz::max(local->args.len, (size_t)1) - 1));
+    } break;
 
     case CZ_DIGIT_CASES: {
         size_t i = 0;
@@ -877,12 +935,13 @@ static cz::Str deref_var_at_point(const Shell_Local* local, cz::Str text, size_t
         }
         *index += eat;
 
-        if (i < local->args.len)
-            return local->args[i];
-        return "";
-    }
+        if (i < local->args.len) {
+            outputs->push(local->args[i]);
+        }
+    } break;
 
     default:
-        return "$";
+        outputs->push("$");
+        return;
     }
 }
