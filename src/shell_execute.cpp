@@ -511,10 +511,6 @@ static Error run_program(Shell_State* shell,
         return start_execute_node(shell, tty, backlog, &program->v.sub, parse.v.sub);
     }
 
-    // Lookup aliases before expanding.  Thus the user can type 'alias' and get around the alias.
-    Shell_Node* alias_value;
-    bool is_alias = (parse.v.args.len > 0 && get_alias(local, parse.v.args[0], &alias_value));
-
     // Expand arguments.
     cz::Vector<cz::Str> args = {};
     CZ_DEFER(args.drop(cz::heap_allocator()));
@@ -522,23 +518,29 @@ static Error run_program(Shell_State* shell,
         expand_arg_split(local, parse.v.args[i], allocator, &args);
     }
 
-    bool is_function = (!is_alias && (args.len > 0 && get_function(local, args[0], &alias_value)));
+    if (parse.v.args.len > 0 || args.len > 0) {
+        // Lookup aliases based on the raw arguments, functions based on the expanded arguments.
+        cz::Str alias_key = (parse.v.args.len > 0 ? parse.v.args[0] : "");
+        cz::Str function_key = (args.len > 0 ? args[0] : "");
+        Shell_Node* body;
+        int result = get_alias_or_function(local, alias_key, function_key, &body);
 
-    // Handle alias.
-    if (is_alias || is_function) {
-        program->type = Running_Program::SUB;
-        program->v.sub = {};
-        program->v.sub.stdio = stdio;
-        program->v.sub.local = allocator.alloc<Shell_Local>();
-        *program->v.sub.local = {};
-        program->v.sub.local->parent = local;
-        if (is_alias) {
+        if (result != 0) {
+            program->type = Running_Program::SUB;
+            program->v.sub = {};
+            program->v.sub.stdio = stdio;
+            program->v.sub.local = allocator.alloc<Shell_Local>();
+            *program->v.sub.local = {};
+            program->v.sub.local->parent = local;
             program->v.sub.local->args = args.clone(allocator);
-            program->v.sub.local->blocked_alias = parse.v.args[0];
-        } else {
-            program->v.sub.local->args = args.clone(allocator);
+
+            // Track the alias stack to prevent infinite recursion on 'alias ls=ls; ls'.
+            if (result == 1) {
+                program->v.sub.local->blocked_alias = parse.v.args[0];
+            }
+
+            return start_execute_node(shell, tty, backlog, &program->v.sub, body);
         }
-        return start_execute_node(shell, tty, backlog, &program->v.sub, alias_value);
     }
 
     parse.v.args = args;

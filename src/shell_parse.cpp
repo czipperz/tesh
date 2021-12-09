@@ -68,7 +68,8 @@ static Error parse_function_declaration(cz::Allocator allocator,
 static void deref_var_at_point(const Shell_Local* local,
                                cz::Str text,
                                size_t* index,
-                               cz::Vector<cz::Str>* outputs);
+                               cz::Vector<cz::Str>* outputs,
+                               bool* force_merge);
 
 ///////////////////////////////////////////////////////////////////////////////
 // Driver
@@ -315,7 +316,7 @@ static Error advance_through_dollar_sign(cz::Str text, size_t* index) {
         return Error_Success;
 
     switch (text[*index]) {
-    case CZ_ALNUM_CASES:
+    case CZ_ALPHA_CASES:
     case '_': {
         ++*index;
         while (*index < text.len) {
@@ -342,8 +343,19 @@ static Error advance_through_dollar_sign(cz::Str text, size_t* index) {
         ++*index;
     } break;
 
-    case '@': {
+    case '@':
+    case '*': {
         ++*index;
+    } break;
+
+    case CZ_DIGIT_CASES: {
+        ++*index;
+        while (*index < text.len) {
+            char ch = text[*index];
+            if (!cz::is_digit(ch))
+                break;
+            ++*index;
+        }
     } break;
 
     default:
@@ -735,13 +747,15 @@ void expand_arg(const Shell_Local* local,
                     size_t index_before = index;
                     cz::Vector<cz::Str> values = {};
                     CZ_DEFER(values.drop(cz::heap_allocator()));
-                    deref_var_at_point(local, text, &index, &values);
+                    bool force_merge = false;
+                    deref_var_at_point(local, text, &index, &values, &force_merge);
 
-                    if (words && index_before == 1 && text[index] == '"') {
+                    if (words && index_before == 1 && text[index] == '"' && !force_merge) {
                         // "$@" -> "$1" "$2" "$3" ...
                         CZ_DEBUG_ASSERT(word->len == 0);
                         words->reserve(cz::heap_allocator(), values.len);
                         words->append(values);
+                        has_word = false;
                     } else if (values.len == 1) {
                         // "$x" -> "$x"
                         word->reserve(allocator, values[0].len);
@@ -791,7 +805,8 @@ void expand_arg(const Shell_Local* local,
         case '$': {
             cz::Vector<cz::Str> values = {};
             CZ_DEFER(values.drop(cz::heap_allocator()));
-            deref_var_at_point(local, text, &index, &values);
+            bool force_merge = false;
+            deref_var_at_point(local, text, &index, &values, &force_merge);
 
             if (words) {
                 for (size_t v = 0; v < values.len; ++v) {
@@ -907,7 +922,8 @@ void expand_arg_split(const Shell_Local* local,
 static void deref_var_at_point(const Shell_Local* local,
                                cz::Str text,
                                size_t* index,
-                               cz::Vector<cz::Str>* outputs) {
+                               cz::Vector<cz::Str>* outputs,
+                               bool* force_merge) {
     outputs->reserve(cz::heap_allocator(), 1);
 
     ++*index;
@@ -951,23 +967,15 @@ static void deref_var_at_point(const Shell_Local* local,
         outputs->push(value);
     } break;
 
+    case '*':
+        *force_merge = true;
+        // fallthrough
     case '@': {
         ++*index;
         if (local->args.len == 0)
             break;
         outputs->reserve(cz::heap_allocator(), local->args.len - 1);
         outputs->append(local->args.slice_start(1));
-    } break;
-
-    case '*': {
-        cz::String string = {};
-        for (size_t i = 1; i < local->args.len; ++i) {
-            if (i >= 2)
-                string.push(' ');
-            string.reserve(temp_allocator, local->args[i].len + 1);
-            string.append(local->args[i]);
-        }
-        outputs->push(string);
     } break;
 
     case '#': {

@@ -67,17 +67,31 @@ void make_env_var(Shell_State* shell, cz::Str key) {
     shell->exported_vars.push(key.clone(cz::heap_allocator()));
 }
 
-bool get_alias(const Shell_Local* local, cz::Str key, Shell_Node** value) {
+int get_alias_or_function(const Shell_Local* local,
+                          cz::Str alias_key,
+                          cz::Str function_key,
+                          Shell_Node** value) {
+    bool allow_alias = true;
     for (const Shell_Local* elem = local; elem; elem = elem->parent) {
-        if (key == elem->blocked_alias)
-            return false;
+        if (alias_key == elem->blocked_alias) {
+            allow_alias = false;
+            break;
+        }
     }
 
     for (; local; local = local->parent) {
-        for (size_t i = 0; i < local->alias_names.len; ++i) {
-            if (local->alias_names[i] == key) {
-                *value = local->alias_values[i];
-                return true;
+        if (allow_alias) {
+            for (size_t i = 0; i < local->alias_names.len; ++i) {
+                if (local->alias_names[i] == alias_key) {
+                    *value = local->alias_values[i];
+                    return 1;
+                }
+            }
+        }
+        for (size_t i = 0; i < local->function_names.len; ++i) {
+            if (local->function_names[i] == function_key) {
+                *value = local->function_values[i];
+                return 2;
             }
         }
     }
@@ -98,18 +112,6 @@ void set_alias(Shell_Local* local, cz::Str key, Shell_Node* node) {
     // TODO: garbage collect / ref count?
     local->alias_names.push(key.clone(cz::heap_allocator()));
     local->alias_values.push(node);
-}
-
-bool get_function(const Shell_Local* local, cz::Str key, Shell_Node** value) {
-    for (; local; local = local->parent) {
-        for (size_t i = 0; i < local->function_names.len; ++i) {
-            if (local->function_names[i] == key) {
-                *value = local->function_values[i];
-                return true;
-            }
-        }
-    }
-    return false;
 }
 
 void set_function(Shell_Local* local, cz::Str key, Shell_Node* node) {

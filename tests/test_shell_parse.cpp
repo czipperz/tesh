@@ -480,6 +480,50 @@ TEST_CASE("parse_script tilde expanded simple") {
     CHECK(expand(&shell, "~/abc/123") == "arg0: /path/to/my/home/abc/123\n");
 }
 
+TEST_CASE("parse_script argument expansion 1") {
+    Shell_State shell = {};
+    shell.local.args.reserve(cz::heap_allocator(), 3);
+    shell.local.args.push("program");
+    shell.local.args.push("thearg1");
+    shell.local.args.push("thearg2");
+    CHECK(expand(&shell, "\"$@\"") == "\
+arg0: thearg1\n\
+arg1: thearg2\n");
+}
+
+TEST_CASE("parse_script argument expansion 2") {
+    Shell_State shell = {};
+    shell.local.args.reserve(cz::heap_allocator(), 3);
+    shell.local.args.push("program");
+    shell.local.args.push("thearg1 has spaces");
+    shell.local.args.push("thearg2");
+    CHECK(expand(&shell, "\"$@\"") == "\
+arg0: thearg1 has spaces\n\
+arg1: thearg2\n");
+}
+
+TEST_CASE("parse_script argument expansion 3") {
+    Shell_State shell = {};
+    shell.local.args.reserve(cz::heap_allocator(), 3);
+    shell.local.args.push("program");
+    shell.local.args.push("thearg1 has spaces");
+    shell.local.args.push("thearg2");
+    CHECK(expand(&shell, "$@") == "\
+arg0: thearg1\n\
+arg1: has\n\
+arg2: spaces\n\
+arg3: thearg2\n");
+}
+
+TEST_CASE("parse_script argument expansion 4") {
+    Shell_State shell = {};
+    shell.local.args.reserve(cz::heap_allocator(), 3);
+    shell.local.args.push("program");
+    shell.local.args.push("thearg1");
+    shell.local.args.push("thearg2");
+    CHECK(expand(&shell, "\"$*\"") == "arg0: thearg1 thearg2\n");
+}
+
 TEST_CASE("parse_script comment basic") {
     Shell_State shell = {};
     cz::String string = {};

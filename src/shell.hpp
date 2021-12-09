@@ -54,10 +54,14 @@ void set_var(Shell_Local* local, cz::Str key, cz::Str value);
 void make_env_var(Shell_State* shell, cz::Str key);
 cz::Str get_wd(const Shell_Local* local);
 void set_wd(Shell_Local* local, cz::Str value);
-bool get_alias(const Shell_Local* local, cz::Str key, Shell_Node** value);
 void set_alias(Shell_Local* local, cz::Str key, Shell_Node* node);
-bool get_function(const Shell_Local* local, cz::Str key, Shell_Node** value);
 void set_function(Shell_Local* local, cz::Str key, Shell_Node* node);
+
+/// Returns 0 on failure, 1 for alias, 2 for function.
+int get_alias_or_function(const Shell_Local* local,
+                          cz::Str alias_key,
+                          cz::Str function_key,
+                          Shell_Node** value);
 
 void cleanup_processes(Shell_State* shell);
 void recycle_process(Shell_State* shell, Running_Script* script);
