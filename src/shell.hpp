@@ -64,6 +64,8 @@ void cleanup_local(Shell_Local* local);
 cz::Buffer_Array alloc_arena(Shell_State* shell);
 void recycle_arena(Shell_State* shell, cz::Buffer_Array arena);
 
+void append_node(cz::Allocator allocator, cz::String* string, Shell_Node* node, bool add_semicolon);
+
 /// Get the attached process, or `nullptr` if there is none.
 Running_Script* attached_process(Shell_State* shell);
 /// Get the selected process, or `nullptr` if there is none.

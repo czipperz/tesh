@@ -399,11 +399,13 @@ static bool tick_program(Shell_State* shell,
                 size_t i = 0;
                 for (; i < local->alias_names.len; ++i) {
                     if (arg == local->alias_names[i]) {
-                        (void)builtin.out.write("alias ");
+                        (void)builtin.out.write("alias: ");
                         (void)builtin.out.write(local->alias_names[i]);
-                        (void)builtin.out.write("=");
-                        CZ_PANIC("todo");
-                        // (void)builtin.out.write(local->alias_values[i]);
+                        (void)builtin.out.write(" is aliased to: ");
+                        cz::String string = {};
+                        append_node(temp_allocator, &string, local->alias_values[i], false);
+                        (void)builtin.out.write(string);
+                        string.drop(temp_allocator);
                         (void)builtin.out.write("\n");
                         break;
                     }

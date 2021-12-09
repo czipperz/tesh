@@ -1,5 +1,6 @@
 #include "shell.hpp"
 
+#include <cz/format.hpp>
 #include <cz/heap.hpp>
 
 static cz::Str canonical_var(cz::Str key) {
@@ -212,4 +213,94 @@ Running_Script* lookup_process(Shell_State* shell, uint64_t id) {
             return script;
     }
     return nullptr;
+}
+
+void append_node(cz::Allocator allocator,
+                 cz::String* string,
+                 Shell_Node* node,
+                 bool append_semicolon) {
+    switch (node->type) {
+    case Shell_Node::SEQUENCE: {
+        if (node->async)
+            cz::append(allocator, string, "(");
+
+        for (size_t i = 0; i < node->v.sequence.len; ++i) {
+            if (i > 0)
+                cz::append(allocator, string, ' ');
+            append_node(allocator, string, &node->v.sequence[i], true);
+        }
+
+        if (node->async)
+            cz::append(allocator, string, ") &");
+        else if (append_semicolon)
+            cz::append(allocator, string, ";");
+    } break;
+
+    case Shell_Node::PROGRAM: {
+        Parse_Program* program = node->v.program;
+        for (size_t i = 0; i < program->variable_names.len; ++i) {
+            if (i > 0)
+                cz::append(allocator, string, ' ');
+            cz::append(allocator, string, program->variable_names[i], '=',
+                       program->variable_values[i]);
+        }
+
+        if (program->is_sub) {
+            if (program->variable_names.len > 0)
+                cz::append(allocator, string, ' ');
+            cz::append(allocator, string, "(");
+            append_node(allocator, string, program->v.sub, false);
+        } else {
+            for (size_t i = 0; i < program->v.args.len; ++i) {
+                if (i > 0 || program->variable_names.len > 0)
+                    cz::append(allocator, string, ' ');
+                cz::append(allocator, string, program->v.args[i]);
+            }
+        }
+
+        if (program->in_file.buffer)
+            cz::append(allocator, string, " < ", program->in_file);
+        if (program->out_file.buffer)
+            cz::append(allocator, string, " > ", program->out_file);
+        if (program->err_file.buffer)
+            cz::append(allocator, string, " 2> ", program->err_file);
+
+        if (node->async)
+            cz::append(allocator, string, " &");
+        else if (append_semicolon)
+            cz::append(allocator, string, ";");
+    } break;
+
+    case Shell_Node::PIPELINE: {
+        if (node->async)
+            cz::append(allocator, string, "(");
+
+        for (size_t i = 0; i < node->v.pipeline.len; ++i) {
+            if (i > 0)
+                cz::append(allocator, string, " | ");
+            append_node(allocator, string, &node->v.pipeline[i], false);
+        }
+
+        if (node->async)
+            cz::append(allocator, string, ") &");
+        else if (append_semicolon)
+            cz::append(allocator, string, ";");
+    } break;
+
+    case Shell_Node::AND:
+    case Shell_Node::OR: {
+        cz::Str middle = (node->type == Shell_Node::AND ? ") && (" : ") || (");
+
+        cz::append(allocator, string, "(");
+        append_node(allocator, string, node->v.binary.left, false);
+        cz::append(allocator, string, middle);
+        append_node(allocator, string, node->v.binary.right, false);
+        cz::append(allocator, string, ")");
+
+        if (node->async)
+            cz::append(allocator, string, " &");
+        else if (append_semicolon)
+            cz::append(allocator, string, ";");
+    } break;
+    }
 }

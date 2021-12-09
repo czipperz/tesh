@@ -2,7 +2,7 @@
 
 #include "shell.hpp"
 
-static void append_node(cz::Allocator allocator,
+static void test_append_node(cz::Allocator allocator,
                         cz::String* string,
                         Shell_Node* node,
                         size_t depth) {
@@ -20,7 +20,7 @@ static void append_node(cz::Allocator allocator,
         }
         if (program->is_sub) {
             append(allocator, string, cz::many(' ', (depth + 1) * spd), "sub:\n");
-            append_node(allocator, string, program->v.sub, depth + 2);
+            test_append_node(allocator, string, program->v.sub, depth + 2);
         } else {
             for (size_t i = 0; i < program->v.args.len; ++i) {
                 append(allocator, string, cz::many(' ', (depth + 1) * spd), "arg", i, ": ",
@@ -44,7 +44,7 @@ static void append_node(cz::Allocator allocator,
     case Shell_Node::PIPELINE: {
         append(allocator, string, cz::many(' ', depth * spd), "pipeline", async_str, ":\n");
         for (size_t i = 0; i < node->v.pipeline.len; ++i) {
-            append_node(allocator, string, &node->v.pipeline[i], depth + 1);
+            test_append_node(allocator, string, &node->v.pipeline[i], depth + 1);
         }
     } break;
 
@@ -52,8 +52,8 @@ static void append_node(cz::Allocator allocator,
     case Shell_Node::OR: {
         cz::Str op = (node->type == Shell_Node::AND ? "and" : "or");
         append(allocator, string, cz::many(' ', depth * spd), op, async_str, ":\n");
-        append_node(allocator, string, node->v.binary.left, depth + 1);
-        append_node(allocator, string, node->v.binary.right, depth + 1);
+        test_append_node(allocator, string, node->v.binary.left, depth + 1);
+        test_append_node(allocator, string, node->v.binary.right, depth + 1);
     } break;
 
     case Shell_Node::SEQUENCE:
@@ -62,7 +62,7 @@ static void append_node(cz::Allocator allocator,
             depth++;
         }
         for (size_t i = 0; i < node->v.sequence.len; ++i) {
-            append_node(allocator, string, &node->v.sequence[i], depth);
+            test_append_node(allocator, string, &node->v.sequence[i], depth);
         }
         break;
 
@@ -75,7 +75,7 @@ static Error parse_and_emit(const Shell_State* shell, cz::String* string, cz::St
     Shell_Node root = {};
     Error error = parse_script(cz::heap_allocator(), &root, text);
     if (error == Error_Success)
-        append_node(cz::heap_allocator(), string, &root, 0);
+        test_append_node(cz::heap_allocator(), string, &root, 0);
     return error;
 }
 
