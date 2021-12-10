@@ -674,6 +674,10 @@ static Error deal_with_token(cz::Allocator allocator,
 
             cz::Str key = token.slice_end(index);
             cz::Str value = token.slice_start(index + 1);
+            if (force_alloc) {
+                key = key.clone_null_terminate(allocator);
+                value = value.clone_null_terminate(allocator);
+            }
             program->variable_names.reserve(cz::heap_allocator(), 1);
             program->variable_values.reserve(cz::heap_allocator(), 1);
             program->variable_names.push(key);
