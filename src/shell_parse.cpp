@@ -321,7 +321,7 @@ static Error advance_through_dollar_sign(cz::Str text, size_t* index) {
         ++*index;
         while (*index < text.len) {
             char ch = text[*index];
-            if (!cz::is_alnum(ch) || ch == '_')
+            if (!(cz::is_alnum(ch) || ch == '_'))
                 break;
             ++*index;
         }
@@ -332,7 +332,7 @@ static Error advance_through_dollar_sign(cz::Str text, size_t* index) {
         size_t start = *index;
         while (*index < text.len) {
             char ch = text[*index];
-            if (!cz::is_alnum(ch) || ch == '_')
+            if (!(cz::is_alnum(ch) || ch == '_'))
                 break;
             ++*index;
         }
@@ -953,7 +953,7 @@ static void deref_var_at_point(const Shell_Local* local,
         size_t start = *index;
         while (*index < text.len) {
             char ch = text[*index];
-            if (!cz::is_alnum(ch) || ch == '_')
+            if (!(cz::is_alnum(ch) || ch == '_'))
                 break;
             ++*index;
         }
