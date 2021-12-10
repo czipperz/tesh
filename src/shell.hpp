@@ -204,6 +204,7 @@ struct Running_Program {
         ATTACH,
         ARGDUMP,
         VARDUMP,
+        SHIFT,
     } type;
     union {
         cz::Process process;

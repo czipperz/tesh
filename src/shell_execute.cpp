@@ -492,7 +492,7 @@ static Error run_program(Shell_State* shell,
                          Backlog_State* backlog) {
     {
         cz::Vector<cz::Str> variable_values = {};
-        variable_values.reserve(allocator, parse.variable_values.len);
+        variable_values.reserve_exact(allocator, parse.variable_values.len);
         for (size_t i = 0; i < parse.variable_values.len; ++i) {
             cz::String value = {};
             expand_arg_single(local, parse.variable_values[i], allocator, &value);
@@ -783,6 +783,8 @@ static void recognize_builtins(Running_Program* program,
             program->type = Running_Program::ARGDUMP;
         } else if (parse.v.args[0] == "vardump") {
             program->type = Running_Program::VARDUMP;
+        } else if (parse.v.args[0] == "shift") {
+            program->type = Running_Program::SHIFT;
         }
     }
 

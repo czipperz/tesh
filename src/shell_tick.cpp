@@ -581,7 +581,7 @@ static bool tick_program(Shell_State* shell,
 
     case Running_Program::ARGDUMP: {
         auto& builtin = program->v.builtin;
-        for (size_t i = 0; i < builtin.args.len; ++i) {
+        for (size_t i = 1; i < builtin.args.len; ++i) {
             (void)builtin.out.write(builtin.args[i]);
             (void)builtin.out.write("\n");
         }
@@ -600,6 +600,12 @@ static bool tick_program(Shell_State* shell,
                 (void)builtin.out.write("\n");
             }
         }
+        goto finish_builtin;
+    } break;
+
+    case Running_Program::SHIFT: {
+        if (local->args.len > 0)
+            local->args.remove(0);
         goto finish_builtin;
     } break;
 
