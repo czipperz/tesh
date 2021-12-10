@@ -527,6 +527,17 @@ TEST_CASE("parse_script argument expansion 4") {
     CHECK(expand(&shell, "\"$*\"") == "arg0: thearg1 thearg2\n");
 }
 
+TEST_CASE("parse_script argument expansion 5") {
+    temp_allocator = cz::heap_allocator();
+
+    Shell_State shell = {};
+    shell.local.args.reserve(cz::heap_allocator(), 3);
+    shell.local.args.push("program");
+    shell.local.args.push("thearg1 has spaces");
+    shell.local.args.push("thearg2");
+    CHECK(expand(&shell, "$#") == "arg0: 2\n");
+}
+
 TEST_CASE("parse_script comment basic") {
     Shell_State shell = {};
     cz::String string = {};

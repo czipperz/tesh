@@ -344,7 +344,8 @@ static Error advance_through_dollar_sign(cz::Str text, size_t* index) {
     } break;
 
     case '@':
-    case '*': {
+    case '*':
+    case '#': {
         ++*index;
     } break;
 
@@ -983,6 +984,7 @@ static void deref_var_at_point(const Shell_Local* local,
     } break;
 
     case '#': {
+        ++*index;
         outputs->push(cz::format(temp_allocator, cz::max(local->args.len, (size_t)1) - 1));
     } break;
 
