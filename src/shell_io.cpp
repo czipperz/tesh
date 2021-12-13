@@ -7,6 +7,8 @@
 int64_t Process_Output::write(const void* buffer, size_t len) {
     switch (type) {
     case FILE:
+        if (!v.file.is_open())
+            return 0;
         return v.file.write(buffer, len);
     case BACKLOG:
         return append_text(v.backlog, {(const char*)buffer, len});
@@ -56,6 +58,8 @@ static int64_t detect_eot(void* buffer, int64_t length, bool* done) {
 
 int64_t Process_Input::read(void* buffer, size_t len) {
     if (done)
+        return 0;
+    if (!file.is_open())
         return 0;
     if (!should_read(this))
         return -1;
