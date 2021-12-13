@@ -1824,8 +1824,13 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
             mod &= ~KMOD_GUI;
 
             SDL_Keycode key = event.key.keysym.sym;
-            if (cfg.escape_closes && key == SDLK_ESCAPE)
-                return -1;
+
+            if (key == SDLK_ESCAPE) {
+                if (cfg.escape_closes)
+                    return -1;
+                else
+                    stop_selecting(rend);
+            }
 
             if (handle_prompt_manipulation_commands(shell, prompt, backlogs, rend, mod, key)) {
                 ++num_events;
