@@ -13,6 +13,7 @@ struct Config_State {
     int default_font_size;
     int tab_width;
     uint64_t max_length;
+    bool windows_wide_terminal;
 
     /// 0 = absolute minimum, 1 = compromise, 2 = everything builtin.
     int builtin_level;

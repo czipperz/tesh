@@ -2284,6 +2284,8 @@ static void load_default_configuration() {
 
     cfg.max_length = ((uint64_t)1 << 30);  // 1GB
 
+    cfg.windows_wide_terminal = false;
+
     static SDL_Color process_colors[] = {
         {0x18, 0, 0, 0xff},    {0, 0x13, 0, 0xff},    {0, 0, 0x20, 0xff},
         {0x11, 0x11, 0, 0xff}, {0, 0x11, 0x11, 0xff}, {0x11, 0, 0x17, 0xff},

@@ -1,5 +1,7 @@
 #include "shell.hpp"
 
+#include "config.hpp"
+
 #ifdef _WIN32
 #include <process.h>
 #define NOMINMAX
@@ -41,7 +43,10 @@ bool create_pseudo_terminal(Pseudo_Terminal* tty, int width, int height) {
         return false;  // TODO cleanup
 
     COORD size = {};
-    size.X = width;
+    if (cfg.windows_wide_terminal)
+        size.X = 10000;
+    else
+        size.X = width;
     size.Y = height;
 
     HRESULT hr = CreatePseudoConsole(size, tty->child_in.handle, tty->child_out.handle, 0,
@@ -89,7 +94,10 @@ void destroy_pseudo_terminal(Pseudo_Terminal* tty) {
 bool set_window_size(Pseudo_Terminal* tty, int width, int height) {
 #ifdef _WIN32
     COORD size = {};
-    size.X = width;
+    if (cfg.windows_wide_terminal)
+        size.X = 1000;
+    else
+        size.X = width;
     size.Y = height;
     HRESULT result = ResizePseudoConsole(tty->pseudo_console, size);
     return result == S_OK;
