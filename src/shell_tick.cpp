@@ -395,6 +395,14 @@ static bool tick_program(Shell_State* shell,
                 Shell_Node* node = permanent_allocator.alloc<Shell_Node>();
                 *node = {};
                 Error error = parse_script(permanent_allocator, node, script);
+
+                // Try not appending the "$@" just in case the user
+                // does 'alias x="if true; then echo hi; fi"'.
+                if (error == Error_Parse_ExpectedEndOfStatement) {
+                    error =
+                        parse_script(permanent_allocator, node, script.slice_end(script.len - 5));
+                }
+
                 if (error != Error_Success) {
                     (void)builtin.err.write("alias: Error: ");
                     (void)builtin.err.write(error_string(error));
