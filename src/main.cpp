@@ -1746,6 +1746,35 @@ static void submit_prompt(Shell_State* shell,
         ++prompt->process_id;
 }
 
+static void user_submit_prompt(Render_State* rend,
+                               Shell_State* shell,
+                               cz::Vector<Backlog_State*>* backlogs,
+                               Prompt_State* prompt,
+                               bool submit) {
+    rend->scroll_mode = AUTO_SCROLL;
+
+    if (submit && shell->attached_process == -1)
+        rend->scroll_mode = cfg.on_spawn_scroll_mode;
+
+    submit_prompt(shell, backlogs, prompt, submit);
+
+    // Push the history entry to either the stdin or the shell history list.
+    cz::Vector<cz::Str>* history = prompt_history(prompt, shell->attached_process != -1);
+    if (prompt->text.len > 0) {
+        if (history->len == 0 || history->last() != prompt->text) {
+            history->reserve(cz::heap_allocator(), 1);
+            history->push(prompt->text.clone(prompt->history_arena.allocator()));
+        }
+    }
+    prompt->history_counter = history->len;
+
+    stop_completing(prompt);
+    prompt->text.len = 0;
+    prompt->cursor = 0;
+
+    ensure_prompt_on_screen(rend, *backlogs);
+}
+
 static int process_events(cz::Vector<Backlog_State*>* backlogs,
                           Prompt_State* prompt,
                           Render_State* rend,
@@ -1830,31 +1859,10 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
 
             if ((mod == KMOD_CTRL && event.key.keysym.sym == SDLK_c) ||
                 event.key.keysym.sym == SDLK_RETURN) {
-                rend->scroll_mode = AUTO_SCROLL;
-
                 bool submit = (event.key.keysym.sym == SDLK_RETURN);
-                if (submit && shell->attached_process == -1)
-                    rend->scroll_mode = cfg.on_spawn_scroll_mode;
-
-                submit_prompt(shell, backlogs, prompt, submit);
-
-                // Push the history entry to either the stdin or the shell history list.
-                cz::Vector<cz::Str>* history =
-                    prompt_history(prompt, shell->attached_process != -1);
-                if (prompt->text.len > 0) {
-                    if (history->len == 0 || history->last() != prompt->text) {
-                        history->reserve(cz::heap_allocator(), 1);
-                        history->push(prompt->text.clone(prompt->history_arena.allocator()));
-                    }
-                }
-                prompt->history_counter = history->len;
-
-                stop_completing(prompt);
-                prompt->text.len = 0;
-                prompt->cursor = 0;
-
-                ensure_prompt_on_screen(rend, *backlogs);
+                user_submit_prompt(rend, shell, backlogs, prompt, submit);
                 ++num_events;
+                continue;
             }
 
             if (mod == KMOD_CTRL && key == SDLK_z) {
@@ -1879,6 +1887,7 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
                     prompt->history_counter = prompt->history.len;
                 }
                 ++num_events;
+                continue;
             }
 
             if (mod == KMOD_CTRL && key == SDLK_d &&
@@ -1897,11 +1906,13 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
                     shell->selected_process = shell->attached_process;
                     ++num_events;
                 }
+                continue;
             }
 
             if (mod == KMOD_CTRL && key == SDLK_l) {
                 clear_screen(rend, shell, *backlogs);
                 ++num_events;
+                continue;
             }
 
             // Ctrl + Shift + E - save the selected backlog to a file and open it in $EDITOR.
@@ -1928,6 +1939,7 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
                         shell->selected_process = old_selected;
                     }
                 }
+                continue;
             }
 
             if (mod == KMOD_ALT && key == SDLK_GREATER) {
@@ -1940,6 +1952,7 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
                 rend->scroll_mode = AUTO_SCROLL;
                 int lines = cz::max(rend->window_rows, 3) - 3;
                 scroll_up(rend, *backlogs, lines);
+                continue;
             }
 
             if ((mod == KMOD_CTRL && key == SDLK_INSERT) ||
@@ -1952,6 +1965,7 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
                     ++num_events;
                     set_clipboard_contents_to_selection(rend, shell, prompt, *backlogs);
                 }
+                continue;
             }
 
             // Note: C-= used to zoom in so you don't have to hold shift.
@@ -1964,6 +1978,41 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
                 }
                 resize_font(new_font_size, rend);
                 ++num_events;
+                continue;
+            }
+
+            // Unbound key.  Try to run a user command.
+            const char* key_name = SDL_GetKeyName(key);
+            if (key_name && key_name[0]) {
+                cz::String name = {};
+                cz::append(temp_allocator, &name, "__tesh_");
+                if (mod & KMOD_CTRL)
+                    cz::append(temp_allocator, &name, "ctrl_");
+                if (mod & KMOD_ALT)
+                    cz::append(temp_allocator, &name, "alt_");
+                if (mod & KMOD_SHIFT)
+                    cz::append(temp_allocator, &name, "shift_");
+                cz::append(temp_allocator, &name, key_name);
+
+                Shell_Node* value;
+                if (get_alias_or_function(&shell->local, name, name, &value)) {
+                    cz::String old_text = prompt->text;
+                    size_t old_cursor = prompt->cursor;
+
+                    prompt->text = {};
+                    append_node(cz::heap_allocator(), &prompt->text, value,
+                                /*add_semicolon=*/false);
+                    prompt->cursor = 0;
+
+                    user_submit_prompt(rend, shell, backlogs, prompt, true);
+                    ++num_events;
+
+                    prompt->text.drop(cz::heap_allocator());
+                    prompt->text = old_text;
+                    prompt->cursor = old_cursor;
+
+                    continue;
+                }
             }
         } break;
 
