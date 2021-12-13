@@ -548,7 +548,9 @@ static Error parse_pipeline(cz::Allocator allocator,
             continue;
         }
 
-        CZ_DEBUG_ASSERT(get_precedence(token) > max_precedence);
+        if (get_precedence(token) <= max_precedence) {
+            return Error_Parse_ExpectedEndOfStatement;
+        }
         break;
     }
 
