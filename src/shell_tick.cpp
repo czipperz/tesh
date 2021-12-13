@@ -10,6 +10,7 @@
 #include <cz/parse.hpp>
 #include <cz/path.hpp>
 #include "global.hpp"
+#include "prompt.hpp"
 
 ///////////////////////////////////////////////////////////////////////////////
 // Forward declarations
@@ -20,6 +21,7 @@ static void read_tty_output(Backlog_State* backlog, Pseudo_Terminal* tty, bool c
 static void tick_pipeline(Shell_State* shell,
                           Shell_Local* local,
                           Render_State* rend,
+                          Prompt_State* prompt,
                           cz::Slice<Backlog_State*> backlogs,
                           Backlog_State* backlog,
                           Running_Pipeline* pipeline,
@@ -29,6 +31,7 @@ static void tick_pipeline(Shell_State* shell,
 static bool tick_program(Shell_State* shell,
                          Shell_Local* local,
                          Render_State* rend,
+                         Prompt_State* prompt,
                          cz::Slice<Backlog_State*> backlogs,
                          Backlog_State* backlog,
                          cz::Allocator allocator,
@@ -57,6 +60,7 @@ void clear_screen(Render_State* rend, Shell_State* shell, cz::Slice<Backlog_Stat
 bool tick_running_node(Shell_State* shell,
                        cz::Slice<Backlog_State*> backlogs,
                        Render_State* rend,
+                       Prompt_State* prompt,
                        Running_Node* node,
                        Pseudo_Terminal* tty,
                        Backlog_State* backlog,
@@ -64,14 +68,14 @@ bool tick_running_node(Shell_State* shell,
     size_t starting_length = backlog->length;
     for (size_t b = 0; b < node->bg.len; ++b) {
         Running_Pipeline* line = &node->bg[b];
-        tick_pipeline(shell, node->local, rend, backlogs, backlog, line, tty, force_quit);
+        tick_pipeline(shell, node->local, rend, prompt, backlogs, backlog, line, tty, force_quit);
         if (line->programs.len == 0) {
             finish_line(shell, *tty, node, backlog, line, /*background=*/true);
             --b;
         }
     }
 
-    tick_pipeline(shell, node->local, rend, backlogs, backlog, &node->fg, tty, force_quit);
+    tick_pipeline(shell, node->local, rend, prompt, backlogs, backlog, &node->fg, tty, force_quit);
 
     if (*force_quit)
         return true;
@@ -97,6 +101,7 @@ bool tick_running_node(Shell_State* shell,
 static void tick_pipeline(Shell_State* shell,
                           Shell_Local* local,
                           Render_State* rend,
+                          Prompt_State* prompt,
                           cz::Slice<Backlog_State*> backlogs,
                           Backlog_State* backlog,
                           Running_Pipeline* pipeline,
@@ -106,8 +111,8 @@ static void tick_pipeline(Shell_State* shell,
     for (size_t p = 0; p < pipeline->programs.len; ++p) {
         Running_Program* program = &pipeline->programs[p];
         int exit_code = 1;
-        if (tick_program(shell, local, rend, backlogs, backlog, allocator, program, tty, &exit_code,
-                         force_quit)) {
+        if (tick_program(shell, local, rend, prompt, backlogs, backlog, allocator, program, tty,
+                         &exit_code, force_quit)) {
             if (!pipeline->has_exit_code && p + 1 == pipeline->programs.len) {
                 pipeline->has_exit_code = true;
                 pipeline->last_exit_code = exit_code;
@@ -160,6 +165,7 @@ static void read_tty_output(Backlog_State* backlog, Pseudo_Terminal* tty, bool c
 static bool tick_program(Shell_State* shell,
                          Shell_Local* local,
                          Render_State* rend,
+                         Prompt_State* prompt,
                          cz::Slice<Backlog_State*> backlogs,
                          Backlog_State* backlog,
                          cz::Allocator allocator,
@@ -176,7 +182,7 @@ static bool tick_program(Shell_State* shell,
     case Running_Program::SUB: {
         Running_Node* node = &program->v.sub;
         while (1) {
-            if (!tick_running_node(shell, backlogs, rend, node, tty, backlog, force_quit)) {
+            if (!tick_running_node(shell, backlogs, rend, prompt, node, tty, backlog, force_quit)) {
                 break;  // TODO rate limit
             }
         }
@@ -615,6 +621,42 @@ static bool tick_program(Shell_State* shell,
         if (local->args.len > 0)
             local->args.remove(0);
         goto finish_builtin;
+    } break;
+
+    case Running_Program::HISTORY: {
+        auto& builtin = program->v.builtin;
+        auto& st = builtin.st.history;
+        while (1) {
+            if (st.outer == prompt->history.len)
+                goto finish_builtin;
+
+            cz::Str elem = prompt->history[st.outer];
+
+            if (st.inner < elem.len) {
+                cz::Str slice = elem.slice_start(st.inner);
+                int64_t wrote = builtin.out.write(slice);
+                if (wrote != slice.len) {
+                    if (wrote == 0)
+                        goto finish_builtin;
+                    if (wrote > 0)
+                        st.inner += wrote;
+                    break;
+                }
+            }
+
+            {
+                int64_t wrote = builtin.out.write("\n");
+                if (wrote != 1) {
+                    if (wrote == 0)
+                        goto finish_builtin;
+                    st.inner = elem.len;
+                    break;
+                }
+            }
+
+            st.outer++;
+            st.inner = 0;
+        }
     } break;
 
     default:

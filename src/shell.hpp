@@ -16,6 +16,7 @@ struct Running_Script;
 struct Parse_Line;
 struct Pseudo_Terminal;
 struct Shell_Node;
+struct Prompt_State;
 
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -206,6 +207,7 @@ struct Running_Program {
         ARGDUMP,
         VARDUMP,
         SHIFT,
+        HISTORY,
     } type;
     union {
         cz::Process process;
@@ -238,6 +240,9 @@ struct Running_Program {
                 struct {
                     std::chrono::high_resolution_clock::time_point start;
                 } sleep;
+                struct {
+                    size_t outer, inner;
+                } history;
             } st;
         } builtin;
     } v;
@@ -331,6 +336,7 @@ bool finish_line(Shell_State* shell,
 bool tick_running_node(Shell_State* shell,
                        cz::Slice<Backlog_State*> backlogs,
                        Render_State* rend,
+                       Prompt_State* prompt,
                        Running_Node* node,
                        Pseudo_Terminal* tty,
                        Backlog_State* backlog,

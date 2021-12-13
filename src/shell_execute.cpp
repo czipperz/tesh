@@ -787,6 +787,8 @@ static void recognize_builtins(Running_Program* program,
             program->type = Running_Program::VARDUMP;
         } else if (parse.v.args[0] == "shift") {
             program->type = Running_Program::SHIFT;
+        } else if (parse.v.args[0] == "history") {
+            program->type = Running_Program::HISTORY;
         }
     }
 

@@ -30,6 +30,7 @@
 #include "backlog.hpp"
 #include "config.hpp"
 #include "global.hpp"
+#include "prompt.hpp"
 #include "render.hpp"
 #include "shell.hpp"
 #include "solarized_dark.hpp"
@@ -42,31 +43,6 @@
 static Backlog_State* push_backlog(cz::Vector<Backlog_State*>* backlogs, uint64_t id);
 static float get_dpi_scale(SDL_Window* window);
 static void scroll_down1(Render_State* rend, cz::Slice<Backlog_State*> backlogs, int lines);
-
-///////////////////////////////////////////////////////////////////////////////
-// Type definitions
-///////////////////////////////////////////////////////////////////////////////
-
-struct Prompt_State {
-    cz::Str prefix;
-    cz::String text;
-    size_t cursor;
-    uint64_t process_id;
-    uint64_t history_counter;
-    cz::Vector<cz::Str> history;
-    cz::Vector<cz::Str> stdin_history;
-    cz::Buffer_Array history_arena;
-    bool history_searching;
-
-    struct {
-        bool is;
-        size_t prefix_length;
-        cz::Buffer_Array results_arena;
-        cz::Vector<cz::Str> results;
-        size_t current;
-    } completion;
-};
-
 static cz::Vector<cz::Str>* prompt_history(Prompt_State* prompt, bool script);
 static void stop_completing(Prompt_State* prompt);
 
@@ -579,6 +555,7 @@ static void run_rc(Shell_State* shell, Backlog_State* backlog) {
 static bool read_process_data(Shell_State* shell,
                               cz::Slice<Backlog_State*> backlogs,
                               Render_State* rend,
+                              Prompt_State* prompt,
                               bool* force_quit) {
     bool changes = false;
     for (size_t i = 0; i < shell->scripts.len; ++i) {
@@ -586,7 +563,7 @@ static bool read_process_data(Shell_State* shell,
         Backlog_State* backlog = backlogs[script->id];
         size_t starting_length = backlog->length;
 
-        if (tick_running_node(shell, backlogs, rend, &script->root, &script->tty, backlog,
+        if (tick_running_node(shell, backlogs, rend, prompt, &script->root, &script->tty, backlog,
                               force_quit)) {
             if (*force_quit)
                 return true;
@@ -2480,7 +2457,7 @@ int actual_main(int argc, char** argv) {
                 break;
 
             bool force_quit = false;
-            if (read_process_data(&shell, backlogs, &rend, &force_quit))
+            if (read_process_data(&shell, backlogs, &rend, &prompt, &force_quit))
                 status = 1;
 
             if (force_quit)
