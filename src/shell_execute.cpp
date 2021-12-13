@@ -153,7 +153,9 @@ bool finish_line(Shell_State* shell,
     cleanup_pipeline(line);
     Error error = start_execute_line(shell, tty, node, backlog, line, background);
     if (error != Error_Success) {
-        append_text(backlog, "Error: failed to execute continuation\n");
+        append_text(backlog, "tesh: Error: \n");
+        append_text(backlog, error_string(error));
+        append_text(backlog, "\n");
     }
 
     return true;

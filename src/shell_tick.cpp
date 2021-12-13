@@ -396,7 +396,9 @@ static bool tick_program(Shell_State* shell,
                 *node = {};
                 Error error = parse_script(permanent_allocator, node, script);
                 if (error != Error_Success) {
-                    (void)builtin.err.write("alias: Failed to parse alias value\n");
+                    (void)builtin.err.write("alias: Error: ");
+                    (void)builtin.err.write(error_string(error));
+                    (void)builtin.err.write("\n");
                     continue;
                 }
 

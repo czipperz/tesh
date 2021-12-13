@@ -498,10 +498,10 @@ static void render_frame(SDL_Window* window,
 // Process control
 ///////////////////////////////////////////////////////////////////////////////
 
-static bool run_script(Shell_State* shell,
-                       Backlog_State* backlog,
-                       cz::Buffer_Array arena,
-                       cz::Str text) {
+static Error run_script(Shell_State* shell,
+                        Backlog_State* backlog,
+                        cz::Buffer_Array arena,
+                        cz::Str text) {
 #ifdef TRACY_ENABLE
     {
         cz::String message = cz::format(temp_allocator, "Start: ", text);
@@ -521,7 +521,7 @@ static bool run_script(Shell_State* shell,
     if (error != Error_Success)
         goto fail;
 
-    return true;
+    return error;
 
 fail:;
 #ifdef TRACY_ENABLE
@@ -530,7 +530,7 @@ fail:;
         TracyMessage(message.buffer, message.len);
     }
 #endif
-    return false;
+    return error;
 }
 
 static void run_rc(Shell_State* shell, Backlog_State* backlog) {
@@ -548,7 +548,7 @@ static void run_rc(Shell_State* shell, Backlog_State* backlog) {
     cz::String contents = {};
     read_to_string(file, arena.allocator(), &contents);
 
-    if (!run_script(shell, backlog, arena, contents))
+    if (run_script(shell, backlog, arena, contents) != Error_Success)
         recycle_arena(shell, arena);
 }
 
@@ -1694,8 +1694,11 @@ static void submit_prompt(Shell_State* shell,
         } else {
             cz::Buffer_Array arena = alloc_arena(shell);
             cz::String script = prompt->text.clone_null_terminate(arena.allocator());
-            if (!run_script(shell, backlog, arena, script)) {
-                append_text(backlog, "Error: failed to execute\n");
+            Error error = run_script(shell, backlog, arena, script);
+            if (error != Error_Success) {
+                append_text(backlog, "tesh: Error: ");
+                append_text(backlog, error_string(error));
+                append_text(backlog, "\n");
                 backlog->done = true;
                 backlog->end = std::chrono::high_resolution_clock::now();
             }

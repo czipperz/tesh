@@ -15,3 +15,5 @@ enum Error {
     Error_InvalidPath,
     Error_InvalidProgram,
 };
+
+const char * error_string(Error error);
