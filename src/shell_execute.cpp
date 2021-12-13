@@ -391,13 +391,15 @@ static Error start_execute_pipeline(Shell_State* shell,
         cz::String path = {};
         if (parse_program.in_file.buffer) {
             stdio.in_type = File_Type_File;
-            path.len = 0;
-            cz::path::make_absolute(parse_program.in_file, get_wd(node->local), temp_allocator,
-                                    &path);
-            if (!stdio.in.open(path.buffer))
-                return Error_InvalidPath;
-            stdio.in_count = allocator.alloc<size_t>();
-            *stdio.in_count = 1;
+            if (parse_program.in_file != "/dev/null") {
+                path.len = 0;
+                cz::path::make_absolute(parse_program.in_file, get_wd(node->local), temp_allocator,
+                                        &path);
+                if (!stdio.in.open(path.buffer))
+                    return Error_InvalidPath;
+                stdio.in_count = allocator.alloc<size_t>();
+                *stdio.in_count = 1;
+            }
         } else if (p > 0) {
             stdio.in_type = File_Type_Pipe;
             stdio.in = pipe_in;
@@ -410,28 +412,32 @@ static Error start_execute_pipeline(Shell_State* shell,
 
         if (parse_program.out_file.buffer) {
             stdio.out_type = File_Type_File;
-            path.len = 0;
-            cz::path::make_absolute(parse_program.out_file, get_wd(node->local), temp_allocator,
-                                    &path);
-            if (!stdio.out.open(path.buffer))
-                return Error_InvalidPath;
-            path.len = 0;
-            stdio.out_count = allocator.alloc<size_t>();
-            *stdio.out_count = 1;
+            if (parse_program.out_file != "/dev/null") {
+                path.len = 0;
+                cz::path::make_absolute(parse_program.out_file, get_wd(node->local), temp_allocator,
+                                        &path);
+                if (!stdio.out.open(path.buffer))
+                    return Error_InvalidPath;
+                path.len = 0;
+                stdio.out_count = allocator.alloc<size_t>();
+                *stdio.out_count = 1;
+            }
         } else if (p + 1 < program_nodes.len) {
             stdio.out_type = File_Type_Pipe;
         }
 
         if (parse_program.err_file.buffer) {
             stdio.err_type = File_Type_File;
-            path.len = 0;
-            cz::path::make_absolute(parse_program.err_file, get_wd(node->local), temp_allocator,
-                                    &path);
-            if (!stdio.err.open(path.buffer))
-                return Error_InvalidPath;
-            path.len = 0;
-            stdio.err_count = allocator.alloc<size_t>();
-            *stdio.err_count = 1;
+            if (parse_program.err_file != "/dev/null") {
+                path.len = 0;
+                cz::path::make_absolute(parse_program.err_file, get_wd(node->local), temp_allocator,
+                                        &path);
+                if (!stdio.err.open(path.buffer))
+                    return Error_InvalidPath;
+                path.len = 0;
+                stdio.err_count = allocator.alloc<size_t>();
+                *stdio.err_count = 1;
+            }
         }
 
         // Make pipes for the next iteration.
