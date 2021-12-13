@@ -162,6 +162,8 @@ struct Stdio_State {
     size_t* err_count;
 };
 
+void cleanup_stdio(Stdio_State* stdio);
+
 struct Running_Node;
 struct Running_Program;
 

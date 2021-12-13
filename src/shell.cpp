@@ -190,6 +190,12 @@ void cleanup_local(Shell_Local* local) {
     local->alias_values.drop(cz::heap_allocator());
 }
 
+void cleanup_stdio(Stdio_State* stdio) {
+    close_rc_file(stdio->in_count, stdio->in);
+    close_rc_file(stdio->out_count, stdio->out);
+    close_rc_file(stdio->err_count, stdio->err);
+}
+
 cz::Buffer_Array alloc_arena(Shell_State* shell) {
     if (shell->arenas.len > 0)
         return shell->arenas.pop();

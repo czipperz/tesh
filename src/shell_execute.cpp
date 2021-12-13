@@ -410,6 +410,9 @@ static Error start_execute_pipeline(Shell_State* shell,
             *stdio.in_count = 1;
         } else if (!bind_stdin) {
             stdio.in_type = File_Type_None;
+        } else {
+            if (stdio.in_count)
+                ++*stdio.in_count;
         }
         pipe_in = {};
 
@@ -430,6 +433,9 @@ static Error start_execute_pipeline(Shell_State* shell,
             }
         } else if (p + 1 < program_nodes.len) {
             stdio.out_type = File_Type_Pipe;
+        } else {
+            if (stdio.out_count)
+                ++*stdio.out_count;
         }
 
         if (parse_program.err_file.buffer) {
@@ -447,6 +453,9 @@ static Error start_execute_pipeline(Shell_State* shell,
                 stdio.err_count = allocator.alloc<size_t>();
                 *stdio.err_count = 1;
             }
+        } else {
+            if (stdio.err_count)
+                ++*stdio.err_count;
         }
 
         // Make pipes for the next iteration.

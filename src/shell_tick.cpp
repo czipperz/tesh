@@ -191,6 +191,7 @@ static bool tick_program(Shell_State* shell,
         if (node->fg_finished && node->bg.len == 0) {
             *exit_code = program->v.sub.fg.last_exit_code;
             cleanup_local(program->v.sub.local);
+            cleanup_stdio(&program->v.sub.stdio);
             return true;
         }
     } break;
