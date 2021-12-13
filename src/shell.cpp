@@ -321,13 +321,39 @@ void append_node(cz::Allocator allocator,
 
     case Shell_Node::AND:
     case Shell_Node::OR: {
-        cz::Str middle = (node->type == Shell_Node::AND ? ") && (" : ") || (");
+        if (node->async)
+            cz::append(allocator, string, "(");
 
-        cz::append(allocator, string, "(");
         append_node(allocator, string, node->v.binary.left, false);
-        cz::append(allocator, string, middle);
+        cz::append(allocator, string, (node->type == Shell_Node::AND ? " && " : " || "));
         append_node(allocator, string, node->v.binary.right, false);
-        cz::append(allocator, string, ")");
+
+        if (node->async)
+            cz::append(allocator, string, ") &");
+        else if (append_semicolon)
+            cz::append(allocator, string, ";");
+    } break;
+
+    case Shell_Node::IF: {
+        append_node(allocator, string, node->v.if_.cond, true);
+        cz::append(allocator, string, " then ");
+        append_node(allocator, string, node->v.if_.then, true);
+        if (node->v.if_.other) {
+            cz::append(allocator, string, " else ");
+            append_node(allocator, string, node->v.if_.other, true);
+        }
+        cz::append(allocator, string, "fi");
+
+        if (node->async)
+            cz::append(allocator, string, " &");
+        else if (append_semicolon)
+            cz::append(allocator, string, ";");
+    } break;
+
+    case Shell_Node::FUNCTION: {
+        cz::append(allocator, string, node->v.function.name, "() { ");
+        append_node(allocator, string, node->v.function.body, true);
+        cz::append(allocator, string, " }");
 
         if (node->async)
             cz::append(allocator, string, " &");
