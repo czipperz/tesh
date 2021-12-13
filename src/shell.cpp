@@ -335,6 +335,7 @@ void append_node(cz::Allocator allocator,
     } break;
 
     case Shell_Node::IF: {
+        cz::append(allocator, string, "if ");
         append_node(allocator, string, node->v.if_.cond, true);
         cz::append(allocator, string, " then ");
         append_node(allocator, string, node->v.if_.then, true);
@@ -342,7 +343,7 @@ void append_node(cz::Allocator allocator,
             cz::append(allocator, string, " else ");
             append_node(allocator, string, node->v.if_.other, true);
         }
-        cz::append(allocator, string, "fi");
+        cz::append(allocator, string, " fi");
 
         if (node->async)
             cz::append(allocator, string, " &");
