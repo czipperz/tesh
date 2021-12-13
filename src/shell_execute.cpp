@@ -280,9 +280,12 @@ static Error start_execute_line(Shell_State* shell,
                                 Backlog_State* backlog,
                                 Running_Pipeline* pipeline,
                                 bool background) {
+    // Don't do this on Windows to avoid a race condition because the pipe gets flushed post exit.
+#ifndef _WIN32
     if (backlog->length > 0 && backlog->get(backlog->length - 1) != '\n') {
         append_text(backlog, "\n");
     }
+#endif
 
     Running_Pipeline* pipeline_orig = pipeline;
     while (1) {
