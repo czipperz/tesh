@@ -261,6 +261,8 @@ struct Parse_Program {
     cz::Vector<cz::Str> variable_names;
     cz::Vector<cz::Str> variable_values;
 
+    cz::Vector<Shell_Node*> subexprs;
+
     bool is_sub;
     union {
         cz::Vector<cz::Str> args;

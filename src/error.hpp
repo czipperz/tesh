@@ -9,6 +9,8 @@ enum Error {
     Error_Parse_UnterminatedParen,
     Error_Parse_UnterminatedIf,
     Error_Parse_UnterminatedFunctionDeclaration,
+    Error_Parse_UnterminatedSubExpr,
+    Error_Parse_StrayCloseParen,
     Error_Parse_ExpectedEndOfStatement,
     Error_Parse_EmptyProgram,
     Error_Parse_NothingToIndirect,
