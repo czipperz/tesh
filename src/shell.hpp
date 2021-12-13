@@ -202,6 +202,7 @@ struct Running_Program {
         SLEEP,
         CONFIGURE,
         ATTACH,
+        FOLLOW,
         ARGDUMP,
         VARDUMP,
         SHIFT,

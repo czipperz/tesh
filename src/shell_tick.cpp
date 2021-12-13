@@ -574,8 +574,16 @@ static bool tick_program(Shell_State* shell,
 
     case Running_Program::ATTACH: {
         uint64_t this_process = backlog->id;
+        rend->scroll_mode = AUTO_SCROLL;
         shell->selected_process = this_process;
         shell->attached_process = this_process;
+        goto finish_builtin;
+    } break;
+
+    case Running_Program::FOLLOW: {
+        uint64_t this_process = backlog->id;
+        rend->scroll_mode = AUTO_SCROLL;
+        shell->selected_process = this_process;
         goto finish_builtin;
     } break;
 

@@ -779,6 +779,8 @@ static void recognize_builtins(Running_Program* program,
             program->type = Running_Program::CONFIGURE;
         } else if (parse.v.args[0] == "attach") {
             program->type = Running_Program::ATTACH;
+        } else if (parse.v.args[0] == "follow") {
+            program->type = Running_Program::FOLLOW;
         } else if (parse.v.args[0] == "argdump") {
             program->type = Running_Program::ARGDUMP;
         } else if (parse.v.args[0] == "vardump") {
