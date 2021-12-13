@@ -363,7 +363,7 @@ static Error start_execute_pipeline(Shell_State* shell,
         CZ_ASSERT(program_node->type == Shell_Node::PROGRAM);  // TODO
         Parse_Program parse_program = *program_node->v.program;
 
-        Stdio_State stdio = {};
+        Stdio_State stdio = node->stdio;
 
         // Expand file arguments.
         if (parse_program.in_file.buffer) {
@@ -391,7 +391,10 @@ static Error start_execute_pipeline(Shell_State* shell,
         cz::String path = {};
         if (parse_program.in_file.buffer) {
             stdio.in_type = File_Type_File;
-            if (parse_program.in_file != "/dev/null") {
+            if (parse_program.in_file == "/dev/null") {
+                stdio.in = {};
+                stdio.in_count = nullptr;
+            } else {
                 path.len = 0;
                 cz::path::make_absolute(parse_program.in_file, get_wd(node->local), temp_allocator,
                                         &path);
@@ -412,7 +415,10 @@ static Error start_execute_pipeline(Shell_State* shell,
 
         if (parse_program.out_file.buffer) {
             stdio.out_type = File_Type_File;
-            if (parse_program.out_file != "/dev/null") {
+            if (parse_program.out_file == "/dev/null") {
+                stdio.out = {};
+                stdio.out_count = nullptr;
+            } else {
                 path.len = 0;
                 cz::path::make_absolute(parse_program.out_file, get_wd(node->local), temp_allocator,
                                         &path);
@@ -428,7 +434,10 @@ static Error start_execute_pipeline(Shell_State* shell,
 
         if (parse_program.err_file.buffer) {
             stdio.err_type = File_Type_File;
-            if (parse_program.err_file != "/dev/null") {
+            if (parse_program.err_file == "/dev/null") {
+                stdio.err = {};
+                stdio.err_count = nullptr;
+            } else {
                 path.len = 0;
                 cz::path::make_absolute(parse_program.err_file, get_wd(node->local), temp_allocator,
                                         &path);
