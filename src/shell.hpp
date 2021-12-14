@@ -35,6 +35,11 @@ struct Shell_Local {
     cz::Vector<cz::Str> args;
 
     cz::Str blocked_alias;
+
+    enum {
+        COW = 0,    // All writes are independent, reads are merged.
+        ARGS_ONLY,  // Only arguments are independent.
+    } relationship;
 };
 
 struct Shell_State {

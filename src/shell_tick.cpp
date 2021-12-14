@@ -565,6 +565,7 @@ static bool tick_program(Shell_State* shell,
             *node->local = {};
             node->local->parent = local;
             node->local->args = args;
+            node->local->relationship = Shell_Local::ARGS_ONLY;
 
             error = start_execute_node(shell, *tty, backlog, node, root);
             if (error == Error_Success) {

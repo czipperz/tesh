@@ -533,6 +533,7 @@ static Error run_program(Shell_State* shell,
         program->v.sub.local = allocator.alloc<Shell_Local>();
         *program->v.sub.local = {};
         program->v.sub.local->parent = local;
+        program->v.sub.local->relationship = Shell_Local::COW;
         return start_execute_node(shell, tty, backlog, &program->v.sub, parse.v.sub);
     }
 
@@ -558,6 +559,7 @@ static Error run_program(Shell_State* shell,
             *program->v.sub.local = {};
             program->v.sub.local->parent = local;
             program->v.sub.local->args = args.clone(allocator);
+            program->v.sub.local->relationship = Shell_Local::ARGS_ONLY;
 
             // Track the alias stack to prevent infinite recursion on 'alias ls=ls; ls'.
             if (result == 1) {

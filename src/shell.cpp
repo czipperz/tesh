@@ -27,6 +27,10 @@ bool get_var(const Shell_Local* local, cz::Str key, cz::Str* value) {
 }
 
 void set_var(Shell_Local* local, cz::Str key, cz::Str value) {
+    while (local && local->relationship == Shell_Local::ARGS_ONLY) {
+        local = local->parent;
+    }
+
     key = canonical_var(key);
 
     for (size_t i = 0; i < local->variable_names.len; ++i) {
@@ -99,6 +103,10 @@ int get_alias_or_function(const Shell_Local* local,
 }
 
 void set_alias(Shell_Local* local, cz::Str key, Shell_Node* node) {
+    while (local && local->relationship == Shell_Local::ARGS_ONLY) {
+        local = local->parent;
+    }
+
     for (size_t i = 0; i < local->alias_names.len; ++i) {
         if (local->alias_names[i] == key) {
             // TODO: deallocate old node.
@@ -115,6 +123,10 @@ void set_alias(Shell_Local* local, cz::Str key, Shell_Node* node) {
 }
 
 void set_function(Shell_Local* local, cz::Str key, Shell_Node* node) {
+    while (local && local->relationship == Shell_Local::ARGS_ONLY) {
+        local = local->parent;
+    }
+
     for (size_t i = 0; i < local->function_names.len; ++i) {
         if (local->function_names[i] == key) {
             // TODO: deallocate old node.
