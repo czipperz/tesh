@@ -498,11 +498,10 @@ static void render_frame(SDL_Window* window,
 // Process control
 ///////////////////////////////////////////////////////////////////////////////
 
-void run_script(Shell_State* shell,
-                Backlog_State* backlog,
-                cz::Buffer_Array arena,
-                cz::Str text,
-                cz::Str error_prefix) {
+static void run_script(Shell_State* shell,
+                       Backlog_State* backlog,
+                       cz::Buffer_Array arena,
+                       cz::Str text) {
 #ifdef TRACY_ENABLE
     {
         cz::String message = cz::format(temp_allocator, "Start: ", text);
@@ -532,8 +531,7 @@ fail:;
     }
 #endif
 
-    append_text(backlog, error_prefix);
-    append_text(backlog, "Error: ");
+    append_text(backlog, "tesh: Error: ");
     append_text(backlog, error_string(error));
     append_text(backlog, "\n");
     backlog->done = true;
@@ -1684,7 +1682,7 @@ static void submit_prompt(Shell_State* shell,
         } else {
             cz::Buffer_Array arena = alloc_arena(shell);
             cz::String script = prompt->text.clone_null_terminate(arena.allocator());
-            run_script(shell, backlog, arena, script, "tesh: ");
+            run_script(shell, backlog, arena, script);
             shell->selected_process = backlog->id;
         }
     } else {
