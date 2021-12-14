@@ -467,6 +467,11 @@ static Error start_execute_pipeline(Shell_State* shell,
                 if (!cz::create_pipe(&pipe_in, &pipe_out))
                     return Error_IO;
 
+                if (!pipe_in.set_non_inheritable())
+                    return Error_IO;
+                if (!pipe_out.set_non_inheritable())
+                    return Error_IO;
+
                 size_t* count = allocator.alloc<size_t>();
                 *count = 0;
                 if (stdio.out_type == File_Type_Pipe) {
@@ -671,6 +676,13 @@ static Error run_program(Shell_State* shell,
         options.std_err = stdio.err;
     }
 #endif
+
+    if (stdio.in_type != File_Type_Terminal && !options.std_in.set_inheritable())
+        return Error_IO;
+    if (stdio.out_type != File_Type_Terminal && !options.std_out.set_inheritable())
+        return Error_IO;
+    if (stdio.err_type != File_Type_Terminal && !options.std_err.set_inheritable())
+        return Error_IO;
 
     options.working_directory = get_wd(local).buffer;
     generate_environment(&options.environment, shell, local, parse.variable_names,
