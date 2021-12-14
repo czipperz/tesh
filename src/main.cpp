@@ -1653,11 +1653,6 @@ static void submit_prompt(Shell_State* shell,
                           cz::Vector<Backlog_State*>* backlogs,
                           Prompt_State* prompt,
                           bool submit) {
-    {
-        cz::Vector<cz::Str>* history = prompt_history(prompt, shell->attached_process != -1);
-        resolve_history_searching(prompt, history);
-    }
-
     Running_Script* script = attached_process(shell);
     uint64_t process_id = (script ? script->id : prompt->process_id);
     Backlog_State* backlog;
@@ -1716,6 +1711,11 @@ static void user_submit_prompt(Render_State* rend,
 
     if (submit && shell->attached_process == -1)
         rend->scroll_mode = cfg.on_spawn_scroll_mode;
+
+    {
+        cz::Vector<cz::Str>* history = prompt_history(prompt, shell->attached_process != -1);
+        resolve_history_searching(prompt, history);
+    }
 
     submit_prompt(shell, backlogs, prompt, submit);
 
