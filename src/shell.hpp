@@ -245,6 +245,9 @@ struct Running_Program {
                 struct {
                     size_t outer, inner;
                 } history;
+                struct {
+                    Stdio_State stdio;
+                } source;
             } st;
         } builtin;
     } v;
@@ -327,6 +330,12 @@ Error start_execute_script(Shell_State* shell,
                            Backlog_State* backlog,
                            cz::Buffer_Array arena,
                            Shell_Node* root);
+
+Error start_execute_node(Shell_State* shell,
+                         const Pseudo_Terminal& tty,
+                         Backlog_State* backlog,
+                         Running_Node* node,
+                         Shell_Node* root);
 
 bool finish_line(Shell_State* shell,
                  const Pseudo_Terminal& tty,

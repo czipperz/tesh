@@ -1,6 +1,7 @@
 #include "shell.hpp"
 
 #include <Tracy.hpp>
+#include <cz/debug.hpp>
 #include <cz/defer.hpp>
 #include <cz/heap.hpp>
 #include <cz/path.hpp>
@@ -12,12 +13,6 @@
 ///////////////////////////////////////////////////////////////////////////////
 // Forward declarationss
 ///////////////////////////////////////////////////////////////////////////////
-
-static Error start_execute_node(Shell_State* shell,
-                                const Pseudo_Terminal& tty,
-                                Backlog_State* backlog,
-                                Running_Node* node,
-                                Shell_Node* root);
 
 static Error start_execute_line(Shell_State* shell,
                                 const Pseudo_Terminal& tty,
@@ -44,7 +39,8 @@ static Error run_program(Shell_State* shell,
 
 static void recognize_builtins(Running_Program* program,
                                const Parse_Program& parse,
-                               cz::Allocator allocator);
+                               cz::Allocator allocator,
+                               Stdio_State stdio);
 
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -101,11 +97,11 @@ Error start_execute_script(Shell_State* shell,
     return Error_Success;
 }
 
-static Error start_execute_node(Shell_State* shell,
-                                const Pseudo_Terminal& tty,
-                                Backlog_State* backlog,
-                                Running_Node* node,
-                                Shell_Node* root) {
+Error start_execute_node(Shell_State* shell,
+                         const Pseudo_Terminal& tty,
+                         Backlog_State* backlog,
+                         Running_Node* node,
+                         Shell_Node* root) {
     node->fg.arena = alloc_arena(shell);
 
     if (!descend_to_first_pipeline(&node->fg.path, root))
@@ -573,7 +569,7 @@ static Error run_program(Shell_State* shell,
     }
 
     parse.v.args = args;
-    recognize_builtins(program, parse, allocator);
+    recognize_builtins(program, parse, allocator, stdio);
 
     // If command is a builtin.
     if (program->type != Running_Program::PROCESS) {
@@ -620,6 +616,8 @@ static Error run_program(Shell_State* shell,
 
     cz::String full_path = {};
     if (!find_in_path(local, args[0], allocator, &full_path)) {
+        cz::Str program = args[0];
+        cz::dbreak();
         return Error_InvalidProgram;
     }
     args[0] = full_path;
@@ -771,7 +769,8 @@ static void generate_environment(void* out_arg,
 
 static void recognize_builtins(Running_Program* program,
                                const Parse_Program& parse,
-                               cz::Allocator allocator) {
+                               cz::Allocator allocator,
+                               Stdio_State stdio) {
     program->type = Running_Program::PROCESS;
 
     // Line that only assigns to variables runs as special builtin.
@@ -800,6 +799,8 @@ static void recognize_builtins(Running_Program* program,
             program->type = Running_Program::CLEAR;
         } else if (parse.v.args[0] == "." || parse.v.args[0] == "source") {
             program->type = Running_Program::SOURCE;
+            program->v.builtin.st.source = {};
+            program->v.builtin.st.source.stdio = stdio;
         } else if (parse.v.args[0] == "sleep") {
             program->type = Running_Program::SLEEP;
             program->v.builtin.st.sleep = {};

@@ -524,7 +524,9 @@ static bool tick_program(Shell_State* shell,
 
     case Running_Program::SOURCE: {
         auto& builtin = program->v.builtin;
+        auto& st = program->v.builtin.st.source;
 
+        // First time through start running.
         if (builtin.args.len <= 1) {
             builtin.exit_code = 1;
             (void)builtin.err.write("source: No file specified\n");
@@ -545,9 +547,34 @@ static bool tick_program(Shell_State* shell,
         cz::String contents = {};
         read_to_string(file, allocator, &contents);
 
-        cz::Buffer_Array arena = alloc_arena(shell);
-        run_script(shell, backlog, arena, contents, "source: ");
+        // Root has to be kept alive for path traversal to work.
+        Shell_Node* root = allocator.alloc<Shell_Node>();
+        *root = {};
 
+        Error error = parse_script(allocator, root, contents);
+        if (error == Error_Success) {
+            cz::Vector<cz::Str> args = builtin.args.slice_start(2).clone(allocator);
+            Stdio_State stdio = st.stdio;
+
+            // Convert this node to a sub node.
+            program->type = Running_Program::SUB;
+            Running_Node* node = &program->v.sub;
+            *node = {};
+            node->stdio = stdio;
+            node->local = allocator.alloc<Shell_Local>();
+            *node->local = {};
+            node->local->parent = local;
+            node->local->args = args;
+
+            error = start_execute_node(shell, *tty, backlog, node, root);
+            if (error == Error_Success) {
+                break;
+            }
+        }
+
+        append_text(backlog, "source: Error: ");
+        append_text(backlog, error_string(error));
+        append_text(backlog, "\n");
         goto finish_builtin;
     } break;
 
