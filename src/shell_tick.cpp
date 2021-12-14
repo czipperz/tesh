@@ -545,23 +545,9 @@ static bool tick_program(Shell_State* shell,
         cz::String contents = {};
         read_to_string(file, allocator, &contents);
 
-#if 0
-        Parse_Script subscript = {};
-        Error error =
-            parse_script(shell, allocator, &subscript, line->on, contents);
-        if (error != Error_Success) {
-            builtin.exit_code = 1;
-            (void)builtin.err.write(
-                cz::format(temp_allocator, "source: Error while parsing ", builtin.args[1], '\n'));
-            goto finish_builtin;
-        }
+        cz::Buffer_Array arena = alloc_arena(shell);
+        run_script(shell, backlog, arena, contents, "source: ");
 
-        Parse_Line* first = allocator.clone(subscript.first);
-        CZ_ASSERT(first);
-        line->on = {};
-        line->on.success = first;
-        line->on.failure = first;
-#endif
         goto finish_builtin;
     } break;
 

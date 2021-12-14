@@ -337,6 +337,14 @@ bool finish_line(Shell_State* shell,
 
 ///////////////////////////////////////////////////////////////////////////////
 
+void run_script(Shell_State* shell,
+                Backlog_State* backlog,
+                cz::Buffer_Array arena,
+                cz::Str text,
+                cz::Str error_prefix);
+
+///////////////////////////////////////////////////////////////////////////////
+
 bool tick_running_node(Shell_State* shell,
                        cz::Slice<Backlog_State*> backlogs,
                        Render_State* rend,

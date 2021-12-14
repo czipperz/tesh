@@ -498,10 +498,11 @@ static void render_frame(SDL_Window* window,
 // Process control
 ///////////////////////////////////////////////////////////////////////////////
 
-static Error run_script(Shell_State* shell,
-                        Backlog_State* backlog,
-                        cz::Buffer_Array arena,
-                        cz::Str text) {
+void run_script(Shell_State* shell,
+                Backlog_State* backlog,
+                cz::Buffer_Array arena,
+                cz::Str text,
+                cz::Str error_prefix) {
 #ifdef TRACY_ENABLE
     {
         cz::String message = cz::format(temp_allocator, "Start: ", text);
@@ -521,7 +522,7 @@ static Error run_script(Shell_State* shell,
     if (error != Error_Success)
         goto fail;
 
-    return error;
+    return;
 
 fail:;
 #ifdef TRACY_ENABLE
@@ -530,33 +531,15 @@ fail:;
         TracyMessage(message.buffer, message.len);
     }
 #endif
+
+    append_text(backlog, error_prefix);
+    append_text(backlog, "Error: ");
+    append_text(backlog, error_string(error));
+    append_text(backlog, "\n");
+    backlog->done = true;
+    backlog->end = std::chrono::high_resolution_clock::now();
+
     recycle_arena(shell, arena);
-    return error;
-}
-
-static void run_rc(Shell_State* shell, Backlog_State* backlog) {
-    cz::Str home;
-    if (!get_var(&shell->local, "HOME", &home))
-        return;
-
-    cz::Input_File file;
-    if (!file.open(cz::format(temp_allocator, home, "/.teshrc").buffer))
-        return;
-    CZ_DEFER(file.close());
-
-    cz::Buffer_Array arena = alloc_arena(shell);
-
-    cz::String contents = {};
-    read_to_string(file, arena.allocator(), &contents);
-
-    Error error = run_script(shell, backlog, arena, contents);
-    if (error != Error_Success) {
-        append_text(backlog, "tesh: Error: ");
-        append_text(backlog, error_string(error));
-        append_text(backlog, "\n");
-        backlog->done = true;
-        backlog->end = std::chrono::high_resolution_clock::now();
-    }
 }
 
 static bool read_process_data(Shell_State* shell,
@@ -1701,14 +1684,7 @@ static void submit_prompt(Shell_State* shell,
         } else {
             cz::Buffer_Array arena = alloc_arena(shell);
             cz::String script = prompt->text.clone_null_terminate(arena.allocator());
-            Error error = run_script(shell, backlog, arena, script);
-            if (error != Error_Success) {
-                append_text(backlog, "tesh: Error: ");
-                append_text(backlog, error_string(error));
-                append_text(backlog, "\n");
-                backlog->done = true;
-                backlog->end = std::chrono::high_resolution_clock::now();
-            }
+            run_script(shell, backlog, arena, script, "tesh: ");
             shell->selected_process = backlog->id;
         }
     } else {
@@ -2372,7 +2348,7 @@ int actual_main(int argc, char** argv) {
 
     prompt.history_arena.init();
     prompt.completion.results_arena.init();
-    prompt.process_id = 1;  // rc = 0
+    prompt.process_id = 0;
 
     cz::Buffer_Array permanent_arena;
     permanent_arena.init();
@@ -2463,7 +2439,12 @@ int actual_main(int argc, char** argv) {
         shell.height = h / rend.font_height;
     }
 
-    run_rc(&shell, push_backlog(&backlogs, 0));
+    // Start running ~/.teshrc.
+    prompt.text = cz::format(temp_allocator, "source ~/.teshrc");
+    submit_prompt(&shell, &backlogs, &prompt, true);
+    prompt.text = {};
+    shell.attached_process = -1;
+    shell.selected_process = -1;
 
     while (1) {
         uint32_t start_frame = SDL_GetTicks();
