@@ -530,6 +530,7 @@ fail:;
         TracyMessage(message.buffer, message.len);
     }
 #endif
+    recycle_arena(shell, arena);
     return error;
 }
 
@@ -548,8 +549,14 @@ static void run_rc(Shell_State* shell, Backlog_State* backlog) {
     cz::String contents = {};
     read_to_string(file, arena.allocator(), &contents);
 
-    if (run_script(shell, backlog, arena, contents) != Error_Success)
-        recycle_arena(shell, arena);
+    Error error = run_script(shell, backlog, arena, contents);
+    if (error != Error_Success) {
+        append_text(backlog, "tesh: Error: ");
+        append_text(backlog, error_string(error));
+        append_text(backlog, "\n");
+        backlog->done = true;
+        backlog->end = std::chrono::high_resolution_clock::now();
+    }
 }
 
 static bool read_process_data(Shell_State* shell,
