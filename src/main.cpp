@@ -980,15 +980,17 @@ static void start_completing(Prompt_State* prompt, Shell_State* shell) {
     // Split by last slash
     /////////////////////////////////////////////
 
-    size_t slash = query.rfind_index('/');
+    const char* slash = query.rfind('/');
 #ifdef _WIN32
-    size_t backslash = query.rfind_index('\\');
-    if (slash > backslash)
-        slash = backslash;
+    {
+        const char* backslash = query.rfind('\\');
+        if (backslash && (!slash || backslash > slash))
+            slash = backslash;
+    }
 #endif
 
-    cz::Str query_path = (slash == query.len ? "." : query.slice_end(slash));
-    cz::Str prefix = (slash == query.len ? query : query.slice_start(slash + 1));
+    cz::Str query_path = (slash ? query.slice_end(slash) : ".");
+    cz::Str prefix = (slash ? query.slice_start(slash + 1) : query);
     prompt->completion.prefix_length = prefix.len;
 
 #ifndef _WIN32
