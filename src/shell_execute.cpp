@@ -692,6 +692,13 @@ static Error run_program(Shell_State* shell,
     program->v.process = {};
     bool result = program->v.process.launch_program(args, options);
 
+    if (stdio.in_type != File_Type_Terminal && !options.std_in.set_non_inheritable())
+        return Error_IO;
+    if (stdio.out_type != File_Type_Terminal && !options.std_out.set_non_inheritable())
+        return Error_IO;
+    if (stdio.err_type != File_Type_Terminal && !options.std_err.set_non_inheritable())
+        return Error_IO;
+
     close_rc_file(stdio.in_count, stdio.in);
     close_rc_file(stdio.out_count, stdio.out);
     close_rc_file(stdio.err_count, stdio.err);
