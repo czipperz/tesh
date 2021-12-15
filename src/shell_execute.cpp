@@ -625,6 +625,7 @@ static Error run_program(Shell_State* shell,
     if (!find_in_path(local, args[0], allocator, &full_path)) {
         cz::Str program = args[0];
         cz::dbreak();
+        (void)program;
         return Error_InvalidProgram;
     }
     args[0] = full_path;

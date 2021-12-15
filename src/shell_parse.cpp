@@ -17,8 +17,7 @@ static Error tokenize(cz::Allocator allocator, cz::Vector<cz::Str>* tokens, cz::
 static Error advance_through_token(cz::Str text,
                                    size_t* token_start,
                                    size_t* token_end,
-                                   bool* any_special,
-                                   bool* program_break);
+                                   bool* any_special);
 static Error advance_through_single_quote_string(cz::Str text, size_t* index);
 static Error advance_through_double_quote_string(cz::Str text,
                                                  size_t* index,
@@ -107,14 +106,11 @@ Error parse_script(cz::Allocator allocator, Shell_Node* root, cz::Str text) {
 
 static Error tokenize(cz::Allocator allocator, cz::Vector<cz::Str>* tokens, cz::Str text) {
     size_t index = 0;
-    bool at_start_of_program = true;
     while (1) {
         size_t token_start = index;
         size_t token_end = index;
         bool any_special = false;
-        bool program_break = false;
-        Error error =
-            advance_through_token(text, &token_start, &token_end, &any_special, &program_break);
+        Error error = advance_through_token(text, &token_start, &token_end, &any_special);
         if (error != Error_Success)
             return error;
         if (token_start == token_end)
@@ -124,7 +120,6 @@ static Error tokenize(cz::Allocator allocator, cz::Vector<cz::Str>* tokens, cz::
         tokens->reserve(cz::heap_allocator(), 1);
         tokens->push(token);
         index = token_end;
-        at_start_of_program = program_break;
     }
     return Error_Success;
 }
@@ -136,8 +131,7 @@ static Error tokenize(cz::Allocator allocator, cz::Vector<cz::Str>* tokens, cz::
 static Error advance_through_token(cz::Str text,
                                    size_t* token_start,
                                    size_t* index,
-                                   bool* any_special,
-                                   bool* program_break) {
+                                   bool* any_special) {
     // Skip starting whitespace.
     for (; *index < text.len; ++*index) {
         if (!cz::is_blank(text[*index]))
@@ -157,7 +151,6 @@ static Error advance_through_token(cz::Str text,
         case ';':
             if (*index == *token_start) {
                 *any_special = true;
-                *program_break = true;
                 ++*index;
             }
             return Error_Success;
@@ -176,7 +169,6 @@ static Error advance_through_token(cz::Str text,
         case '|': {
             if (*index == *token_start) {
                 *any_special = true;
-                *program_break = true;
                 ++*index;
                 if (*index < text.len && text[*index - 1] == text[*index]) {
                     ++*index;
@@ -230,7 +222,6 @@ static Error advance_through_token(cz::Str text,
         case ')':
             if (*index == *token_start) {
                 *any_special = true;
-                *program_break = true;
                 ++*index;
             }
             return Error_Success;
@@ -391,9 +382,7 @@ static Error advance_through_dollar_sign(cz::Str text,
         while (1) {
             size_t token_start = *index;
             bool any_special = false;
-            bool program_break = false;
-            Error error =
-                advance_through_token(text, &token_start, index, &any_special, &program_break);
+            Error error = advance_through_token(text, &token_start, index, &any_special);
             if (error != Error_Success)
                 return error;
             if (token_start == *index)

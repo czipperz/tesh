@@ -65,7 +65,6 @@ bool tick_running_node(Shell_State* shell,
                        Pseudo_Terminal* tty,
                        Backlog_State* backlog,
                        bool* force_quit) {
-    size_t starting_length = backlog->length;
     for (size_t b = 0; b < node->bg.len; ++b) {
         Running_Pipeline* line = &node->bg[b];
         tick_pipeline(shell, node->local, rend, prompt, backlogs, backlog, line, tty, force_quit);
