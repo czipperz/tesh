@@ -111,3 +111,12 @@ endif()
 if(CMAKE_BUILD_TYPE STREQUAL "Release")
   add_definitions(-DNDEBUG)
 endif()
+
+###############################################################################
+# Test programs
+###############################################################################
+
+add_executable(catforever tests/catforever.c)
+add_executable(forever    tests/forever.c)
+add_executable(mycat      tests/mycat.c)
+add_executable(myecho     tests/myecho.c)
