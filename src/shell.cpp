@@ -160,10 +160,20 @@ void cleanup_builtin(Running_Program* program) {
         close_rc_file(builtin.err_count, builtin.err.v.file);
 }
 
+static void cleanup_node(Running_Node* node) {
+    for (size_t i = 0; i < node->bg.len; ++i) {
+        cleanup_pipeline(&node->bg[i]);
+    }
+    cleanup_pipeline(&node->fg);
+}
+
 static void kill_program(Running_Program* program) {
     switch (program->type) {
     case Running_Program::PROCESS:
         program->v.process.kill();
+        break;
+    case Running_Program::SUB:
+        cleanup_node(&program->v.sub);
         break;
     default:
         // TODO: close CAT's file.
@@ -181,10 +191,7 @@ void cleanup_pipeline(Running_Pipeline* pipeline) {
 }
 
 static void cleanup_script(Running_Script* script) {
-    for (size_t i = 0; i < script->root.bg.len; ++i) {
-        cleanup_pipeline(&script->root.bg[i]);
-    }
-    cleanup_pipeline(&script->root.fg);
+    cleanup_node(&script->root);
     destroy_pseudo_terminal(&script->tty);
 }
 
