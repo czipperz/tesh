@@ -309,6 +309,7 @@ void append_node(cz::Allocator allocator,
                 cz::append(allocator, string, ' ');
             cz::append(allocator, string, "(");
             append_node(allocator, string, program->v.sub, false);
+            cz::append(allocator, string, ")");
         } else {
             for (size_t i = 0; i < program->v.args.len; ++i) {
                 if (i > 0 || program->variable_names.len > 0 || program->subexprs.len > 0)
