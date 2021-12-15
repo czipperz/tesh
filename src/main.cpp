@@ -971,6 +971,8 @@ static void start_completing(Prompt_State* prompt, Shell_State* shell) {
                 prompt->completion.results.push(result.clone_null_terminate(path_allocator));
             }
         }
+        prompt->completion.prefix_length = query.len;
+        cz::sort(prompt->completion.results);
         return;
     }
 
