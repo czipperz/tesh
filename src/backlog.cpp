@@ -436,7 +436,6 @@ static bool process_escape_sequence(Backlog_State* backlog, cz::Str fresh, size_
             //
             // ESC [ <n> A          Cursor Up
             // ESC [ <n> B          Cursor Down
-            // ESC [ <n> C          Cursor Forward
             // ESC [ <n> D          Cursor Backward
             // ESC [ <n> E          Cursor Down Lines
             // ESC [ <n> F          Cursor Up Lines
@@ -460,13 +459,13 @@ static bool process_escape_sequence(Backlog_State* backlog, cz::Str fresh, size_
             //
             // ESC [ <n> ; <b> r    Set Scrolling Region between n and b (row numbers).
             if ((*text)[it] == 's' || (*text)[it] == 'u' || (*text)[it] == 'A' ||
-                (*text)[it] == 'B' || (*text)[it] == 'C' || (*text)[it] == 'D' ||
-                (*text)[it] == 'E' || (*text)[it] == 'F' || (*text)[it] == 'G' ||
-                (*text)[it] == 'd' || (*text)[it] == 'l' || (*text)[it] == 'Z' ||
-                (*text)[it] == 'S' || (*text)[it] == 'T' || (*text)[it] == '@' ||
-                (*text)[it] == 'P' || (*text)[it] == 'X' || (*text)[it] == 'L' ||
-                (*text)[it] == 'M' || (*text)[it] == 'J' || (*text)[it] == 'K' ||
-                (*text)[it] == 'g' || (*text)[it] == 'r') {
+                (*text)[it] == 'B' || (*text)[it] == 'D' || (*text)[it] == 'E' ||
+                (*text)[it] == 'F' || (*text)[it] == 'G' || (*text)[it] == 'd' ||
+                (*text)[it] == 'l' || (*text)[it] == 'Z' || (*text)[it] == 'S' ||
+                (*text)[it] == 'T' || (*text)[it] == '@' || (*text)[it] == 'P' ||
+                (*text)[it] == 'X' || (*text)[it] == 'L' || (*text)[it] == 'M' ||
+                (*text)[it] == 'J' || (*text)[it] == 'K' || (*text)[it] == 'g' ||
+                (*text)[it] == 'r') {
                 return true;
             }
 
@@ -497,6 +496,21 @@ static bool process_escape_sequence(Backlog_State* backlog, cz::Str fresh, size_
                 }
                 uint64_t line_start = backlog->lines.len > 0 ? backlog->lines.last() : 0;
                 truncate_to(backlog, line_start);
+                return true;
+            }
+
+            // ESC [ <n> C          Cursor Forward
+            else if ((*text)[it] == 'C') {
+                // Instead of writing 12 spaces, conhost emits:
+                // ESC [ 12 X ESC [ 96 m ESC [ 12 C
+                // In other words, clear 12 characters, reset the rendition,
+                // then move forward 12 characters.  We just ignore the clear
+                // operation and count the "move forward" as inserting spaces.
+                if (args.len >= 1) {
+                    for (int32_t i = 0; i < args[0]; ++i) {
+                        append_chunk(backlog, " ");
+                    }
+                }
                 return true;
             }
 
