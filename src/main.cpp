@@ -2430,7 +2430,7 @@ int actual_main(int argc, char** argv) {
 
     // Old versions of SDL_ttf don't parse FontLineSkip correctly so we manually set it.
     rend.font_height =
-        cz::max(TTF_FontLineSkip(rend.font), (int)(TTF_FontHeight(rend.font) * 1.1f));
+        cz::max(TTF_FontLineSkip(rend.font), (int)(TTF_FontHeight(rend.font) * 1.05f));
     rend.font_width = 10;
     TTF_GlyphMetrics(rend.font, ' ', nullptr, nullptr, nullptr, nullptr, &rend.font_width);
 
@@ -2494,7 +2494,7 @@ void resize_font(int font_size, Render_State* rend) {
         rend->font_size = font_size;
         // Old versions of SDL_ttf don't parse FontLineSkip correctly so we manually set it.
         rend->font_height =
-            cz::max(TTF_FontLineSkip(rend->font), (int)(TTF_FontHeight(rend->font) * 1.1f));
+            cz::max(TTF_FontLineSkip(rend->font), (int)(TTF_FontHeight(rend->font) * 1.05f));
         // TODO: handle failure
         TTF_GlyphMetrics(rend->font, ' ', nullptr, nullptr, nullptr, nullptr, &rend->font_width);
 
