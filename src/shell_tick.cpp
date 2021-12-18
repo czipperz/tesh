@@ -182,9 +182,10 @@ static bool tick_program(Shell_State* shell,
 
     case Running_Program::SUB: {
         Running_Node* node = &program->v.sub;
-        while (1) {
+        // TODO better rate limiting
+        for (int rounds = 0; rounds < 128; ++rounds) {
             if (!tick_running_node(shell, backlogs, rend, prompt, node, tty, backlog, force_quit)) {
-                break;  // TODO rate limit
+                break;
             }
         }
 
