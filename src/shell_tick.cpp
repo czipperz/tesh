@@ -9,6 +9,8 @@
 #include <cz/heap.hpp>
 #include <cz/parse.hpp>
 #include <cz/path.hpp>
+
+#include "config.hpp"
 #include "global.hpp"
 #include "prompt.hpp"
 
@@ -452,9 +454,21 @@ static bool tick_program(Shell_State* shell,
 
         if (option == "font_size") {
             if (value <= 0) {
-                (void)builtin.err.write("configure: Invalid font_height\n");
+                (void)builtin.err.write("configure: Invalid font size.\n");
             } else {
                 resize_font(value, rend);
+            }
+        } else if (option == "builtin_level") {
+            if (value < 0 || value > 2) {
+                (void)builtin.err.write("configure: Invalid builtin level.\n");
+            } else {
+                cfg.builtin_level = value;
+            }
+        } else if (option == "wide_terminal") {
+            if (value < 0 || value > 1) {
+                (void)builtin.err.write("configure: Invalid boolean value.\n");
+            } else {
+                cfg.windows_wide_terminal = value;
             }
         } else {
             (void)builtin.err.write(
