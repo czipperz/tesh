@@ -13,6 +13,10 @@ static void test_append_node(cz::Allocator allocator,
     case Shell_Node::PROGRAM: {
         Parse_Program* program = node->v.program;
         append(allocator, string, cz::many(' ', depth * spd), "program", async_str, ":\n");
+        for (size_t i = 0; i < program->subexprs.len; ++i) {
+            append(allocator, string, cz::many(' ', (depth + 1) * spd), "sub", i, ":\n");
+            test_append_node(allocator, string, program->subexprs[i], depth + 2);
+        }
         for (size_t i = 0; i < program->variable_names.len; ++i) {
             append(allocator, string, cz::many(' ', (depth + 1) * spd), "var", i, ": ",
                    program->variable_names[i], '\n');
@@ -752,4 +756,26 @@ function:\n\
         program:\n\
             arg0: echo\n\
             arg1: }\n");
+}
+
+TEST_CASE("parse_script subexpr $()") {
+    // Temporary hack.
+    permanent_allocator = cz::heap_allocator();
+
+    Shell_State shell = {};
+    cz::String string = {};
+    Error error = parse_and_emit(&shell, &string, "a$(c x$(y)z d)b");
+    REQUIRE(error == Error_Success);
+    CHECK(string.as_str() ==
+          "\
+program:\n\
+    sub0:\n\
+        program:\n\
+            sub0:\n\
+                program:\n\
+                    arg0: y\n\
+            arg0: c\n\
+            arg1: x${__tesh_sub0}z\n\
+            arg2: d\n\
+    arg0: a${__tesh_sub0}b\n");
 }
