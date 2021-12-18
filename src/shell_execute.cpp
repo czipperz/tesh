@@ -176,10 +176,16 @@ static void do_descend_to_first_pipeline(cz::Vector<Shell_Node*>* path, Shell_No
         path->push(child);
 
         switch (child->type) {
-        case Shell_Node::PROGRAM:
         case Shell_Node::PIPELINE:
         case Shell_Node::FUNCTION:
             return;
+        case Shell_Node::PROGRAM:
+            if (child->v.program->subexprs.len == 0) {
+                return;
+            } else {
+                child = child->v.program->subexprs[0];
+                break;
+            }
         case Shell_Node::SEQUENCE:
             if (child->v.sequence.len == 0) {
                 path->reserve(cz::heap_allocator(), 1);
@@ -255,7 +261,21 @@ static bool walk_to_next_pipeline(cz::Vector<Shell_Node*>* path, Walk_Status sta
             }
             break;
 
-        case Shell_Node::PROGRAM:
+        case Shell_Node::PROGRAM: {
+            size_t i = 0;
+            for (; i < parent->v.program->subexprs.len; ++i) {
+                if (child == parent->v.program->subexprs[i]) {
+                    break;
+                }
+            }
+            ++i;
+            if (i < parent->v.program->subexprs.len) {
+                return descend_to_first_pipeline(path, parent->v.program->subexprs[i]);
+            }
+            CZ_DEBUG_ASSERT(i == parent->v.program->subexprs.len);
+            return true;
+        }
+
         case Shell_Node::PIPELINE:
         case Shell_Node::FUNCTION:
             CZ_PANIC("invalid");
