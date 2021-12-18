@@ -252,14 +252,14 @@ static bool walk_to_next_pipeline(cz::Vector<Shell_Node*>* path, Walk_Status sta
                 return descend_to_first_pipeline(path, parent->v.binary.right);
         } break;
 
-        case Shell_Node::IF:
+        case Shell_Node::IF: {
             if (child == parent->v.if_.cond) {
                 if (success)
                     return descend_to_first_pipeline(path, parent->v.if_.then);
                 else if (parent->v.if_.other)
                     return descend_to_first_pipeline(path, parent->v.if_.other);
             }
-            break;
+        } break;
 
         case Shell_Node::PROGRAM: {
             size_t i = 0;
