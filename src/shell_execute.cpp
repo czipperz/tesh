@@ -3,6 +3,7 @@
 #include <Tracy.hpp>
 #include <cz/debug.hpp>
 #include <cz/defer.hpp>
+#include <cz/format.hpp>
 #include <cz/heap.hpp>
 #include <cz/path.hpp>
 #include <cz/process.hpp>
@@ -149,9 +150,16 @@ bool finish_line(Shell_State* shell,
     cleanup_pipeline(line);
     Error error = start_execute_line(shell, tty, node, backlog, line, background);
     if (error != Error_Success) {
-        append_text(backlog, "tesh: Error: ");
-        append_text(backlog, error_string(error));
-        append_text(backlog, "\n");
+        Process_Output err = {};
+        if (node->stdio.err_type == File_Type_Terminal) {
+            err.type = Process_Output::BACKLOG;
+            err.v.backlog = backlog;
+        } else {
+            err.type = Process_Output::FILE;
+            err.v.file = node->stdio.err;
+        }
+
+        (void)err.write(cz::format(temp_allocator, "tesh: Error: ", error_string(error), "\n"));
     }
 
     return true;

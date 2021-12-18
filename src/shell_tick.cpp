@@ -586,9 +586,7 @@ static bool tick_program(Shell_State* shell,
             }
         }
 
-        append_text(backlog, "source: Error: ");
-        append_text(backlog, error_string(error));
-        append_text(backlog, "\n");
+        builtin.err.write(cz::format(temp_allocator, "source: Error: ", error_string(error), "\n"));
         goto finish_builtin;
     } break;
 
