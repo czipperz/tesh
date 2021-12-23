@@ -146,7 +146,16 @@ bool render_code_point(SDL_Surface* window_surface,
 
             if (seq[0] == '\n') {
                 for (int x = point->x + 1; x < rend->window_cols; ++x) {
-                    ++index;
+                    ++tile;
+                    tile->outer = point->outer + 1;
+                    tile->inner = point->inner;
+                }
+            } else if (seq[0] == '\t') {
+                uint64_t lcol2 = point->column;
+                lcol2 += cfg.tab_width;
+                lcol2 -= lcol2 % cfg.tab_width;
+                uint64_t width = lcol2 - point->column;
+                for (uint64_t i = 1; i < width; ++i) {
                     ++tile;
                     tile->outer = point->outer + 1;
                     tile->inner = point->inner;
