@@ -1461,12 +1461,23 @@ static void set_clipboard_contents_to_selection(Render_State* rend,
 }
 
 static int word_char_category(char ch) {
-    if (cz::is_alnum(ch) || is_path_sep(ch) || ch == '-' || ch == '_' || ch == '.' || ch == '~')
+    switch (ch) {
+    case CZ_ALNUM_CASES:
+    case '/':
+    case '\\':
+    case '-':
+    case '_':
+    case '.':
+    case '~':
+    case ':':
         return 1;  // Path character.
-    else if (cz::is_space(ch))
+
+    case CZ_SPACE_CASES:
         return 2;
-    else
+
+    default:
         return 3;
+    }
 }
 
 static void expand_selection(Selection* selection,
