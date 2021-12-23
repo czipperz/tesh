@@ -1628,6 +1628,34 @@ static void expand_selection(Selection* selection,
     }
 }
 
+static void expand_selection_to(Render_State* rend,
+                                Shell_State* shell,
+                                Prompt_State* prompt,
+                                cz::Slice<Backlog_State*> backlogs,
+                                Visual_Tile tile) {
+    if (tile.outer == 0) {
+        tile.outer = backlogs.len + 1;
+        tile.inner = get_wd(&shell->local).len + prompt->prefix.len + prompt->text.len;
+    }
+
+    rend->selection.type = SELECT_REGION;
+    rend->selection.current = tile;
+
+    if ((rend->selection.current.outer < rend->selection.down.outer) ||
+        (rend->selection.current.outer == rend->selection.down.outer &&
+         rend->selection.current.inner < rend->selection.down.inner)) {
+        rend->selection.start = rend->selection.current;
+        rend->selection.end = rend->selection.down;
+    } else {
+        rend->selection.start = rend->selection.down;
+        rend->selection.end = rend->selection.current;
+    }
+
+    expand_selection(&rend->selection, shell, prompt, backlogs);
+
+    rend->complete_redraw = true;
+}
+
 static bool write_selected_backlog_to_file(Shell_State* shell,
                                            Prompt_State* prompt,
                                            cz::Slice<Backlog_State*> backlogs,
@@ -2055,18 +2083,22 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
 
         case SDL_MOUSEBUTTONDOWN: {
             if (event.button.button == SDL_BUTTON_LEFT) {
-                shell->selected_process = -1;
+                bool holding_shift = (SDL_GetModState() & KMOD_SHIFT);
+                if (!holding_shift)
+                    shell->selected_process = -1;
                 rend->scroll_mode = MANUAL_SCROLL;
                 rend->selection.type = SELECT_DISABLED;
 
-                if (!rend->grid_is_valid)
+                if (!rend->grid_is_valid) {
+                    shell->selected_process = -1;
                     break;
+                }
 
                 int row = event.button.y / rend->font_height;
                 int column = event.button.x / rend->font_width;
                 Visual_Tile tile = rend->grid[row * rend->window_cols + column];
 
-                if (tile.outer == 0)
+                if (!holding_shift && tile.outer == 0)
                     break;
 
                 rend->selection.expand_word = 0;
@@ -2082,19 +2114,23 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
                     rend->selection.type = SELECT_EMPTY;
                 }
 
-                shell->selected_process = tile.outer - 1;
-                if (shell->selected_process == backlogs->len)
-                    shell->selected_process = -1;
+                if (holding_shift) {
+                    expand_selection_to(rend, shell, prompt, *backlogs, tile);
+                } else {
+                    shell->selected_process = tile.outer - 1;
+                    if (shell->selected_process == backlogs->len)
+                        shell->selected_process = -1;
 
-                rend->selection.down = tile;
-                rend->selection.current = tile;
-                rend->selection.start = tile;
-                rend->selection.end = tile;
+                    rend->selection.down = tile;
+                    rend->selection.current = tile;
+                    rend->selection.start = tile;
+                    rend->selection.end = tile;
 
-                expand_selection(&rend->selection, shell, prompt, *backlogs);
+                    expand_selection(&rend->selection, shell, prompt, *backlogs);
 
-                rend->complete_redraw = true;
-                ++num_events;
+                    rend->complete_redraw = true;
+                    ++num_events;
+                }
             } else if (event.button.button == SDL_BUTTON_MIDDLE) {
                 run_paste(prompt);
                 finish_prompt_manipulation(shell, rend, *backlogs, prompt, false);
@@ -2127,29 +2163,7 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
             int row = event.motion.y / rend->font_height;
             int column = event.motion.x / rend->font_width;
             Visual_Tile tile = rend->grid[row * rend->window_cols + column];
-
-            if (tile.outer == 0) {
-                tile.outer = backlogs->len + 1;
-                tile.inner = get_wd(&shell->local).len + prompt->prefix.len + prompt->text.len;
-            }
-
-            rend->selection.type = SELECT_REGION;
-            rend->selection.current = tile;
-
-            if ((rend->selection.current.outer < rend->selection.down.outer) ||
-                (rend->selection.current.outer == rend->selection.down.outer &&
-                 rend->selection.current.inner < rend->selection.down.inner)) {
-                rend->selection.start = rend->selection.current;
-                rend->selection.end = rend->selection.down;
-            } else {
-                rend->selection.start = rend->selection.down;
-                rend->selection.end = rend->selection.current;
-            }
-
-            expand_selection(&rend->selection, shell, prompt, *backlogs);
-
-            rend->complete_redraw = true;
-            ++num_events;
+            expand_selection_to(rend, shell, prompt, *backlogs, tile);
         } break;
         }
     }
