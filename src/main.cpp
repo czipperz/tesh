@@ -859,9 +859,7 @@ static void resolve_history_searching(Prompt_State* prompt, cz::Vector<cz::Str>*
         prompt->text.len = 0;
         if (prompt->history_counter < history->len) {
             cz::Str hist = history->get(prompt->history_counter);
-            prompt->text.reserve(cz::heap_allocator(), hist.len);
-            prompt->text.append(hist);
-            prompt->cursor = prompt->text.len;
+            insert_before(prompt, prompt->text.len, hist);
         }
     }
 }
@@ -922,9 +920,7 @@ static void run_paste(Prompt_State* prompt) {
             str.pop();
 
         stop_completing(prompt);
-        prompt->text.reserve(cz::heap_allocator(), str.len);
-        prompt->text.insert(prompt->cursor, str);
-        prompt->cursor += str.len;
+        insert_before(prompt, prompt->cursor, str);
     }
 }
 
@@ -1086,48 +1082,60 @@ static bool handle_prompt_manipulation_commands(Shell_State* shell,
                                                 SDL_Keycode key) {
     bool doing_completion = false;
     cz::Vector<cz::Str>* history = prompt_history(prompt, shell->attached_process != -1);
-    if ((mod & ~KMOD_SHIFT) == 0 && key == SDLK_BACKSPACE) {
+
+    ///////////////////////////////////////////////////////////////////////
+    // Prompt editing commands
+    ///////////////////////////////////////////////////////////////////////
+
+    if (mod == KMOD_ALT && key == SDLK_SLASH) {
+        undo(prompt);
+    } else if (mod == KMOD_CTRL && key == SDLK_SLASH) {
+        redo(prompt);
+    } else if ((mod & ~KMOD_SHIFT) == 0 && key == SDLK_BACKSPACE) {
         if (prompt->cursor > 0) {
-            --prompt->cursor;
-            prompt->text.remove(prompt->cursor);
+            remove_before(prompt, prompt->cursor - 1, prompt->cursor);
         }
     } else if (mod == (KMOD_CTRL | KMOD_ALT) && key == SDLK_BACKSPACE) {
-        prompt->text.remove_range(0, prompt->cursor);
-        prompt->cursor = 0;
+        remove_before(prompt, 0, prompt->cursor);
     } else if ((mod & ~KMOD_SHIFT) == 0 && key == SDLK_DELETE) {
         if (prompt->cursor < prompt->text.len) {
-            prompt->text.remove(prompt->cursor);
+            remove_after(prompt, prompt->cursor, prompt->cursor + 1);
         }
     } else if ((mod == KMOD_ALT && key == SDLK_DELETE) || (mod == KMOD_ALT && key == SDLK_d)) {
         size_t end = prompt->cursor;
         forward_word(prompt->text, &end);
-        prompt->text.remove_range(prompt->cursor, end);
+        remove_after(prompt, prompt->cursor, end);
     } else if ((mod == KMOD_CTRL && key == SDLK_BACKSPACE) ||
                (mod == KMOD_ALT && key == SDLK_BACKSPACE)) {
-        size_t end = prompt->cursor;
-        backward_word(prompt->text, &prompt->cursor);
-        prompt->text.remove_range(prompt->cursor, end);
+        size_t start = prompt->cursor;
+        backward_word(prompt->text, &start);
+        remove_before(prompt, start, prompt->cursor);
     } else if (mod == KMOD_CTRL && key == SDLK_k) {
-        prompt->text.remove_range(prompt->cursor, prompt->text.len);
+        remove_after(prompt, prompt->cursor, prompt->text.len);
     } else if (mod == (KMOD_CTRL | KMOD_ALT) && key == SDLK_BACKSPACE) {
-        size_t end = prompt->cursor;
-        prompt->cursor = 0;
-        prompt->text.remove_range(prompt->cursor, end);
+        remove_before(prompt, 0, prompt->cursor);
     } else if (mod == KMOD_SHIFT && key == SDLK_RETURN) {
-        prompt->text.reserve(cz::heap_allocator(), 1);
-        prompt->text.insert(prompt->cursor, '\n');
-        prompt->cursor++;
+        insert_before(prompt, prompt->cursor, "\n");
     } else if (mod == KMOD_ALT && key == SDLK_CARET) {
         const char* ptr = prompt->text.slice_start(prompt->cursor).find('\n');
-        if (ptr)
-            *(char*)ptr = ' ';
+        if (ptr) {
+            start_combo(prompt);
+            remove(prompt, ptr - prompt->text.buffer, ptr - prompt->text.buffer + 1);
+            insert(prompt, ptr - prompt->text.buffer, " ");
+            end_combo(prompt);
+        }
     } else if (mod == KMOD_CTRL && key == SDLK_t) {
         if (prompt->cursor < prompt->text.len && prompt->cursor > 0) {
-            char ch1 = prompt->text[prompt->cursor - 1];
-            char ch2 = prompt->text[prompt->cursor];
-            prompt->text[prompt->cursor - 1] = ch2;
-            prompt->text[prompt->cursor] = ch1;
-            prompt->cursor++;
+            size_t point = prompt->cursor;
+            char ch1 = prompt->text[point - 1];
+            char ch2 = prompt->text[point];
+
+            start_combo(prompt);
+            remove(prompt, point - 1, point);
+            remove_after(prompt, point, point + 1);
+            insert(prompt, point - 1, cz::Str{&ch2, 1});
+            insert_after(prompt, point, cz::Str{&ch1, 1});
+            end_combo(prompt);
         }
     } else if (mod == KMOD_ALT && key == SDLK_t) {
         size_t start1, end1, start2, end2;
@@ -1144,24 +1152,26 @@ static bool handle_prompt_manipulation_commands(Shell_State* shell,
             cz::Str word1 = prompt->text.slice(start1, end1).clone(temp_allocator);
             cz::Str word2 = prompt->text.slice(start2, end2).clone(temp_allocator);
 
-            prompt->text.remove_range(start2, end2);
-            prompt->text.remove_range(start1, end1);
-            prompt->text.insert(start1, word2);
-            prompt->text.insert(start2 + word2.len - word1.len, word1);
-
-            prompt->cursor = end2;
+            start_combo(prompt);
+            remove(prompt, start1, end1);
+            remove_after(prompt, start2, end2);
+            insert(prompt, start1, word2);
+            insert_after(prompt, start2 + word2.len - word1.len, word1);
+            end_combo(prompt);
         }
     } else if ((mod & ~KMOD_SHIFT) == 0 && key == SDLK_TAB &&
                shell->selected_process == shell->attached_process) {
         doing_completion = true;
 
+        bool combo = false;
         if (prompt->completion.is) {
             // Delete previous completion.
             size_t prefix = prompt->completion.prefix_length;
             cz::Str prev = prompt->completion.results[prompt->completion.current];
             size_t del = prev.len - prefix;
-            prompt->cursor -= del;
-            prompt->text.remove_many(prompt->cursor, del);
+            combo = true;
+            start_combo(prompt);
+            remove_before(prompt, prompt->cursor - del, prompt->cursor);
         } else {
             start_completing(prompt, shell);
             // Completion won't start if the user isn't at a thing that could conceivably be
@@ -1186,20 +1196,22 @@ static bool handle_prompt_manipulation_commands(Shell_State* shell,
         cz::Str curr = prompt->completion.results[prompt->completion.current];
         size_t prefix = prompt->completion.prefix_length;
         cz::Str ins = curr.slice_start(prefix);
-        prompt->text.reserve(cz::heap_allocator(), ins.len);
-        prompt->text.insert(prompt->cursor, ins);
-        prompt->cursor += ins.len;
-    } else if ((mod == 0 && key == SDLK_LEFT) || (mod == KMOD_CTRL && key == SDLK_b)) {
-        if (prompt->cursor > 0) {
-            --prompt->cursor;
-        }
-    } else if ((mod == 0 && key == SDLK_RIGHT) || (mod == KMOD_CTRL && key == SDLK_f)) {
-        if (prompt->cursor < prompt->text.len) {
-            ++prompt->cursor;
-        }
-    } else if ((mod == 0 && key == SDLK_UP) || (mod == KMOD_CTRL && key == SDLK_p)) {
+        insert_before(prompt, prompt->cursor, ins);
+        if (combo)
+            end_combo(prompt);
+    } else if ((mod == KMOD_SHIFT && key == SDLK_INSERT) ||
+               (mod == (KMOD_CTRL | KMOD_SHIFT) && key == SDLK_v)) {
+        run_paste(prompt);
+    }
+
+    ///////////////////////////////////////////////////////////////////////
+    // History commands
+    ///////////////////////////////////////////////////////////////////////
+
+    else if ((mod == 0 && key == SDLK_UP) || (mod == KMOD_CTRL && key == SDLK_p)) {
         if (prompt->history_counter > 0) {
             --prompt->history_counter;
+            clear_undo_tree(prompt);
             prompt->text.len = 0;
             cz::Str hist = (*history)[prompt->history_counter];
             prompt->text.reserve(cz::heap_allocator(), hist.len);
@@ -1209,6 +1221,7 @@ static bool handle_prompt_manipulation_commands(Shell_State* shell,
     } else if ((mod == 0 && key == SDLK_DOWN) || (mod == KMOD_CTRL && key == SDLK_n)) {
         if (prompt->history_counter < history->len) {
             ++prompt->history_counter;
+            clear_undo_tree(prompt);
             prompt->text.len = 0;
             if (prompt->history_counter < history->len) {
                 cz::Str hist = (*history)[prompt->history_counter];
@@ -1248,6 +1261,20 @@ static bool handle_prompt_manipulation_commands(Shell_State* shell,
         }
     } else if (mod == KMOD_CTRL && key == SDLK_g) {
         resolve_history_searching(prompt, history);
+    }
+
+    ///////////////////////////////////////////////////////////////////////
+    // Movement commands
+    ///////////////////////////////////////////////////////////////////////
+
+    else if ((mod == 0 && key == SDLK_LEFT) || (mod == KMOD_CTRL && key == SDLK_b)) {
+        if (prompt->cursor > 0) {
+            --prompt->cursor;
+        }
+    } else if ((mod == 0 && key == SDLK_RIGHT) || (mod == KMOD_CTRL && key == SDLK_f)) {
+        if (prompt->cursor < prompt->text.len) {
+            ++prompt->cursor;
+        }
     } else if (mod == KMOD_CTRL && key == SDLK_a) {
         prompt->cursor = 0;
     } else if (mod == KMOD_CTRL && key == SDLK_e) {
@@ -1266,9 +1293,6 @@ static bool handle_prompt_manipulation_commands(Shell_State* shell,
     } else if ((mod == KMOD_CTRL && key == SDLK_RIGHT) || (mod == KMOD_ALT && key == SDLK_RIGHT) ||
                (mod == KMOD_ALT && key == SDLK_f)) {
         forward_word(prompt->text, &prompt->cursor);
-    } else if ((mod == KMOD_SHIFT && key == SDLK_INSERT) ||
-               (mod == (KMOD_CTRL | KMOD_SHIFT) && key == SDLK_v)) {
-        run_paste(prompt);
     } else {
         return false;
     }
@@ -1795,7 +1819,6 @@ static void user_submit_prompt(Render_State* rend,
     prompt->history_counter = history->len;
 
     stop_completing(prompt);
-    prompt->text.len = 0;
     prompt->cursor = 0;
 
     ensure_prompt_on_screen(rend, *backlogs);
@@ -1892,6 +1915,8 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
                 event.key.keysym.sym == SDLK_RETURN) {
                 bool submit = (event.key.keysym.sym == SDLK_RETURN);
                 user_submit_prompt(rend, shell, backlogs, prompt, submit);
+                clear_undo_tree(prompt);
+                prompt->text.len = 0;
                 ++num_events;
                 continue;
             }
@@ -1925,7 +1950,7 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
                 (rend->scroll_mode == AUTO_SCROLL || rend->scroll_mode == AUTO_PAGE)) {
                 if (prompt->cursor < prompt->text.len) {
                     stop_completing(prompt);
-                    prompt->text.remove(prompt->cursor);
+                    remove_after(prompt, prompt->cursor, prompt->cursor + 1);
                     ++num_events;
                 } else if (shell->attached_process != -1) {
                     Running_Script* script = attached_process(shell);
@@ -2058,9 +2083,7 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
                 break;
 
             cz::Str text = event.text.text;
-            prompt->text.reserve(cz::heap_allocator(), text.len);
-            prompt->text.insert(prompt->cursor, text);
-            prompt->cursor += text.len;
+            insert_before(prompt, prompt->cursor, text);
             finish_prompt_manipulation(shell, rend, *backlogs, prompt, false);
             ++num_events;
         } break;
@@ -2395,6 +2418,7 @@ int actual_main(int argc, char** argv) {
 
     load_default_configuration();
 
+    prompt.edit_arena.init();
     prompt.history_arena.init();
     prompt.completion.results_arena.init();
     prompt.process_id = 0;
