@@ -347,6 +347,25 @@ static bool tick_program(Shell_State* shell,
         if (cz::file::is_directory(new_wd.buffer)) {
             set_wd(local, new_wd);
         } else {
+            if (builtin.args.len >= 2 && arg.starts_with('-')) {
+                uint64_t num = 0;
+                if (arg.len == 1) {
+                    num = 1;
+                } else {
+                    (void)cz::parse(arg.slice_start(1), &num);
+                }
+
+                if (num != 0) {
+                    cz::Str new_wd2;
+                    if (get_old_wd(local, num, &new_wd2)) {
+                        if (cz::file::is_directory(new_wd2.buffer)) {
+                            set_wd(local, new_wd2);
+                            goto finish_builtin;
+                        }
+                    }
+                }
+            }
+
             builtin.exit_code = 1;
             (void)builtin.err.write("cd: ");
             (void)builtin.err.write(new_wd.buffer, new_wd.len);

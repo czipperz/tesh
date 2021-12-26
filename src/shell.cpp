@@ -47,16 +47,39 @@ void set_var(Shell_Local* local, cz::Str key, cz::Str value) {
     local->variable_values.push(value.clone_null_terminate(cz::heap_allocator()));
 }
 
-#define SPECIAL_WD_VAR "__tesh_wd"
-
 cz::Str get_wd(const Shell_Local* local) {
-    cz::Str wd;
-    if (get_var(local, SPECIAL_WD_VAR, &wd))
-        return wd;
+    for (; local; local = local->parent) {
+        if (local->working_directories.len > 0) {
+            return local->working_directories.last();
+        }
+    }
     return "";
 }
+bool get_old_wd(const Shell_Local* local, size_t num, cz::Str* result) {
+    for (; local; local = local->parent) {
+        if (num >= local->working_directories.len) {
+            num -= local->working_directories.len;
+        } else {
+            size_t index = local->working_directories.len - num - 1;
+            *result = local->working_directories[index];
+            return true;
+        }
+    }
+    return false;
+}
 void set_wd(Shell_Local* local, cz::Str value) {
-    set_var(local, SPECIAL_WD_VAR, value);
+    while (local && local->relationship == Shell_Local::ARGS_ONLY) {
+        local = local->parent;
+    }
+
+    // 128 should be enough.
+    if (local->working_directories.len >= 128) {
+        local->working_directories[0].drop(cz::heap_allocator());
+        local->working_directories.remove(0);
+    }
+
+    local->working_directories.reserve(cz::heap_allocator(), 1);
+    local->working_directories.push(value.clone_null_terminate(cz::heap_allocator()));
 }
 
 void make_env_var(Shell_State* shell, cz::Str key) {
@@ -203,10 +226,25 @@ void cleanup_processes(Shell_State* shell) {
 }
 
 void cleanup_local(Shell_Local* local) {
+    for (size_t i = 0; i < local->variable_names.len; ++i) {
+        local->variable_names[i].drop(cz::heap_allocator());
+        local->variable_values[i].drop(cz::heap_allocator());
+    }
+    for (size_t i = 0; i < local->alias_names.len; ++i) {
+        local->alias_names[i].drop(cz::heap_allocator());
+    }
+    for (size_t i = 0; i < local->function_names.len; ++i) {
+        local->function_names[i].drop(cz::heap_allocator());
+    }
+    for (size_t i = 0; i < local->working_directories.len; ++i) {
+        local->working_directories[i].drop(cz::heap_allocator());
+    }
+
     local->variable_names.drop(cz::heap_allocator());
     local->variable_values.drop(cz::heap_allocator());
     local->alias_names.drop(cz::heap_allocator());
     local->alias_values.drop(cz::heap_allocator());
+    local->working_directories.drop(cz::heap_allocator());
 }
 
 void cleanup_stdio(Stdio_State* stdio) {

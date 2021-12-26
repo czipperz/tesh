@@ -26,13 +26,15 @@ struct Shell_Local {
     cz::Vector<cz::String> variable_names;
     cz::Vector<cz::String> variable_values;
 
-    cz::Vector<cz::Str> alias_names;
+    cz::Vector<cz::String> alias_names;
     cz::Vector<Shell_Node*> alias_values;
 
-    cz::Vector<cz::Str> function_names;
+    cz::Vector<cz::String> function_names;
     cz::Vector<Shell_Node*> function_values;
 
     cz::Vector<cz::Str> args;
+
+    cz::Vector<cz::String> working_directories;
 
     cz::Str blocked_alias;
 
@@ -59,6 +61,7 @@ bool get_var(const Shell_Local* local, cz::Str key, cz::Str* value);
 void set_var(Shell_Local* local, cz::Str key, cz::Str value);
 void make_env_var(Shell_State* shell, cz::Str key);
 cz::Str get_wd(const Shell_Local* local);
+bool get_old_wd(const Shell_Local* local, size_t num, cz::Str* result);
 void set_wd(Shell_Local* local, cz::Str value);
 void set_alias(Shell_Local* local, cz::Str key, Shell_Node* node);
 void set_function(Shell_Local* local, cz::Str key, Shell_Node* node);
