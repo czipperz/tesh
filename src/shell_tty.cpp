@@ -25,16 +25,46 @@ static bool disable_echo(Pseudo_Terminal* tty) {
     return true;
 }
 
+#ifdef _WIN32
+static bool create_named_pipe(cz::File_Descriptor* server,
+                              cz::File_Descriptor* client,
+                              bool server_write) {
+    for (int number = 0; number <= 99999; ++number) {
+        char filename[20];
+        snprintf(filename, sizeof(filename), "\\\\.\\pipe\\tesh_%05d", number);
+
+        DWORD open_flags =
+            (server_write ? PIPE_ACCESS_OUTBOUND : PIPE_ACCESS_INBOUND) | FILE_FLAG_OVERLAPPED;
+        DWORD pipe_flags =
+            PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | (server_write ? PIPE_NOWAIT : PIPE_NOWAIT);
+        HANDLE handle_server =
+            CreateNamedPipeA(filename, open_flags, pipe_flags, /*max_instances=*/2,
+                             /*out_buffer_size=*/(8 << 10), /*in_buffer_size=*/(8 << 10),
+                             /*default_timeout=*/50, /*security_attributes=*/NULL);
+        if (handle_server == INVALID_HANDLE_VALUE)
+            continue;
+
+        bool client_read = server_write;
+        DWORD client_mode = (client_read ? (GENERIC_READ | FILE_WRITE_ATTRIBUTES) : GENERIC_WRITE);
+        HANDLE handle_client = CreateFile(filename, client_mode, 0, 0, OPEN_EXISTING, 0, 0);
+        if (handle_client == INVALID_HANDLE_VALUE) {
+            CloseHandle(handle_server);
+            return false;
+        }
+
+        server->handle = handle_server;
+        client->handle = handle_client;
+        return true;
+    }
+    return false;
+}
+#endif
+
 bool create_pseudo_terminal(Pseudo_Terminal* tty, int width, int height) {
 #ifdef _WIN32
-    if (!cz::create_pipe(&tty->child_in, &tty->in))
+    if (!create_named_pipe(&tty->in, &tty->child_in, /*server_write=*/true))
         return false;
-    if (!cz::create_pipe(&tty->out, &tty->child_out))
-        return false;  // TODO cleanup
-
-    if (!tty->in.set_non_blocking())
-        return false;  // TODO cleanup
-    if (!tty->out.set_non_blocking())
+    if (!create_named_pipe(&tty->out, &tty->child_out, /*server_write=*/false))
         return false;  // TODO cleanup
 
     if (!tty->child_in.set_non_blocking())
@@ -83,8 +113,8 @@ void destroy_pseudo_terminal(Pseudo_Terminal* tty) {
     ClosePseudoConsole((HPCON)tty->pseudo_console);
     tty->child_in.close();
     tty->child_out.close();
-    tty->in.close();
-    tty->out.close();
+    DisconnectNamedPipe(tty->in.handle);
+    DisconnectNamedPipe(tty->out.handle);
 #else
     close(tty->child_bi);
     close(tty->parent_bi);
