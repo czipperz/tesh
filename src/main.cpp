@@ -1129,6 +1129,28 @@ static bool handle_prompt_manipulation_commands(Shell_State* shell,
             prompt->text[prompt->cursor] = ch1;
             prompt->cursor++;
         }
+    } else if (mod == KMOD_ALT && key == SDLK_t) {
+        size_t start1, end1, start2, end2;
+        end2 = prompt->cursor;
+        forward_word(prompt->text, &end2);
+        start2 = end2;
+        backward_word(prompt->text, &start2);
+        start1 = start2;
+        backward_word(prompt->text, &start1);
+        end1 = start1;
+        forward_word(prompt->text, &end1);
+
+        if (end1 <= start2) {
+            cz::Str word1 = prompt->text.slice(start1, end1).clone(temp_allocator);
+            cz::Str word2 = prompt->text.slice(start2, end2).clone(temp_allocator);
+
+            prompt->text.remove_range(start2, end2);
+            prompt->text.remove_range(start1, end1);
+            prompt->text.insert(start1, word2);
+            prompt->text.insert(start2 + word2.len - word1.len, word1);
+
+            prompt->cursor = end2;
+        }
     } else if ((mod & ~KMOD_SHIFT) == 0 && key == SDLK_TAB &&
                shell->selected_process == shell->attached_process) {
         doing_completion = true;
