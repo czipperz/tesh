@@ -2497,11 +2497,17 @@ int actual_main(int argc, char** argv) {
             return 1;
         }
 
-        const uint32_t frame_length = 1000 / 60;
-        uint32_t wanted_end = start_frame + frame_length;
-        uint32_t end_frame = SDL_GetTicks();
-        if (wanted_end > end_frame) {
-            SDL_Delay(wanted_end - end_frame);
+        if (shell.scripts.len > 0) {
+            // Keep 60fps while any scripts are running.
+            const uint32_t frame_length = 1000 / 60;
+            uint32_t wanted_end = start_frame + frame_length;
+            uint32_t end_frame = SDL_GetTicks();
+            if (wanted_end > end_frame) {
+                SDL_Delay(wanted_end - end_frame);
+            }
+        } else {
+            // If nothing is running then just wait for the next input event.
+            SDL_WaitEvent(NULL);
         }
 
         FrameMark;
