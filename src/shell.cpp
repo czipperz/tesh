@@ -188,20 +188,29 @@ static void cleanup_node(Running_Node* node) {
         cleanup_pipeline(&node->bg[i]);
     }
     cleanup_pipeline(&node->fg);
+
+    // Don't cleanup persistent state (stdio and local) here because this
+    // is ran at the end of every node instead of when the subshell exits.
 }
 
 static void kill_program(Running_Program* program) {
     switch (program->type) {
-    case Running_Program::PROCESS:
+    case Running_Program::PROCESS: {
         program->v.process.kill();
-        break;
-    case Running_Program::SUB:
-        cleanup_node(&program->v.sub);
-        break;
-    default:
+    } break;
+
+    case Running_Program::SUB: {
+        Running_Node* node = &program->v.sub;
+        cleanup_node(node);
+        // Cleanup subshell.
+        cleanup_stdio(&node->stdio);
+        cleanup_local(node->local);
+    } break;
+
+    default: {
         // TODO: close CAT's file.
         cleanup_builtin(program);
-        break;
+    } break;
     }
 }
 
