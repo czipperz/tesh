@@ -120,6 +120,9 @@ void insert(Prompt_State* prompt, size_t index, cz::Str text) {
     edit.position = index;
     edit.value = text.clone(prompt->edit_arena.allocator());
     push_edit(prompt, edit);
+
+    prompt->text.reserve(cz::heap_allocator(), text.len);
+    prompt->text.insert(index, text);
 }
 
 void insert_before(Prompt_State* prompt, size_t index, cz::Str text) {
@@ -152,6 +155,8 @@ void remove(Prompt_State* prompt, size_t start, size_t end) {
     edit.position = start;
     edit.value = prompt->text.slice(start, end).clone(prompt->edit_arena.allocator());
     push_edit(prompt, edit);
+
+    prompt->text.remove_range(start, end);
 }
 
 void remove_before(Prompt_State* prompt, size_t start, size_t end) {

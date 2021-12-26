@@ -962,7 +962,8 @@ static void start_completing(Prompt_State* prompt, Shell_State* shell) {
     if (start > 0 && prompt->text[start - 1] == '$') {
         for (size_t i = 0; i < shell->local.variable_names.len; ++i) {
             cz::Str result = shell->local.variable_names[i];
-            if (result.starts_with(query)) {
+            if (cfg.case_sensitive_completion ? result.starts_with(query)
+                                              : result.starts_with_case_insensitive(query)) {
                 prompt->completion.results.reserve(cz::heap_allocator(), 1);
                 prompt->completion.results.push(result.clone_null_terminate(path_allocator));
             }
@@ -1037,7 +1038,8 @@ skip_absolute:
 
     while (1) {
         cz::Str name = iterator.str_name();
-        if (name.starts_with(prefix)) {
+        if (cfg.case_sensitive_completion ? name.starts_with(prefix)
+                                          : name.starts_with_case_insensitive(prefix)) {
             temp_path.len = temp_path_orig_len;
             temp_path.reserve(temp_allocator, name.len + 1);
             temp_path.append(name);
@@ -1195,6 +1197,22 @@ static bool handle_prompt_manipulation_commands(Shell_State* shell,
         // Insert the result.
         cz::Str curr = prompt->completion.results[prompt->completion.current];
         size_t prefix = prompt->completion.prefix_length;
+
+        // Fix capitalization if applicable.
+        {
+            cz::Str actual = prompt->text.slice(prompt->cursor - prefix, prompt->cursor);
+            cz::Str expected = curr.slice_end(prefix);
+            if (actual != expected) {
+                if (!combo) {
+                    combo = true;
+                    start_combo(prompt);
+                }
+
+                remove(prompt, prompt->cursor - prefix, prompt->cursor);
+                insert(prompt, prompt->cursor - prefix, expected);
+            }
+        }
+
         cz::Str ins = curr.slice_start(prefix);
         insert_before(prompt, prompt->cursor, ins);
         if (combo)
@@ -2340,6 +2358,7 @@ static void load_default_configuration() {
     cfg.max_length = ((uint64_t)1 << 30);  // 1GB
 
     cfg.windows_wide_terminal = false;
+    cfg.case_sensitive_completion = false;
 
     static SDL_Color process_colors[] = {
         {0x18, 0, 0, 0xff},    {0, 0x13, 0, 0xff},    {0, 0, 0x20, 0xff},

@@ -14,6 +14,7 @@ struct Config_State {
     int tab_width;
     uint64_t max_length;
     bool windows_wide_terminal;
+    bool case_sensitive_completion;
 
     /// 0 = absolute minimum, 1 = compromise, 2 = everything builtin.
     int builtin_level;
