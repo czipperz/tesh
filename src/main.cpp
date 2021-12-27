@@ -1056,8 +1056,8 @@ static void start_completing(Prompt_State* prompt, Shell_State* shell) {
 
     // TODO: parse the prompt->text and identify if we're at a program name token.
     if (!prompt->text.contains(' ') && !prompt->text.contains('/')) {
-        cz::Str path_ext;
 #ifdef _WIN32
+        cz::Str path_ext;
         (void)get_var(&shell->local, "PATHEXT", &path_ext);
 #endif
 
