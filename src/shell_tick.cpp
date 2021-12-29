@@ -545,7 +545,16 @@ static bool tick_program(Shell_State* shell,
                 }
                 set_var(local, key, value);
             }
-            make_env_var(shell, key);
+            make_env_var(local, key);
+        }
+        goto finish_builtin;
+    } break;
+
+    case Running_Program::UNSET: {
+        auto& builtin = program->v.builtin;
+        for (size_t i = 1; i < builtin.args.len; ++i) {
+            cz::Str key = builtin.args[i];
+            unset_var(local, key);
         }
         goto finish_builtin;
     } break;
@@ -664,9 +673,9 @@ static bool tick_program(Shell_State* shell,
             if (iter != local)
                 (void)builtin.out.write("\n");
             for (size_t i = 0; i < iter->variable_names.len; ++i) {
-                (void)builtin.out.write(iter->variable_names[i]);
+                (void)builtin.out.write(iter->variable_names[i].str);
                 (void)builtin.out.write("=");
-                (void)builtin.out.write(iter->variable_values[i]);
+                (void)builtin.out.write(iter->variable_values[i].str);
                 (void)builtin.out.write("\n");
             }
         }

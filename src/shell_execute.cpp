@@ -515,7 +515,6 @@ static Error start_execute_pipeline(Shell_State* shell,
 ///////////////////////////////////////////////////////////////////////////////
 
 static void generate_environment(void* out,
-                                 const Shell_State* shell,
                                  const Shell_Local* local,
                                  cz::Slice<const cz::Str> variable_names,
                                  cz::Slice<const cz::Str> variable_values);
@@ -546,6 +545,16 @@ static Error run_program(Shell_State* shell,
         program->v.sub.local = allocator.alloc<Shell_Local>();
         *program->v.sub.local = {};
         program->v.sub.local->parent = local;
+        program->v.sub.local->exported_vars = local->exported_vars.clone(cz::heap_allocator());
+        program->v.sub.local->variable_names = local->variable_names.clone(cz::heap_allocator());
+        program->v.sub.local->variable_values = local->variable_values.clone(cz::heap_allocator());
+        for (size_t i = 0; i < local->exported_vars.len; ++i) {
+            local->exported_vars[i].increment();
+        }
+        for (size_t i = 0; i < local->variable_names.len; ++i) {
+            local->variable_names[i].increment();
+            local->variable_values[i].increment();
+        }
         program->v.sub.local->relationship = Shell_Local::COW;
         return start_execute_node(shell, tty, backlog, &program->v.sub, parse.v.sub);
     }
@@ -694,7 +703,7 @@ static Error run_program(Shell_State* shell,
         return Error_IO;
 
     options.working_directory = get_wd(local).buffer;
-    generate_environment(&options.environment, shell, local, parse.variable_names,
+    generate_environment(&options.environment, local, parse.variable_names,
                          parse.variable_values);
 
     program->v.process = {};
@@ -743,7 +752,6 @@ static void push_environment(cz::Vector<char*>* table, cz::Str key, cz::Str valu
 #endif
 
 static void generate_environment(void* out_arg,
-                                 const Shell_State* shell,
                                  const Shell_Local* local,
                                  cz::Slice<const cz::Str> variable_names,
                                  cz::Slice<const cz::Str> variable_values) {
@@ -764,14 +772,18 @@ static void generate_environment(void* out_arg,
     skip1:;
     }
 
-    for (size_t i = 0; i < shell->exported_vars.len; ++i) {
-        cz::Str key = shell->exported_vars[i];
+    while (local && local->relationship == Shell_Local::ARGS_ONLY) {
+        local = local->parent;
+    }
+
+    for (size_t i = 0; i < local->exported_vars.len; ++i) {
+        cz::Str key = local->exported_vars[i].str;
         for (size_t j = 0; j < variable_names.len; ++j) {
             if (key == variable_names[j])
                 goto skip2;
         }
         for (size_t j = 0; j < i; ++j) {
-            if (key == shell->exported_vars[j])
+            if (key == local->exported_vars[j].str)
                 goto skip2;
         }
         cz::Str value;
@@ -825,6 +837,8 @@ static void recognize_builtins(Running_Program* program,
             program->type = Running_Program::ALIAS;
         } else if (parse.v.args[0] == "export") {
             program->type = Running_Program::EXPORT;
+        } else if (parse.v.args[0] == "unset") {
+            program->type = Running_Program::UNSET;
         } else if (parse.v.args[0] == "clear") {
             program->type = Running_Program::CLEAR;
         } else if (parse.v.args[0] == "." || parse.v.args[0] == "source") {

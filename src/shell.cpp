@@ -12,14 +12,16 @@ static cz::Str canonical_var(cz::Str key) {
 }
 
 bool get_var(const Shell_Local* local, cz::Str key, cz::Str* value) {
+    while (local && local->relationship == Shell_Local::ARGS_ONLY) {
+        local = local->parent;
+    }
+
     key = canonical_var(key);
 
-    for (; local; local = local->parent) {
-        for (size_t i = 0; i < local->variable_names.len; ++i) {
-            if (key == local->variable_names[i]) {
-                *value = local->variable_values[i];
-                return true;
-            }
+    for (size_t i = 0; i < local->variable_names.len; ++i) {
+        if (key == local->variable_names[i].str) {
+            *value = local->variable_values[i].str;
+            return true;
         }
     }
 
@@ -34,17 +36,17 @@ void set_var(Shell_Local* local, cz::Str key, cz::Str value) {
     key = canonical_var(key);
 
     for (size_t i = 0; i < local->variable_names.len; ++i) {
-        if (key == local->variable_names[i]) {
-            local->variable_values[i].drop(cz::heap_allocator());
-            local->variable_values[i] = value.clone_null_terminate(cz::heap_allocator());
+        if (key == local->variable_names[i].str) {
+            local->variable_values[i].drop();
+            local->variable_values[i] = RcStr::create_clone(value);
             return;
         }
     }
 
     local->variable_names.reserve(cz::heap_allocator(), 1);
     local->variable_values.reserve(cz::heap_allocator(), 1);
-    local->variable_names.push(key.clone(cz::heap_allocator()));
-    local->variable_values.push(value.clone_null_terminate(cz::heap_allocator()));
+    local->variable_names.push(RcStr::create_clone(key));
+    local->variable_values.push(RcStr::create_clone(value));
 }
 
 cz::Str get_wd(const Shell_Local* local) {
@@ -82,16 +84,43 @@ void set_wd(Shell_Local* local, cz::Str value) {
     local->working_directories.push(value.clone_null_terminate(cz::heap_allocator()));
 }
 
-void make_env_var(Shell_State* shell, cz::Str key) {
+void make_env_var(Shell_Local* local, cz::Str key) {
+    while (local && local->relationship == Shell_Local::ARGS_ONLY) {
+        local = local->parent;
+    }
+
     key = canonical_var(key);
 
-    for (size_t i = 0; i < shell->exported_vars.len; ++i) {
-        if (key == shell->exported_vars[i])
+    for (size_t i = 0; i < local->exported_vars.len; ++i) {
+        if (key == local->exported_vars[i].str)
             return;
     }
 
-    shell->exported_vars.reserve(cz::heap_allocator(), 1);
-    shell->exported_vars.push(key.clone(cz::heap_allocator()));
+    local->exported_vars.reserve(cz::heap_allocator(), 1);
+    local->exported_vars.push(RcStr::create_clone(key));
+}
+
+void unset_var(Shell_Local* local, cz::Str key) {
+    while (local && local->relationship == Shell_Local::ARGS_ONLY) {
+        local = local->parent;
+    }
+
+    key = canonical_var(key);
+
+    for (size_t i = 0; i < local->variable_names.len; ++i) {
+        if (local->variable_names[i].str == key) {
+            local->variable_names[i].drop();
+            local->variable_names.remove(i);
+            break;
+        }
+    }
+    for (size_t i = 0; i < local->exported_vars.len; ++i) {
+        if (local->exported_vars[i].str == key) {
+            local->exported_vars[i].drop();
+            local->exported_vars.remove(i);
+            break;
+        }
+    }
 }
 
 int get_alias_or_function(const Shell_Local* local,
@@ -235,9 +264,12 @@ void cleanup_processes(Shell_State* shell) {
 }
 
 void cleanup_local(Shell_Local* local) {
+    for (size_t i = 0; i < local->exported_vars.len; ++i) {
+        local->exported_vars[i].drop();
+    }
     for (size_t i = 0; i < local->variable_names.len; ++i) {
-        local->variable_names[i].drop(cz::heap_allocator());
-        local->variable_values[i].drop(cz::heap_allocator());
+        local->variable_names[i].drop();
+        local->variable_values[i].drop();
     }
     for (size_t i = 0; i < local->alias_names.len; ++i) {
         local->alias_names[i].drop(cz::heap_allocator());

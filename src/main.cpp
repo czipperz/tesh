@@ -969,7 +969,7 @@ static void start_completing(Prompt_State* prompt, Shell_State* shell) {
 
     if (start > 0 && prompt->text[start - 1] == '$') {
         for (size_t i = 0; i < shell->local.variable_names.len; ++i) {
-            cz::Str result = shell->local.variable_names[i];
+            cz::Str result = shell->local.variable_names[i].str;
             if (cfg.case_sensitive_completion ? result.starts_with(query)
                                               : result.starts_with_case_insensitive(query)) {
                 prompt->completion.results.reserve(cz::heap_allocator(), 1);
@@ -2455,7 +2455,7 @@ static void load_environment_variables(Shell_State* shell) {
                 // a = as the first character so ignore those.
                 if (key.len > 0) {
                     set_var(&shell->local, key, value);
-                    make_env_var(shell, key);
+                    make_env_var(&shell->local, key);
                 }
             }
         }
@@ -2467,7 +2467,7 @@ static void load_environment_variables(Shell_State* shell) {
         cz::String home = {};
         if (cz::env::get_home(cz::heap_allocator(), &home)) {
             set_var(&shell->local, "HOME", home);
-            make_env_var(shell, "HOME");
+            make_env_var(&shell->local, "HOME");
         }
     }
 #else
@@ -2478,7 +2478,7 @@ static void load_environment_variables(Shell_State* shell) {
         if (line.split_excluding('=', &key, &value)) {
             if (key.len > 0) {
                 set_var(&shell->local, key, value);
-                make_env_var(shell, key);
+                make_env_var(&shell->local, key);
             }
         }
     }

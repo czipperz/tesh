@@ -8,6 +8,7 @@
 #include <cz/vector.hpp>
 #include "backlog.hpp"
 #include "error.hpp"
+#include "rcstr.hpp"
 #include "render.hpp"
 
 struct Running_Program;
@@ -23,8 +24,11 @@ struct Prompt_State;
 struct Shell_Local {
     Shell_Local* parent;
 
-    cz::Vector<cz::String> variable_names;
-    cz::Vector<cz::String> variable_values;
+    // For simplicity's sake, the array of variables is duplicated to subshells.  ('unset' builtin
+    // causes too much complexity in variable lookup and environment generation code otherwise).
+    cz::Vector<RcStr> exported_vars;
+    cz::Vector<RcStr> variable_names;
+    cz::Vector<RcStr> variable_values;
 
     cz::Vector<cz::String> alias_names;
     cz::Vector<Shell_Node*> alias_values;
@@ -39,7 +43,7 @@ struct Shell_Local {
     cz::Str blocked_alias;
 
     enum {
-        COW = 0,    // All writes are independent, reads are merged.
+        COW = 0,    // All writes are independent, reads are merged (except vars).
         ARGS_ONLY,  // Only arguments are independent.
     } relationship;
 };
@@ -47,7 +51,6 @@ struct Shell_Local {
 struct Shell_State {
     int width, height;
 
-    cz::Vector<cz::String> exported_vars;
     Shell_Local local;
 
     cz::Vector<Running_Script> scripts;
@@ -59,7 +62,8 @@ struct Shell_State {
 
 bool get_var(const Shell_Local* local, cz::Str key, cz::Str* value);
 void set_var(Shell_Local* local, cz::Str key, cz::Str value);
-void make_env_var(Shell_State* shell, cz::Str key);
+void unset_var(Shell_Local* local, cz::Str key);
+void make_env_var(Shell_Local* local, cz::Str key);
 cz::Str get_wd(const Shell_Local* local);
 bool get_old_wd(const Shell_Local* local, size_t num, cz::Str* result);
 void set_wd(Shell_Local* local, cz::Str value);
@@ -208,6 +212,7 @@ struct Running_Program {
         TRUE_,
         FALSE_,
         EXPORT,
+        UNSET,
         CLEAR,
         SOURCE,
         SLEEP,
