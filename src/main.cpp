@@ -44,6 +44,7 @@ static Backlog_State* push_backlog(cz::Vector<Backlog_State*>* backlogs, uint64_
 static float get_dpi_scale(SDL_Window* window);
 static void scroll_down1(Render_State* rend, cz::Slice<Backlog_State*> backlogs, int lines);
 static cz::Vector<cz::Str>* prompt_history(Prompt_State* prompt, bool script);
+static void stop_merging_edits(Prompt_State* prompt);
 static void stop_completing(Prompt_State* prompt);
 static int word_char_category(char ch);
 
@@ -856,6 +857,7 @@ static void transform_shift_numbers(SDL_Keysym* keysym) {
 static void resolve_history_searching(Prompt_State* prompt, cz::Vector<cz::Str>* history) {
     if (prompt->history_searching) {
         prompt->history_searching = false;
+        stop_merging_edits(prompt);
         stop_completing(prompt);
         prompt->text.len = 0;
         if (prompt->history_counter < history->len) {
@@ -899,11 +901,15 @@ static void finish_prompt_manipulation(Shell_State* shell,
                                        Render_State* rend,
                                        cz::Slice<Backlog_State*> backlogs,
                                        Prompt_State* prompt,
+                                       bool doing_merge,
                                        bool doing_completion) {
     shell->selected_process = shell->attached_process;
     ensure_prompt_on_screen(rend, backlogs);
     rend->scroll_mode = AUTO_SCROLL;
     stop_selecting(rend);
+    if (!doing_merge) {
+        stop_merging_edits(prompt);
+    }
     if (!doing_completion) {
         stop_completing(prompt);
     }
@@ -920,6 +926,7 @@ static void run_paste(Prompt_State* prompt) {
         while (str.ends_with('\n'))
             str.pop();
 
+        stop_merging_edits(prompt);
         stop_completing(prompt);
         insert_before(prompt, prompt->cursor, str);
     }
@@ -1066,7 +1073,15 @@ skip_absolute:
     cz::sort(prompt->completion.results);
 }
 
+static void stop_merging_edits(Prompt_State* prompt) {
+    if (prompt->edit_index > 0) {
+        Prompt_Edit* edit = &prompt->edit_history[prompt->edit_index - 1];
+        edit->type &= ~PROMPT_EDIT_MERGE;
+    }
+}
+
 static void stop_completing(Prompt_State* prompt) {
+    // Most of the time we aren't completing so just short circuit out.
     if (!prompt->completion.is)
         return;
 
@@ -1094,7 +1109,8 @@ static void delete_forward_1(Prompt_State* prompt) {
     }
 
     remove_after(prompt, prompt->cursor, prompt->cursor + length);
-    prompt->edit_history.last().type |= PROMPT_EDIT_MERGE;
+    Prompt_Edit* edit = &prompt->edit_history[prompt->edit_index - 1];
+    edit->type |= PROMPT_EDIT_MERGE;
 }
 
 static bool handle_prompt_manipulation_commands(Shell_State* shell,
@@ -1103,6 +1119,7 @@ static bool handle_prompt_manipulation_commands(Shell_State* shell,
                                                 Render_State* rend,
                                                 uint16_t mod,
                                                 SDL_Keycode key) {
+    bool doing_merge = false;
     bool doing_completion = false;
     cz::Vector<cz::Str>* history = prompt_history(prompt, shell->attached_process != -1);
 
@@ -1125,6 +1142,7 @@ static bool handle_prompt_manipulation_commands(Shell_State* shell,
     } else if ((mod & ~KMOD_SHIFT) == 0 && key == SDLK_DELETE) {
         if (prompt->cursor < prompt->text.len) {
             delete_forward_1(prompt);
+            doing_merge = true;
         }
     } else if ((mod == KMOD_ALT && key == SDLK_DELETE) || (mod == KMOD_ALT && key == SDLK_d)) {
         size_t end = prompt->cursor;
@@ -1187,16 +1205,11 @@ static bool handle_prompt_manipulation_commands(Shell_State* shell,
     } else if ((mod & ~KMOD_SHIFT) == 0 && key == SDLK_TAB &&
                shell->selected_process == shell->attached_process) {
         doing_completion = true;
+        stop_merging_edits(prompt);
 
-        bool combo = false;
         if (prompt->completion.is) {
             // Delete previous completion.
-            size_t prefix = prompt->completion.prefix_length;
-            cz::Str prev = prompt->completion.results[prompt->completion.current];
-            size_t del = prev.len - prefix;
-            combo = true;
-            start_combo(prompt);
-            remove_before(prompt, prompt->cursor - del, prompt->cursor);
+            undo(prompt);
         } else {
             start_completing(prompt, shell);
             // Completion won't start if the user isn't at a thing that could conceivably be
@@ -1222,14 +1235,13 @@ static bool handle_prompt_manipulation_commands(Shell_State* shell,
         size_t prefix = prompt->completion.prefix_length;
 
         // Fix capitalization if applicable.
+        bool combo = false;
         {
             cz::Str actual = prompt->text.slice(prompt->cursor - prefix, prompt->cursor);
             cz::Str expected = curr.slice_end(prefix);
             if (actual != expected) {
-                if (!combo) {
-                    combo = true;
-                    start_combo(prompt);
-                }
+                combo = true;
+                start_combo(prompt);
 
                 remove(prompt, prompt->cursor - prefix, prompt->cursor);
                 insert(prompt, prompt->cursor - prefix, expected);
@@ -1338,7 +1350,7 @@ static bool handle_prompt_manipulation_commands(Shell_State* shell,
         return false;
     }
 
-    finish_prompt_manipulation(shell, rend, *backlogs, prompt, doing_completion);
+    finish_prompt_manipulation(shell, rend, *backlogs, prompt, doing_merge, doing_completion);
     return true;
 }
 
@@ -1864,6 +1876,7 @@ static void user_submit_prompt(Render_State* rend,
     }
     prompt->history_counter = history->len;
 
+    stop_merging_edits(prompt);
     stop_completing(prompt);
     prompt->cursor = 0;
 
@@ -1995,6 +2008,7 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
             if (mod == KMOD_CTRL && key == SDLK_d &&
                 (rend->scroll_mode == AUTO_SCROLL || rend->scroll_mode == AUTO_PAGE)) {
                 if (prompt->cursor < prompt->text.len) {
+                    // Don't call stop_merging_edits!
                     stop_completing(prompt);
                     delete_forward_1(prompt);
                     ++num_events;
@@ -2146,8 +2160,9 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
             }
 
             insert_before(prompt, prompt->cursor, text);
-            prompt->edit_history.last().type |= PROMPT_EDIT_MERGE;
-            finish_prompt_manipulation(shell, rend, *backlogs, prompt, false);
+            Prompt_Edit* edit = &prompt->edit_history[prompt->edit_index - 1];
+            edit->type |= PROMPT_EDIT_MERGE;
+            finish_prompt_manipulation(shell, rend, *backlogs, prompt, true, false);
             ++num_events;
         } break;
 
@@ -2241,7 +2256,7 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
                 }
             } else if (event.button.button == SDL_BUTTON_MIDDLE) {
                 run_paste(prompt);
-                finish_prompt_manipulation(shell, rend, *backlogs, prompt, false);
+                finish_prompt_manipulation(shell, rend, *backlogs, prompt, false, false);
                 ++num_events;
             }
         } break;
