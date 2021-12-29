@@ -1076,6 +1076,24 @@ static void stop_completing(Prompt_State* prompt) {
     prompt->completion.current = 0;
 }
 
+static void delete_forward_1(Prompt_State* prompt) {
+    size_t length = 1;
+    if (prompt->edit_index > 0) {
+        Prompt_Edit* edit = &prompt->edit_history[prompt->edit_index - 1];
+        if ((edit->type & PROMPT_EDIT_REMOVE) && (edit->type & PROMPT_EDIT_MERGE) &&
+            edit->position == prompt->cursor && edit->value.len + length <= 8) {
+            // The last edit is text input at the same location so merge the edits.
+            undo(prompt);
+            length += edit->value.len;
+            cz::String contents = {(char*)edit->value.buffer, edit->value.len, edit->value.len};
+            contents.drop(prompt->edit_arena.allocator());
+        }
+    }
+
+    remove_after(prompt, prompt->cursor, prompt->cursor + length);
+    prompt->edit_history.last().type |= PROMPT_EDIT_MERGE;
+}
+
 static bool handle_prompt_manipulation_commands(Shell_State* shell,
                                                 Prompt_State* prompt,
                                                 cz::Vector<Backlog_State*>* backlogs,
@@ -1089,6 +1107,8 @@ static bool handle_prompt_manipulation_commands(Shell_State* shell,
     // Prompt editing commands
     ///////////////////////////////////////////////////////////////////////
 
+    // TODO: call stop_completing???
+
     if (mod == KMOD_ALT && key == SDLK_SLASH) {
         undo(prompt);
     } else if (mod == KMOD_CTRL && key == SDLK_SLASH) {
@@ -1101,7 +1121,7 @@ static bool handle_prompt_manipulation_commands(Shell_State* shell,
         remove_before(prompt, 0, prompt->cursor);
     } else if ((mod & ~KMOD_SHIFT) == 0 && key == SDLK_DELETE) {
         if (prompt->cursor < prompt->text.len) {
-            remove_after(prompt, prompt->cursor, prompt->cursor + 1);
+            delete_forward_1(prompt);
         }
     } else if ((mod == KMOD_ALT && key == SDLK_DELETE) || (mod == KMOD_ALT && key == SDLK_d)) {
         size_t end = prompt->cursor;
@@ -1968,7 +1988,7 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
                 (rend->scroll_mode == AUTO_SCROLL || rend->scroll_mode == AUTO_PAGE)) {
                 if (prompt->cursor < prompt->text.len) {
                     stop_completing(prompt);
-                    remove_after(prompt, prompt->cursor, prompt->cursor + 1);
+                    delete_forward_1(prompt);
                     ++num_events;
                 } else if (shell->attached_process != -1) {
                     Running_Script* script = attached_process(shell);
@@ -2101,7 +2121,23 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
                 break;
 
             cz::Str text = event.text.text;
+            if (prompt->edit_index > 0) {
+                Prompt_Edit* edit = &prompt->edit_history[prompt->edit_index - 1];
+                if (!(edit->type & PROMPT_EDIT_REMOVE) && (edit->type & PROMPT_EDIT_MERGE) &&
+                    edit->position + edit->value.len == prompt->cursor &&
+                    edit->value.len + text.len <= 8) {
+                    // The last edit is text input at the same location so merge the edits.
+                    undo(prompt);
+                    cz::String contents = {(char*)edit->value.buffer, edit->value.len,
+                                           edit->value.len};
+                    contents.reserve_exact(prompt->edit_arena.allocator(), text.len);
+                    contents.append(text);
+                    text = contents;
+                }
+            }
+
             insert_before(prompt, prompt->cursor, text);
+            prompt->edit_history.last().type |= PROMPT_EDIT_MERGE;
             finish_prompt_manipulation(shell, rend, *backlogs, prompt, false);
             ++num_events;
         } break;
