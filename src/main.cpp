@@ -45,6 +45,7 @@ static float get_dpi_scale(SDL_Window* window);
 static void scroll_down1(Render_State* rend, cz::Slice<Backlog_State*> backlogs, int lines);
 static cz::Vector<cz::Str>* prompt_history(Prompt_State* prompt, bool script);
 static void stop_completing(Prompt_State* prompt);
+static int word_char_category(char ch);
 
 ///////////////////////////////////////////////////////////////////////////////
 // Renderer methods
@@ -1081,7 +1082,9 @@ static void delete_forward_1(Prompt_State* prompt) {
     if (prompt->edit_index > 0) {
         Prompt_Edit* edit = &prompt->edit_history[prompt->edit_index - 1];
         if ((edit->type & PROMPT_EDIT_REMOVE) && (edit->type & PROMPT_EDIT_MERGE) &&
-            edit->position == prompt->cursor && edit->value.len + length <= 8) {
+            edit->position == prompt->cursor && edit->value.len + length <= 8 &&
+            word_char_category(edit->value.last()) ==
+                word_char_category(prompt->text[prompt->cursor])) {
             // The last edit is text input at the same location so merge the edits.
             undo(prompt);
             length += edit->value.len;
@@ -1559,8 +1562,13 @@ static int word_char_category(char ch) {
     case CZ_SPACE_CASES:
         return 2;
 
-    default:
+    case '\'':
         return 3;
+    case '"':
+        return 4;
+
+    default:
+        return 5;
     }
 }
 
@@ -2121,11 +2129,12 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
                 break;
 
             cz::Str text = event.text.text;
-            if (prompt->edit_index > 0) {
+            if (prompt->edit_index > 0 && text.len == 1) {
                 Prompt_Edit* edit = &prompt->edit_history[prompt->edit_index - 1];
                 if (!(edit->type & PROMPT_EDIT_REMOVE) && (edit->type & PROMPT_EDIT_MERGE) &&
                     edit->position + edit->value.len == prompt->cursor &&
-                    edit->value.len + text.len <= 8) {
+                    edit->value.len + text.len <= 8 &&
+                    word_char_category(edit->value.last()) == word_char_category(text[0])) {
                     // The last edit is text input at the same location so merge the edits.
                     undo(prompt);
                     cz::String contents = {(char*)edit->value.buffer, edit->value.len,
