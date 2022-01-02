@@ -406,13 +406,20 @@ static void render_prompt(SDL_Surface* window_surface,
 
         size_t chars_on_line = 0;
         for (int i = 0; i < prompt->completion.results.len; i++) {
-            render_string(window_surface, rend, &point, background, cfg.backlog_fg_color,
-                          prompt->completion.results[i], true);
-            for (size_t padding = prompt->completion.results[i].len; padding < longest_entry + 1;
-                 padding++) {
+            cz::Str result = prompt->completion.results[i];
+            uint8_t color = cfg.backlog_fg_color;
+            if (prompt->completion.current == i) {
+                // TODO: we should probably have a custom bg color as
+                // well because spaces will be invisible otherwise.
+                color = cfg.selected_completion_fg_color;
+            }
+            render_string(window_surface, rend, &point, background, color, result, true);
+
+            for (size_t padding = result.len; padding < longest_entry + 1; padding++) {
                 render_code_point(window_surface, rend, &point, background, cfg.backlog_fg_color,
                                   " ", true);
             }
+
             chars_on_line += longest_entry + 1;
             if (chars_on_line + longest_entry + 1 > rend->window_cols) {
                 render_code_point(window_surface, rend, &point, background, cfg.backlog_fg_color,
@@ -2552,6 +2559,7 @@ static void load_default_configuration() {
     cfg.info_running_fg_color = 154;
     cfg.selection_fg_color = 7;
     cfg.selection_bg_color = {0x66, 0x00, 0x66, 0xff};
+    cfg.selected_completion_fg_color = 201;
 }
 
 static void load_environment_variables(Shell_State* shell) {

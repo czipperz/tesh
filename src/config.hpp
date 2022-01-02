@@ -30,6 +30,7 @@ struct Config_State {
     uint8_t info_fg_color;
     uint8_t info_running_fg_color;
     uint8_t selection_fg_color;
+    uint8_t selected_completion_fg_color;
 };
 
 extern Config_State cfg;
