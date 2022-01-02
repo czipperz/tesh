@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <Tracy.hpp>
 #include <cz/binary_search.hpp>
+#include <cz/dedup.hpp>
 #include <cz/defer.hpp>
 #include <cz/directory.hpp>
 #include <cz/env.hpp>
@@ -405,15 +406,17 @@ static void render_prompt(SDL_Surface* window_surface,
 
         size_t chars_on_line = 0;
         for (int i = 0; i < prompt->completion.results.len; i++) {
-            render_string(window_surface, rend, &point, background, cfg.backlog_fg_color, prompt->completion.results[i], true);
-            for (size_t padding = prompt->completion.results[i].len; padding < longest_entry + 1; padding++) {
-                render_code_point(window_surface, rend, &point, background, cfg.backlog_fg_color, " ",
-                          true);
+            render_string(window_surface, rend, &point, background, cfg.backlog_fg_color,
+                          prompt->completion.results[i], true);
+            for (size_t padding = prompt->completion.results[i].len; padding < longest_entry + 1;
+                 padding++) {
+                render_code_point(window_surface, rend, &point, background, cfg.backlog_fg_color,
+                                  " ", true);
             }
             chars_on_line += longest_entry + 1;
             if (chars_on_line + longest_entry + 1 > rend->window_cols) {
-                render_code_point(window_surface, rend, &point, background, cfg.backlog_fg_color, "\n",
-                          true);
+                render_code_point(window_surface, rend, &point, background, cfg.backlog_fg_color,
+                                  "\n", true);
                 chars_on_line = 0;
             }
         }
@@ -1001,7 +1004,6 @@ static void start_completing(Prompt_State* prompt, Shell_State* shell) {
             }
         }
         prompt->completion.prefix_length = query.len;
-        cz::sort(prompt->completion.results);
         return;
     }
 
@@ -1029,61 +1031,68 @@ static void start_completing(Prompt_State* prompt, Shell_State* shell) {
 #endif
 
     /////////////////////////////////////////////
-    // Get all executables in the path if we haven't seen a space yet
+    // Get all executables in the path
     /////////////////////////////////////////////
-    if (prompt->text.count(' ') == 0) {
+
+    // TODO: parse the prompt->text and identify if we're at a program name token.
+    if (!prompt->text.contains(' ') && !prompt->text.contains('/')) {
         cz::Str path;
         if (get_var(&shell->local, "PATH", &path)) {
+            while (1) {
+#ifdef _WIN32
+#define PATH_SEP ';'
+#else
+#define PATH_SEP ':'
+#endif
+                cz::Str _piece;
+                bool stop = !path.split_excluding(PATH_SEP, &_piece, &path);
+                if (stop)
+                    _piece = path;
+
+                cz::Directory_Iterator iterator;
+                cz::String piece = _piece.clone_null_terminate(cz::heap_allocator());
+                int result = iterator.init(piece.buffer);
+                if (result <= 0) {
+                    continue;
+                }
+
+                // Add this directory to the search list.
+                cz::String temp_path = {};
+                temp_path.reserve(temp_allocator, path.len + 16);
+                temp_path.append(piece);
+                size_t temp_path_orig_len = temp_path.len;
                 while (1) {
-                    cz::Str _piece;
-                    bool stop = !path.split_excluding(':', &_piece, &path);
-                    if (stop)
-                        _piece = path;
-                    
-                    cz::Directory_Iterator iterator;
-                    cz::String piece = _piece.clone_null_terminate(cz::heap_allocator());
-                    int result = iterator.init(piece.buffer);
-                    if (result <= 0) {
-                        continue;
+                    cz::Str name = iterator.str_name();
+                    if (name.starts_with(prefix)) {
+                        temp_path.len = temp_path_orig_len;
+                        temp_path.reserve(temp_allocator, name.len + 1);
+                        temp_path.append(name);
+                        temp_path.null_terminate();
+                        bool is_dir = cz::file::is_directory(temp_path.buffer);
+
+                        cz::String file = {};
+                        file.reserve_exact(path_allocator, name.len + is_dir + 1);
+                        file.append(name);
+                        if (is_dir)
+                            file.push('/');
+                        file.null_terminate();
+
+                        prompt->completion.results.reserve(cz::heap_allocator(), 1);
+                        prompt->completion.results.push(file.clone(cz::heap_allocator()));
+
+                        file.drop(path_allocator);
                     }
 
-                    cz::String temp_path = {};
-                    temp_path.reserve(temp_allocator, path.len + 16);
-                    temp_path.append(piece);
-                    size_t temp_path_orig_len = temp_path.len;
-                    while (1) {
-                        cz::Str name = iterator.str_name();
-                        if (name.starts_with(prefix)) {
-                            temp_path.len = temp_path_orig_len;
-                            temp_path.reserve(temp_allocator, name.len + 1);
-                            temp_path.append(name);
-                            temp_path.null_terminate();
-                            bool is_dir = cz::file::is_directory(temp_path.buffer);
-
-                            cz::String file = {};
-                            file.reserve_exact(path_allocator, name.len + is_dir + 1);
-                            file.append(name);
-                            if (is_dir)
-                                file.push('/');
-                            file.null_terminate();
-                            prompt->completion.results.reserve(cz::heap_allocator(), 1);
-
-                            prompt->completion.results.push(file.clone(cz::heap_allocator()));
-                            file.drop(path_allocator);
-                        }
-
-                        result = iterator.advance();
-                        if (result <= 0)
-                            break;
-                    }
-                    // Add this directory to the search list.s
-
-                    if (stop)
+                    result = iterator.advance();
+                    if (result <= 0)
                         break;
                 }
+
+                if (stop)
+                    break;
+            }
         }
     }
-
 
     /////////////////////////////////////////////
     // Get all files matching the prefix.
@@ -1150,8 +1159,6 @@ skip_absolute:
             break;
     }
     iterator.drop();
-
-    cz::sort(prompt->completion.results);
 }
 
 static void stop_merging_edits(Prompt_State* prompt) {
@@ -1297,6 +1304,9 @@ static bool handle_prompt_manipulation_commands(Shell_State* shell,
             // completed.  Ex. at a blank prompt.  Allow other TAB bindings to take precedence.
             if (!prompt->completion.is)
                 return false;
+
+            cz::sort(prompt->completion.results);
+            cz::dedup(&prompt->completion.results);
         }
 
         // Goto next / previous result.  Note: index 0 is a
