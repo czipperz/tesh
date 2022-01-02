@@ -420,6 +420,10 @@ static void render_prompt(SDL_Surface* window_surface,
                 chars_on_line = 0;
             }
         }
+        if (chars_on_line != 0) {
+            render_code_point(window_surface, rend, &point, background, cfg.backlog_fg_color, "\n",
+                              true);
+        }
     }
 }
 
@@ -995,6 +999,11 @@ static void start_completing(Prompt_State* prompt, Shell_State* shell) {
     /////////////////////////////////////////////
 
     if (start > 0 && prompt->text[start - 1] == '$') {
+        // Put a dummy element at index 0 so we can tab
+        // through back to no completion as a form of undo.
+        prompt->completion.results.reserve(cz::heap_allocator(), 1);
+        prompt->completion.results.push(query.clone(path_allocator));
+
         for (size_t i = 0; i < shell->local.variable_names.len; ++i) {
             cz::Str result = shell->local.variable_names[i].str;
             if (cfg.case_sensitive_completion ? result.starts_with(query)
@@ -1029,6 +1038,10 @@ static void start_completing(Prompt_State* prompt, Shell_State* shell) {
     if (query_path.len == 0)
         query_path = "/";
 #endif
+
+    // Put a dummy element at index 0 so we can tab through back to no completion as a form of undo.
+    prompt->completion.results.reserve(cz::heap_allocator(), 1);
+    prompt->completion.results.push(prefix.clone(path_allocator));
 
     /////////////////////////////////////////////
     // Get all executables in the path
@@ -1106,15 +1119,15 @@ static void start_completing(Prompt_State* prompt, Shell_State* shell) {
                     break;
             }
         }
+
+        // Don't also show file completion because this
+        // isn't a valid position to insert a file anyway.
+        return;
     }
 
     /////////////////////////////////////////////
     // Get all files matching the prefix.
     /////////////////////////////////////////////
-
-    // Put a dummy element at index 0 so we can tab through back to no completion as a form of undo.
-    prompt->completion.results.reserve(cz::heap_allocator(), 1);
-    prompt->completion.results.push(prefix.clone(path_allocator));
 
     // Expand '~/*' to '$HOME/*'.
     cz::String path = {};
@@ -1319,7 +1332,7 @@ static bool handle_prompt_manipulation_commands(Shell_State* shell,
             if (!prompt->completion.is)
                 return false;
 
-            cz::sort(prompt->completion.results);
+            cz::sort(prompt->completion.results.slice_start(1));
             cz::dedup(&prompt->completion.results);
         }
 
