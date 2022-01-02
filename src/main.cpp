@@ -394,6 +394,30 @@ static void render_prompt(SDL_Surface* window_surface,
         render_code_point(window_surface, rend, &point, background, cfg.backlog_fg_color, "\n",
                           true);
     }
+
+    if (prompt->completion.is) {
+        cz::Str prefix = "Completions: \n";
+        render_string(window_surface, rend, &point, background, cfg.backlog_fg_color, prefix, true);
+        size_t longest_entry = 0;
+        for (int i = 0; i < prompt->completion.results.len; i++) {
+            longest_entry = cz::max(longest_entry, prompt->completion.results[i].len);
+        }
+
+        size_t chars_on_line = 0;
+        for (int i = 0; i < prompt->completion.results.len; i++) {
+            render_string(window_surface, rend, &point, background, cfg.backlog_fg_color, prompt->completion.results[i], true);
+            for (size_t padding = prompt->completion.results[i].len; padding < longest_entry + 1; padding++) {
+                render_code_point(window_surface, rend, &point, background, cfg.backlog_fg_color, " ",
+                          true);
+            }
+            chars_on_line += longest_entry + 1;
+            if (chars_on_line + longest_entry + 1 > rend->window_cols) {
+                render_code_point(window_surface, rend, &point, background, cfg.backlog_fg_color, "\n",
+                          true);
+                chars_on_line = 0;
+            }
+        }
+    }
 }
 
 static void ensure_prompt_on_screen(Render_State* rend, cz::Slice<Backlog_State*> backlogs);
