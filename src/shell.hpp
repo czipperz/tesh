@@ -101,6 +101,14 @@ bool find_in_path(Shell_Local* local,
                   cz::Allocator allocator,
                   cz::String* full_path);
 
+#ifdef _WIN32
+// On Windows, any file with a valid extension is executable.
+bool has_valid_extension(cz::Str full_path, cz::Str path_ext);
+#else
+// On Linux, a file needs to have the access bit.
+bool is_executable(const char* path);
+#endif
+
 void cleanup_builtin(Running_Program* program);
 void close_rc_file(size_t* count, cz::File_Descriptor file);
 

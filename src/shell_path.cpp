@@ -25,7 +25,6 @@
 
 static bool is_absolute(cz::Str path);
 static bool is_relative(cz::Str path);
-static bool is_executable(const char* path);
 #ifdef _WIN32
 static bool is_executable_ext(cz::Str path_ext, cz::Allocator allocator, cz::String* path);
 #endif
@@ -108,13 +107,11 @@ bool find_in_path(Shell_Local* local,
 ///////////////////////////////////////////////////////////////////////////////
 
 #ifdef _WIN32
-static bool has_valid_extension(cz::Str full_path, cz::Str path_ext);
-
 static bool is_executable_ext(cz::Str path_ext, cz::Allocator allocator, cz::String* full_path) {
     // If it already has an extension then use it.
     if (has_valid_extension(*full_path, path_ext)) {
         full_path->null_terminate();
-        return is_executable(full_path->buffer);
+        return cz::file::exists(full_path->buffer);
     }
 
     size_t len = full_path->len;
@@ -129,7 +126,7 @@ static bool is_executable_ext(cz::Str path_ext, cz::Allocator allocator, cz::Str
         full_path->reserve(allocator, ext.len + 1);
         full_path->append(ext);
         full_path->null_terminate();
-        if (is_executable(full_path->buffer))
+        if (cz::file::exists(full_path->buffer))
             return true;
 
         if (stop)
@@ -142,14 +139,14 @@ static bool is_executable_ext(cz::Str path_ext, cz::Allocator allocator, cz::Str
         full_path->reserve(allocator, ext.len + 1);
         full_path->append(ext);
         full_path->null_terminate();
-        if (is_executable(full_path->buffer))
+        if (cz::file::exists(full_path->buffer))
             return true;
     }
 
     return false;
 }
 
-static bool has_valid_extension(cz::Str full_path, cz::Str path_ext) {
+bool has_valid_extension(cz::Str full_path, cz::Str path_ext) {
     const char* dot = full_path.rfind('.');
     if (!dot)
         return false;
@@ -200,10 +197,8 @@ static bool is_relative(cz::Str path) {
     return path.len >= 3 && path[1] == '.' && is_path_sep(path[2]);
 }
 
-static bool is_executable(const char* path) {
-#ifdef _WIN32
-    return cz::file::exists(path);
-#else
+#ifndef _WIN32
+bool is_executable(const char* path) {
     return access(path, X_OK) == 0;
-#endif
 }
+#endif

@@ -1036,6 +1036,11 @@ static void start_completing(Prompt_State* prompt, Shell_State* shell) {
 
     // TODO: parse the prompt->text and identify if we're at a program name token.
     if (!prompt->text.contains(' ') && !prompt->text.contains('/')) {
+        cz::Str path_ext;
+#ifdef _WIN32
+        (void)get_var(&shell->local, "PATHEXT", &path_ext);
+#endif
+
         cz::Str path;
         if (get_var(&shell->local, "PATH", &path)) {
             while (1) {
@@ -1063,24 +1068,24 @@ static void start_completing(Prompt_State* prompt, Shell_State* shell) {
                 size_t temp_path_orig_len = temp_path.len;
                 while (1) {
                     cz::Str name = iterator.str_name();
-                    if (name.starts_with(prefix)) {
+                    if (cfg.case_sensitive_completion ? name.starts_with(prefix)
+                                                      : name.starts_with_case_insensitive(prefix)) {
                         temp_path.len = temp_path_orig_len;
                         temp_path.reserve(temp_allocator, name.len + 1);
                         temp_path.append(name);
                         temp_path.null_terminate();
-                        bool is_dir = cz::file::is_directory(temp_path.buffer);
 
-                        cz::String file = {};
-                        file.reserve_exact(path_allocator, name.len + is_dir + 1);
-                        file.append(name);
-                        if (is_dir)
-                            file.push('/');
-                        file.null_terminate();
-
-                        prompt->completion.results.reserve(cz::heap_allocator(), 1);
-                        prompt->completion.results.push(file.clone(cz::heap_allocator()));
-
-                        file.drop(path_allocator);
+                        bool executable = false;
+#ifdef _WIN32
+                        executable = has_valid_extension(temp_path, path_ext);
+#else
+                        executable = is_executable(temp_path.buffer);
+#endif
+                        if (executable) {
+                            cz::String file = name.clone_null_terminate(path_allocator);
+                            prompt->completion.results.reserve(cz::heap_allocator(), 1);
+                            prompt->completion.results.push(file);
+                        }
                     }
 
                     result = iterator.advance();
