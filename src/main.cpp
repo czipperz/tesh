@@ -1377,6 +1377,10 @@ static bool handle_prompt_manipulation_commands(Shell_State* shell,
         insert_before(prompt, prompt->cursor, ins);
         if (combo)
             end_combo(prompt);
+
+        // If there are only 0 or 1 results then just stop.
+        if (prompt->completion.results.len <= 2)
+            stop_completing(prompt);
     } else if ((mod == KMOD_SHIFT && key == SDLK_INSERT) ||
                (mod == (KMOD_CTRL | KMOD_SHIFT) && key == SDLK_v)) {
         run_paste(prompt);
