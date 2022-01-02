@@ -1031,7 +1031,7 @@ static void start_completing(Prompt_State* prompt, Shell_State* shell) {
     /////////////////////////////////////////////
     // Get all executables in the path if we haven't seen a space yet
     /////////////////////////////////////////////
-    if (query.count(' ') == 0) {
+    if (prompt->text.count(' ') == 0) {
         cz::Str path;
         if (get_var(&shell->local, "PATH", &path)) {
                 while (1) {
