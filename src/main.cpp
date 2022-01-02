@@ -1041,6 +1041,8 @@ static void start_completing(Prompt_State* prompt, Shell_State* shell) {
         (void)get_var(&shell->local, "PATHEXT", &path_ext);
 #endif
 
+        cz::String piece = {};
+        CZ_DEFER(piece.drop(cz::heap_allocator()));
         cz::Str path;
         if (get_var(&shell->local, "PATH", &path)) {
             while (1) {
@@ -1055,11 +1057,18 @@ static void start_completing(Prompt_State* prompt, Shell_State* shell) {
                     _piece = path;
 
                 cz::Directory_Iterator iterator;
-                cz::String piece = _piece.clone_null_terminate(cz::heap_allocator());
+                piece.len = 0;
+                piece.reserve(cz::heap_allocator(), _piece.len + 2);
+                piece.append(_piece);
+                if (piece.len > 0 && !is_path_sep(piece.last()))
+                    piece.push('/');
+                piece.null_terminate();
+
                 int result = iterator.init(piece.buffer);
                 if (result <= 0) {
                     continue;
                 }
+                CZ_DEFER(iterator.drop());
 
                 // Add this directory to the search list.
                 cz::String temp_path = {};
