@@ -1086,6 +1086,8 @@ static void start_completing(Prompt_State* prompt, Shell_State* shell) {
 
                 int result = iterator.init(piece.buffer);
                 if (result <= 0) {
+                    if (stop)
+                        break;
                     continue;
                 }
                 CZ_DEFER(iterator.drop());
