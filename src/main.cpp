@@ -154,7 +154,7 @@ static void render_string(SDL_Surface* window_surface,
         i += make_string_code_point(seq, info, i);
 
         // Render this code point.
-        if (!render_code_point(window_surface, rend, info_start, background, foreground, seq,
+        if (!render_code_point(window_surface, rend, info_start, background, foreground, false, seq,
                                set_tile)) {
             break;
         }
@@ -229,6 +229,7 @@ static bool render_backlog(SDL_Surface* window_surface,
     size_t event_index = 0;
 
     uint64_t end = render_length(backlog);
+    bool inside_hyperlink = false;
     while (i < end) {
         while (event_index < backlog->events.len && backlog->events[event_index].index <= i) {
             Backlog_Event* event = &backlog->events[event_index];
@@ -242,9 +243,9 @@ static bool render_backlog(SDL_Surface* window_surface,
                 uint64_t gr = event->payload;
                 fg_color = (uint8_t)((gr & GR_FOREGROUND_MASK) >> GR_FOREGROUND_SHIFT);
             } else if (event->type == BACKLOG_EVENT_START_HYPERLINK) {
-                // TODO
+                inside_hyperlink = true;
             } else if (event->type == BACKLOG_EVENT_END_HYPERLINK) {
-                // TODO
+                inside_hyperlink = false;
             } else {
                 CZ_PANIC("unreachable");
             }
@@ -257,8 +258,11 @@ static bool render_backlog(SDL_Surface* window_surface,
         char seq[5] = {backlog->get(i)};
         i += make_backlog_code_point(seq, backlog, i);
 
-        if (!render_code_point(window_surface, rend, point, background, fg_color, seq, true))
+        bool underline = (SDL_GetModState() & KMOD_CTRL) != 0 && inside_hyperlink;
+        if (!render_code_point(window_surface, rend, point, background, fg_color, underline, seq,
+                               true)) {
             break;
+        }
 
         if (!info_has_end && point->y != info_y) {
             info_has_end = true;
@@ -277,8 +281,8 @@ static bool render_backlog(SDL_Surface* window_surface,
         backlog->get(backlog->length - 1) != '\n') {
         Visual_Point old_point = *point;
 
-        if (!render_code_point(window_surface, rend, point, background, cfg.prompt_fg_color, "\n",
-                               true)) {
+        if (!render_code_point(window_surface, rend, point, background, cfg.prompt_fg_color, false,
+                               "\n", true)) {
             return false;
         }
 
@@ -301,8 +305,8 @@ static bool render_backlog(SDL_Surface* window_surface,
 
     bg_color = {};
     background = SDL_MapRGB(window_surface->format, bg_color.r, bg_color.g, bg_color.b);
-    if (!render_code_point(window_surface, rend, point, background, cfg.prompt_fg_color, "\n",
-                           true)) {
+    if (!render_code_point(window_surface, rend, point, background, cfg.prompt_fg_color, false,
+                           "\n", true)) {
         return false;
     }
 
@@ -368,7 +372,8 @@ static void render_prompt(SDL_Surface* window_surface,
         i += make_string_code_point(seq, prompt->text, i);
 
         // Render this code point.
-        render_code_point(window_surface, rend, &point, background, cfg.prompt_fg_color, seq, true);
+        render_code_point(window_surface, rend, &point, background, cfg.prompt_fg_color, false, seq,
+                          true);
 
         // Draw cursor.
         if (draw_cursor && point.x != 0) {
@@ -378,7 +383,8 @@ static void render_prompt(SDL_Surface* window_surface,
 
     // Fill rest of line.
     Visual_Point eol = point;
-    render_code_point(window_surface, rend, &point, background, cfg.backlog_fg_color, "\n", true);
+    render_code_point(window_surface, rend, &point, background, cfg.backlog_fg_color, false, "\n",
+                      true);
 
     if (prompt->cursor == prompt->text.len) {
         // Draw cursor.
@@ -397,8 +403,8 @@ static void render_prompt(SDL_Surface* window_surface,
                           true);
         }
 
-        render_code_point(window_surface, rend, &point, background, cfg.backlog_fg_color, "\n",
-                          true);
+        render_code_point(window_surface, rend, &point, background, cfg.backlog_fg_color, false,
+                          "\n", true);
     }
 
     if (prompt->completion.is) {
@@ -422,19 +428,19 @@ static void render_prompt(SDL_Surface* window_surface,
 
             for (size_t padding = result.len; padding < longest_entry + 1; padding++) {
                 render_code_point(window_surface, rend, &point, background, cfg.backlog_fg_color,
-                                  " ", true);
+                                  false, " ", true);
             }
 
             chars_on_line += longest_entry + 1;
             if (chars_on_line + longest_entry + 1 > rend->window_cols) {
                 render_code_point(window_surface, rend, &point, background, cfg.backlog_fg_color,
-                                  "\n", true);
+                                  false, "\n", true);
                 chars_on_line = 0;
             }
         }
         if (chars_on_line != 0) {
-            render_code_point(window_surface, rend, &point, background, cfg.backlog_fg_color, "\n",
-                              true);
+            render_code_point(window_surface, rend, &point, background, cfg.backlog_fg_color, false,
+                              "\n", true);
         }
     }
 }
@@ -2244,6 +2250,13 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
                 continue;
             }
 
+            if (key == SDLK_LCTRL || key == SDLK_RCTRL) {
+                // Redraw because it changes how links are drawn.
+                rend->complete_redraw = true;
+                ++num_events;
+                continue;
+            }
+
             // Unbound key.  Try to run a user command.
             const char* key_name = SDL_GetKeyName(key);
             if (key_name && key_name[0]) {
@@ -2276,6 +2289,16 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
 
                     continue;
                 }
+            }
+        } break;
+
+        case SDL_KEYUP: {
+            SDL_Keycode key = event.key.keysym.sym;
+            if (key == SDLK_LCTRL || key == SDLK_RCTRL) {
+                // Redraw because it changes how links are drawn.
+                rend->complete_redraw = true;
+                ++num_events;
+                continue;
             }
         } break;
 
@@ -2424,6 +2447,10 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
         } break;
 
         case SDL_MOUSEMOTION: {
+            // Redraw because links respond to mouse input.
+            rend->complete_redraw = true;
+            ++num_events;
+
             if (!rend->grid_is_valid)
                 break;
 

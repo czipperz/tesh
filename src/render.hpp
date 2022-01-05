@@ -83,6 +83,7 @@ bool render_code_point(SDL_Surface* window_surface,
                        Visual_Point* point,
                        uint32_t background,
                        uint8_t foreground,
+                       bool underline,
                        const char seq[5],
                        bool set_tile);
 void resize_font(int font_size, Render_State* rend);

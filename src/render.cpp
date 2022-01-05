@@ -135,6 +135,7 @@ bool render_code_point(SDL_Surface* window_surface,
                        Visual_Point* point,
                        uint32_t background,
                        uint8_t foreground,
+                       bool underline,
                        const char seq[5],
                        bool set_tile) {
     if (set_tile) {
@@ -212,6 +213,19 @@ bool render_code_point(SDL_Surface* window_surface,
         rect.h = rend->font_height;
         SDL_FillRect(window_surface, &rect, background);
         SDL_BlitSurface(s, NULL, window_surface, &rect);
+    }
+
+    if (underline) {
+        // TODO cache
+        int baseline = TTF_FontAscent(rend->font) + 1;
+        SDL_Rect ur = {};
+        ur.x = rect.x;
+        ur.y = rect.y + baseline;
+        ur.w = rect.w;
+        ur.h = 1;
+        SDL_Color fgc = cfg.theme[foreground];
+        uint32_t fg32 = SDL_MapRGB(window_surface->format, fgc.r, fgc.g, fgc.b);
+        SDL_FillRect(window_surface, &ur, fg32);
     }
 
     return true;
