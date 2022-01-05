@@ -146,6 +146,10 @@ static void read_tty_output(Backlog_State* backlog, Pseudo_Terminal* tty, bool c
             if (cap_read_calls && rounds == 1024)
                 break;
 
+#ifndef NDEBUG
+            memset(buffer, 0xcd, sizeof(buffer));
+#endif
+
             // Note: CRLF is stripped in append_text.
             result = parent_out.read(buffer, sizeof(buffer));
             if (result <= 0)

@@ -225,7 +225,9 @@ static uint64_t parse_graphics_rendition(cz::Slice<int32_t> args, uint64_t graph
 }
 
 static bool parse_hyperlink(Backlog_State* backlog, cz::Str fresh, size_t* skip) {
-    // ESC]8;; <HYPERLINK> ESC]8;;
+    // ESC]8;; <HYPERLINK> \a <TEXT> ESC]8;;
+    // <TEXT> can have escape sequences in it and thus we preempt at the \a.
+
     cz::String* text = &backlog->escape_backlog;
     if (!ensure_char(backlog, 3, fresh, skip))
         return false;
@@ -234,59 +236,31 @@ static bool parse_hyperlink(Backlog_State* backlog, cz::Str fresh, size_t* skip)
     if ((*text)[3] != ';' || (*text)[4] != ';')
         CZ_PANIC("todo");
 
-    size_t it = 5;
-    while (1) {
-        if (!ensure_char(backlog, it, fresh, skip))
-            return false;
-        char ch = (*text)[it];
-        if (ch == 0x1b) {
+    Backlog_Event event = {};
+    event.index = backlog->length;
+
+    if (backlog->inside_hyperlink) {
+        event.type = BACKLOG_EVENT_END_HYPERLINK;
+    } else {
+        size_t it = 5;
+        while (1) {
+            if (!ensure_char(backlog, it, fresh, skip))
+                return false;
+            char ch = (*text)[it];
+            if (ch == '\a')
+                break;
             ++it;
-            break;
         }
-        if (ch == '\a') {
-            // Ignore alarm characters.
-            text->remove(it);
-            continue;
-        }
-        ++it;
+
+        cz::Str url = text->slice(5, text->len - 1);
+        // TODO: maybe don't permanently allocate this?  Right now it is permanent so it's fine.
+        event.payload = (uint64_t)url.clone_null_terminate(permanent_allocator).buffer;
+        event.type = BACKLOG_EVENT_START_HYPERLINK;
     }
 
-    if (!ensure_char(backlog, it, fresh, skip))
-        return false;
-    if ((*text)[it] != ']')
-        CZ_PANIC("todo");
-    ++it;
-
-    if (!ensure_char(backlog, it, fresh, skip))
-        return false;
-    if ((*text)[it] != '8')
-        CZ_PANIC("todo");
-    ++it;
-
-    if (!ensure_char(backlog, it, fresh, skip))
-        return false;
-    if ((*text)[it] != ';')
-        CZ_PANIC("todo");
-    ++it;
-
-    if (!ensure_char(backlog, it, fresh, skip))
-        return false;
-    if ((*text)[it] != ';')
-        CZ_PANIC("todo");
-    ++it;
-
-    cz::Str hyperlink = text->slice(5, text->len - 5);
-
-    // TODO: have a special event to start link
-    uint64_t old_graphics_rendition = backlog->graphics_rendition;
-    uint64_t graphics_rendition = backlog->graphics_rendition;
-    graphics_rendition &= ~GR_FOREGROUND_MASK;
-    graphics_rendition |= (5 << GR_FOREGROUND_SHIFT);
-    set_graphics_rendition(backlog, graphics_rendition);
-
-    append_chunk(backlog, hyperlink);
-
-    set_graphics_rendition(backlog, old_graphics_rendition);
+    backlog->inside_hyperlink = !backlog->inside_hyperlink;
+    backlog->events.reserve(cz::heap_allocator(), 1);
+    backlog->events.push(event);
     return true;
 }
 

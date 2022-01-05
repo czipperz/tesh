@@ -22,6 +22,7 @@ struct Backlog_State {
     cz::Vector<Backlog_Event> events;
     cz::String escape_backlog;
     uint64_t graphics_rendition;
+    bool inside_hyperlink;
 
     std::chrono::high_resolution_clock::time_point start, end;
     bool done;
@@ -43,13 +44,14 @@ enum Backlog_Event_Type {
     BACKLOG_EVENT_START_PROCESS = 1,
     BACKLOG_EVENT_START_DIRECTORY = 2,
     BACKLOG_EVENT_SET_GRAPHIC_RENDITION = 3,
-    // @BacklogEventTypeBits
+    BACKLOG_EVENT_START_HYPERLINK = 4,
+    BACKLOG_EVENT_END_HYPERLINK = 5,
 };
 
 struct Backlog_Event {
     uint64_t index;
-    uint64_t type : 2;  // @BacklogEventTypeBits
-    uint64_t payload : 62;
+    Backlog_Event_Type type;
+    uint64_t payload;
 };
 
 ///////////////////////////////////////////////////////////////////////////////

@@ -48,6 +48,7 @@ static cz::Vector<cz::Str>* prompt_history(Prompt_State* prompt, bool script);
 static void stop_merging_edits(Prompt_State* prompt);
 static void stop_completing(Prompt_State* prompt);
 static int word_char_category(char ch);
+static void finish_hyperlink(Backlog_State* backlog);
 
 ///////////////////////////////////////////////////////////////////////////////
 // Renderer methods
@@ -240,6 +241,10 @@ static bool render_backlog(SDL_Surface* window_surface,
             } else if (event->type == BACKLOG_EVENT_SET_GRAPHIC_RENDITION) {
                 uint64_t gr = event->payload;
                 fg_color = (uint8_t)((gr & GR_FOREGROUND_MASK) >> GR_FOREGROUND_SHIFT);
+            } else if (event->type == BACKLOG_EVENT_START_HYPERLINK) {
+                // TODO
+            } else if (event->type == BACKLOG_EVENT_END_HYPERLINK) {
+                // TODO
             } else {
                 CZ_PANIC("unreachable");
             }
@@ -615,6 +620,7 @@ static bool read_process_data(Shell_State* shell,
                     rend->scroll_mode = AUTO_SCROLL;
 
                 recycle_process(shell, script);
+                finish_hyperlink(backlog);
 
                 changes = true;
                 --i;
@@ -1626,6 +1632,13 @@ static void push_backlog_event(Backlog_State* backlog, Backlog_Event_Type event_
     backlog->events.push(event);
 }
 
+static void finish_hyperlink(Backlog_State* backlog) {
+    if (backlog->inside_hyperlink) {
+        backlog->inside_hyperlink = false;
+        push_backlog_event(backlog, BACKLOG_EVENT_END_HYPERLINK);
+    }
+}
+
 static void append_piece(cz::String* clip,
                          size_t* off,
                          size_t inner_start,
@@ -1971,6 +1984,7 @@ static void submit_prompt(Shell_State* shell,
             backlog->exit_code = -1;
             backlog->done = true;
             backlog->end = std::chrono::high_resolution_clock::now();
+            finish_hyperlink(backlog);
             recycle_process(shell, script);
         } else {
             backlog->done = true;
