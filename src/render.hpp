@@ -69,6 +69,10 @@ struct Render_State {
     Scroll_Mode scroll_mode;
 
     Selection selection;
+
+    SDL_Cursor* default_cursor;
+    // SDL_Cursor * select_cursor;
+    SDL_Cursor* click_cursor;
 };
 
 void set_icon(SDL_Window* sdl_window);

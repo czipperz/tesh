@@ -49,6 +49,11 @@ static void stop_merging_edits(Prompt_State* prompt);
 static void stop_completing(Prompt_State* prompt);
 static int word_char_category(char ch);
 static void finish_hyperlink(Backlog_State* backlog);
+static void load_cursors(Render_State* rend);
+static void set_cursor(Render_State* rend, cz::Slice<Backlog_State*> backlogs, Visual_Tile tile);
+static const char* get_hyperlink_at(Render_State* rend,
+                                    cz::Slice<Backlog_State*> backlogs,
+                                    Visual_Tile tile);
 
 ///////////////////////////////////////////////////////////////////////////////
 // Renderer methods
@@ -1951,6 +1956,7 @@ static bool write_selected_backlog_to_file(Shell_State* shell,
 static void submit_prompt(Shell_State* shell,
                           cz::Vector<Backlog_State*>* backlogs,
                           Prompt_State* prompt,
+                          cz::Str command,
                           bool submit) {
     Running_Script* script = attached_process(shell);
     uint64_t process_id = (script ? script->id : prompt->process_id);
@@ -1965,17 +1971,17 @@ static void submit_prompt(Shell_State* shell,
         append_text(backlog, prompt->prefix);
     }
     push_backlog_event(backlog, BACKLOG_EVENT_START_INPUT);
-    append_text(backlog, prompt->text);
+    append_text(backlog, command);
     push_backlog_event(backlog, BACKLOG_EVENT_START_PROCESS);
     append_text(backlog, "\n");
 
     if (submit) {
         if (script) {
-            cz::Str message = cz::format(temp_allocator, prompt->text, '\n');
+            cz::Str message = cz::format(temp_allocator, command, '\n');
             (void)tty_write(&script->tty, message);
         } else {
             cz::Buffer_Array arena = alloc_arena(shell);
-            cz::String script = prompt->text.clone_null_terminate(arena.allocator());
+            cz::String script = command.clone_null_terminate(arena.allocator());
             run_script(shell, backlog, arena, script);
             shell->selected_process = backlog->id;
         }
@@ -2017,7 +2023,7 @@ static void user_submit_prompt(Render_State* rend,
         resolve_history_searching(prompt, history);
     }
 
-    submit_prompt(shell, backlogs, prompt, submit);
+    submit_prompt(shell, backlogs, prompt, prompt->text, submit);
 
     // Push the history entry to either the stdin or the shell history list.
     cz::Vector<cz::Str>* history = prompt_history(prompt, shell->attached_process != -1);
@@ -2189,21 +2195,16 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
                 char temp_path[L_tmpnam];
                 if (tmpnam(temp_path)) {
                     if (write_selected_backlog_to_file(shell, prompt, *backlogs, temp_path)) {
-                        cz::String old_text = prompt->text;
                         uint64_t old_attached = shell->attached_process;
                         uint64_t old_selected = shell->selected_process;
 
-                        cz::Str tesh_editor;
-                        bool has_tesh_editor = get_var(&shell->local, "TESH_EDITOR", &tesh_editor);
-                        cz::Str editor = (has_tesh_editor ? "$EDITOR" : "$TESH_EDITOR");
-                        prompt->text = cz::format(temp_allocator, editor, " '", temp_path, "'");
+                        cz::Str command = cz::format(temp_allocator, "__tesh_edit ", temp_path);
 
                         shell->attached_process = -1;
                         shell->selected_process = -1;
 
-                        submit_prompt(shell, backlogs, prompt, true);
+                        submit_prompt(shell, backlogs, prompt, command, true);
 
-                        prompt->text = old_text;
                         shell->attached_process = old_attached;
                         shell->selected_process = old_selected;
                     }
@@ -2252,6 +2253,14 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
 
             if (key == SDLK_LCTRL || key == SDLK_RCTRL) {
                 // Redraw because it changes how links are drawn.
+                if (rend->grid_is_valid) {
+                    int x, y;
+                    SDL_GetMouseState(&x, &y);
+                    int row = y / rend->font_height;
+                    int column = x / rend->font_width;
+                    Visual_Tile tile = rend->grid[row * rend->window_cols + column];
+                    set_cursor(rend, *backlogs, tile);
+                }
                 rend->complete_redraw = true;
                 ++num_events;
                 continue;
@@ -2296,6 +2305,14 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
             SDL_Keycode key = event.key.keysym.sym;
             if (key == SDLK_LCTRL || key == SDLK_RCTRL) {
                 // Redraw because it changes how links are drawn.
+                if (rend->grid_is_valid) {
+                    int x, y;
+                    SDL_GetMouseState(&x, &y);
+                    int row = y / rend->font_height;
+                    int column = x / rend->font_width;
+                    Visual_Tile tile = rend->grid[row * rend->window_cols + column];
+                    set_cursor(rend, *backlogs, tile);
+                }
                 rend->complete_redraw = true;
                 ++num_events;
                 continue;
@@ -2376,7 +2393,34 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
 
         case SDL_MOUSEBUTTONDOWN: {
             if (event.button.button == SDL_BUTTON_LEFT) {
-                bool holding_shift = (SDL_GetModState() & KMOD_SHIFT);
+                SDL_Keymod mods = SDL_GetModState();
+
+                // Control click for open link.
+                if (mods & KMOD_CTRL) {
+                    if (rend->grid_is_valid) {
+                        int x, y;
+                        SDL_GetMouseState(&x, &y);
+                        int row = y / rend->font_height;
+                        int column = x / rend->font_width;
+                        Visual_Tile tile = rend->grid[row * rend->window_cols + column];
+                        const char* hyperlink = get_hyperlink_at(rend, *backlogs, tile);
+
+                        cz::Str command = cz::format("__tesh_open ", hyperlink);
+
+                        uint64_t old_attached = shell->attached_process;
+                        uint64_t old_selected = shell->selected_process;
+                        shell->attached_process = -1;
+                        shell->selected_process = -1;
+
+                        submit_prompt(shell, backlogs, prompt, command, true);
+
+                        shell->attached_process = old_attached;
+                        shell->selected_process = old_selected;
+                    }
+                    break;
+                }
+
+                bool holding_shift = (mods & KMOD_SHIFT);
                 if (!holding_shift)
                     shell->selected_process = -1;
                 rend->scroll_mode = MANUAL_SCROLL;
@@ -2454,12 +2498,14 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
             if (!rend->grid_is_valid)
                 break;
 
-            if (rend->selection.type == SELECT_DISABLED || rend->selection.type == SELECT_FINISHED)
-                break;
-
             int row = event.motion.y / rend->font_height;
             int column = event.motion.x / rend->font_width;
             Visual_Tile tile = rend->grid[row * rend->window_cols + column];
+            set_cursor(rend, *backlogs, tile);
+
+            if (rend->selection.type == SELECT_DISABLED || rend->selection.type == SELECT_FINISHED)
+                break;
+
             expand_selection_to(rend, shell, prompt, *backlogs, tile);
         } break;
         }
@@ -2746,6 +2792,8 @@ int actual_main(int argc, char** argv) {
 
     set_icon(window);
 
+    load_cursors(&rend);
+
     rend.font = open_font(cfg.font_path, (int)(rend.font_size * rend.dpi_scale));
     if (!rend.font) {
         fprintf(stderr, "TTF_OpenFont failed: %s\n", SDL_GetError());
@@ -2768,7 +2816,7 @@ int actual_main(int argc, char** argv) {
 
     // Start running ~/.teshrc.
     prompt.text = cz::format(temp_allocator, "source ~/.teshrc");
-    submit_prompt(&shell, &backlogs, &prompt, true);
+    submit_prompt(&shell, &backlogs, &prompt, prompt.text, true);
     prompt.text = {};
     shell.attached_process = -1;
     shell.selected_process = -1;
@@ -2864,4 +2912,43 @@ static float get_dpi_scale(SDL_Window* window) {
     if (SDL_GetDisplayDPI(display, &dpi, NULL, NULL) != 0)
         return 1.0f;  // failure so assume no scaling
     return dpi / dpi_default;
+}
+
+static void load_cursors(Render_State* rend) {
+    rend->default_cursor = SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_ARROW);
+    // rend->select_cursor = SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_IBEAM);
+    rend->click_cursor = SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_HAND);
+
+    CZ_ASSERT(rend->default_cursor);
+    // CZ_ASSERT(rend->select_cursor);
+    CZ_ASSERT(rend->click_cursor);
+}
+
+static const char* get_hyperlink_at(Render_State* rend,
+                                    cz::Slice<Backlog_State*> backlogs,
+                                    Visual_Tile tile) {
+    const char* hyperlink = nullptr;
+    if ((SDL_GetModState() & KMOD_CTRL) && tile.outer != 0) {
+        Backlog_State* backlog = backlogs[tile.outer - 1];
+        for (size_t event_index = 0; event_index < backlog->events.len; ++event_index) {
+            Backlog_Event* event = &backlog->events[event_index];
+            if (event->index > tile.inner)
+                break;
+
+            if (event->type == BACKLOG_EVENT_START_HYPERLINK) {
+                hyperlink = (const char*)event->payload;
+            } else if (event->type == BACKLOG_EVENT_END_HYPERLINK) {
+                hyperlink = nullptr;
+                if (event->index == tile.inner)
+                    break;
+            }
+        }
+    }
+    return hyperlink;
+}
+
+static void set_cursor(Render_State* rend, cz::Slice<Backlog_State*> backlogs, Visual_Tile tile) {
+    const char* hyperlink = get_hyperlink_at(rend, backlogs, tile);
+    SDL_Cursor* cursor = (hyperlink ? rend->click_cursor : rend->default_cursor);
+    SDL_SetCursor(cursor);
 }
