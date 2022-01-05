@@ -283,6 +283,15 @@ struct Running_Script {
 
 ///////////////////////////////////////////////////////////////////////////////
 
+struct Builtin {
+    cz::Str name;
+    Running_Program::Type type;
+};
+
+extern const cz::Slice<const cz::Slice<const Builtin> > builtin_levels;
+
+///////////////////////////////////////////////////////////////////////////////
+
 struct Parse_Program {
     cz::Vector<cz::Str> variable_names;
     cz::Vector<cz::Str> variable_values;

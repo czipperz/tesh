@@ -38,10 +38,8 @@ static Error run_program(Shell_State* shell,
                          Stdio_State stdio,
                          Backlog_State* backlog);
 
-static void recognize_builtins(Running_Program* program,
-                               const Parse_Program& parse,
-                               cz::Allocator allocator,
-                               Stdio_State stdio);
+static void recognize_builtin(Running_Program* program, const Parse_Program& parse);
+static void setup_builtin(Running_Program* program, cz::Allocator allocator, Stdio_State stdio);
 
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -593,10 +591,12 @@ static Error run_program(Shell_State* shell,
     }
 
     parse.v.args = args;
-    recognize_builtins(program, parse, allocator, stdio);
+    recognize_builtin(program, parse);
 
     // If command is a builtin.
     if (program->type != Running_Program::PROCESS) {
+        setup_builtin(program, allocator, stdio);
+
         if (stdio.in_type == File_Type_Pipe && !stdio.in.set_non_blocking())
             return Error_IO;
         if (stdio.out_type == File_Type_Pipe && !stdio.out.set_non_blocking())
@@ -703,8 +703,7 @@ static Error run_program(Shell_State* shell,
         return Error_IO;
 
     options.working_directory = get_wd(local).buffer;
-    generate_environment(&options.environment, local, parse.variable_names,
-                         parse.variable_values);
+    generate_environment(&options.environment, local, parse.variable_names, parse.variable_values);
 
     program->v.process = {};
     bool result = program->v.process.launch_program(args, options);
@@ -809,10 +808,7 @@ static void generate_environment(void* out_arg,
 // Recognize builtins
 ///////////////////////////////////////////////////////////////////////////////
 
-static void recognize_builtins(Running_Program* program,
-                               const Parse_Program& parse,
-                               cz::Allocator allocator,
-                               Stdio_State stdio) {
+static void recognize_builtin(Running_Program* program, const Parse_Program& parse) {
     program->type = Running_Program::PROCESS;
 
     // Line that only assigns to variables runs as special builtin.
@@ -825,73 +821,31 @@ static void recognize_builtins(Running_Program* program,
         return;
     }
 
-    // Strictly necessary builtins.
-    if (cfg.builtin_level >= 0) {
-        if (parse.v.args[0] == "exit") {
-            program->type = Running_Program::EXIT;
-        } else if (parse.v.args[0] == "return") {
-            program->type = Running_Program::RETURN;
-        } else if (parse.v.args[0] == "cd") {
-            program->type = Running_Program::CD;
-        } else if (parse.v.args[0] == "alias") {
-            program->type = Running_Program::ALIAS;
-        } else if (parse.v.args[0] == "export") {
-            program->type = Running_Program::EXPORT;
-        } else if (parse.v.args[0] == "unset") {
-            program->type = Running_Program::UNSET;
-        } else if (parse.v.args[0] == "clear") {
-            program->type = Running_Program::CLEAR;
-        } else if (parse.v.args[0] == "." || parse.v.args[0] == "source") {
-            program->type = Running_Program::SOURCE;
-            program->v.builtin.st.source = {};
-            program->v.builtin.st.source.stdio = stdio;
-        } else if (parse.v.args[0] == "sleep") {
-            program->type = Running_Program::SLEEP;
-            program->v.builtin.st.sleep = {};
-            program->v.builtin.st.sleep.start = std::chrono::high_resolution_clock::now();
-        } else if (parse.v.args[0] == "configure") {
-            program->type = Running_Program::CONFIGURE;
-        } else if (parse.v.args[0] == "attach") {
-            program->type = Running_Program::ATTACH;
-        } else if (parse.v.args[0] == "follow") {
-            program->type = Running_Program::FOLLOW;
-        } else if (parse.v.args[0] == "argdump") {
-            program->type = Running_Program::ARGDUMP;
-        } else if (parse.v.args[0] == "vardump") {
-            program->type = Running_Program::VARDUMP;
-        } else if (parse.v.args[0] == "shift") {
-            program->type = Running_Program::SHIFT;
-        } else if (parse.v.args[0] == "history") {
-            program->type = Running_Program::HISTORY;
+    for (size_t i = 0; i <= cfg.builtin_level; ++i) {
+        cz::Slice<const Builtin> builtins = builtin_levels[i];
+        for (size_t j = 0; j < builtins.len; ++j) {
+            const Builtin& builtin = builtins[j];
+            if (parse.v.args[0] == builtin.name) {
+                program->type = builtin.type;
+                return;
+            }
         }
     }
+}
 
-    // Compromise builtins.
-    if (cfg.builtin_level >= 1) {
-        if (parse.v.args[0] == "echo") {
-            program->type = Running_Program::ECHO;
-            program->v.builtin.st.echo = {};
-            program->v.builtin.st.echo.outer = 1;
-        } else if (parse.v.args[0] == "pwd") {
-            program->type = Running_Program::PWD;
-        } else if (parse.v.args[0] == "which") {
-            program->type = Running_Program::WHICH;
-        } else if (parse.v.args[0] == "true") {
-            program->type = Running_Program::TRUE_;
-        } else if (parse.v.args[0] == "false") {
-            program->type = Running_Program::FALSE_;
-        }
-    }
-
-    // All builtins.
-    if (cfg.builtin_level >= 2) {
-        if (parse.v.args[0] == "cat") {
-            program->type = Running_Program::CAT;
-            program->v.builtin.st.cat = {};
-            program->v.builtin.st.cat.buffer = (char*)allocator.alloc({4096, 1});
-            program->v.builtin.st.cat.outer = 0;
-        } else if (parse.v.args[0] == "ls") {
-            program->type = Running_Program::LS;
-        }
+static void setup_builtin(Running_Program* program, cz::Allocator allocator, Stdio_State stdio) {
+    if (program->type == Running_Program::SOURCE) {
+        program->v.builtin.st.source = {};
+        program->v.builtin.st.source.stdio = stdio;
+    } else if (program->type == Running_Program::SLEEP) {
+        program->v.builtin.st.sleep = {};
+        program->v.builtin.st.sleep.start = std::chrono::high_resolution_clock::now();
+    } else if (program->type == Running_Program::ECHO) {
+        program->v.builtin.st.echo = {};
+        program->v.builtin.st.echo.outer = 1;
+    } else if (program->type == Running_Program::CAT) {
+        program->v.builtin.st.cat = {};
+        program->v.builtin.st.cat.buffer = (char*)allocator.alloc({4096, 1});
+        program->v.builtin.st.cat.outer = 0;
     }
 }
