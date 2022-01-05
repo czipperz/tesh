@@ -1298,8 +1298,8 @@ static bool handle_prompt_manipulation_commands(Shell_State* shell,
             char ch2 = prompt->text[point];
 
             start_combo(prompt);
-            remove(prompt, point - 1, point);
             remove_after(prompt, point, point + 1);
+            remove(prompt, point - 1, point);
             insert(prompt, point - 1, cz::Str{&ch2, 1});
             insert_after(prompt, point, cz::Str{&ch1, 1});
             end_combo(prompt);
@@ -1320,8 +1320,8 @@ static bool handle_prompt_manipulation_commands(Shell_State* shell,
             cz::Str word2 = prompt->text.slice(start2, end2).clone(temp_allocator);
 
             start_combo(prompt);
-            remove(prompt, start1, end1);
             remove_after(prompt, start2, end2);
+            remove(prompt, start1, end1);
             insert(prompt, start1, word2);
             insert_after(prompt, start2 + word2.len - word1.len, word1);
             end_combo(prompt);
