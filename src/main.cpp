@@ -1253,9 +1253,11 @@ static bool handle_prompt_manipulation_commands(Shell_State* shell,
 
     // TODO: call stop_completing???
 
-    if (mod == KMOD_ALT && key == SDLK_SLASH) {
+    if ((mod == KMOD_ALT && key == SDLK_SLASH) ||
+        (mod == (KMOD_CTRL | KMOD_SHIFT) && key == SDLK_z)) {
         undo(prompt);
-    } else if (mod == KMOD_CTRL && key == SDLK_SLASH) {
+    } else if ((mod == KMOD_CTRL && key == SDLK_SLASH) ||
+               (mod == (KMOD_CTRL | KMOD_SHIFT) && key == SDLK_y)) {
         redo(prompt);
     } else if ((mod & ~KMOD_SHIFT) == 0 && key == SDLK_BACKSPACE) {
         if (prompt->cursor > 0) {
