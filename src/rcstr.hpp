@@ -11,6 +11,7 @@ struct RcStr {
         RcStr rcstr;
         rcstr.rc = cz::heap_allocator().alloc<uint64_t>();
         CZ_ASSERT(rcstr.rc);
+        *rcstr.rc = 1;
         rcstr.str = arg.clone_null_terminate(cz::heap_allocator());
         return rcstr;
     }
