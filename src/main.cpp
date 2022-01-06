@@ -43,7 +43,7 @@
 
 static Backlog_State* push_backlog(cz::Vector<Backlog_State*>* backlogs, uint64_t id);
 static float get_dpi_scale(SDL_Window* window);
-static void scroll_down1(Render_State* rend, cz::Slice<Backlog_State*> backlogs, int lines);
+static void scroll_down1(Render_State* rend, int lines);
 static cz::Vector<cz::Str>* prompt_history(Prompt_State* prompt, bool script);
 static void stop_merging_edits(Prompt_State* prompt);
 static void stop_completing(Prompt_State* prompt);
@@ -321,10 +321,9 @@ static bool render_backlog(SDL_Surface* window_surface,
 static void render_backlogs(SDL_Surface* window_surface,
                             Render_State* rend,
                             Shell_State* shell,
-                            std::chrono::high_resolution_clock::time_point now,
-                            cz::Slice<Backlog_State*> backlogs) {
-    for (size_t i = rend->backlog_start.outer; i < backlogs.len; ++i) {
-        if (!render_backlog(window_surface, rend, shell, now, backlogs[i]))
+                            std::chrono::high_resolution_clock::time_point now) {
+    for (size_t i = rend->backlog_start.outer; i < rend->visbacklogs.len; ++i) {
+        if (!render_backlog(window_surface, rend, shell, now, rend->visbacklogs[i]))
             break;
     }
 }
@@ -450,13 +449,12 @@ static void render_prompt(SDL_Surface* window_surface,
     }
 }
 
-static void ensure_prompt_on_screen(Render_State* rend, cz::Slice<Backlog_State*> backlogs);
+static void ensure_prompt_on_screen(Render_State* rend);
 static void ensure_end_of_selected_process_on_screen(Render_State* rend,
-                                                     cz::Slice<Backlog_State*> backlogs,
                                                      uint64_t selected_process,
                                                      bool gotostart);
 
-static void auto_scroll_start_paging(Render_State* rend, cz::Slice<Backlog_State*> backlogs) {
+static void auto_scroll_start_paging(Render_State* rend) {
     if (rend->window_rows <= 3)
         return;
 
@@ -465,10 +463,10 @@ static void auto_scroll_start_paging(Render_State* rend, cz::Slice<Backlog_State
     // If we put the previous prompt at the top what happens.
     Visual_Point top_prompt = {};
     top_prompt = {};
-    top_prompt.outer = (backlogs.len > 0 ? backlogs.len - 1 : 0);
+    top_prompt.outer = rend->visbacklogs.last()->id;
 
     rend->backlog_start = top_prompt;
-    scroll_down1(rend, backlogs, rend->window_rows - 3);
+    scroll_down1(rend, rend->window_rows - 3);
 
     if (rend->backlog_start.y + 3 >= rend->window_rows) {
         // More than one page of content so stop auto paging.
@@ -477,7 +475,7 @@ static void auto_scroll_start_paging(Render_State* rend, cz::Slice<Backlog_State
         rend->scroll_mode = PROMPT_SCROLL;
     } else {
         rend->backlog_start = backup;
-        ensure_prompt_on_screen(rend, backlogs);
+        ensure_prompt_on_screen(rend);
     }
 }
 
@@ -490,7 +488,6 @@ static void stop_selecting(Render_State* rend) {
 
 static void render_frame(SDL_Window* window,
                          Render_State* rend,
-                         cz::Slice<Backlog_State*> backlogs,
                          Prompt_State* prompt,
                          Shell_State* shell) {
     ZoneScoped;
@@ -512,11 +509,11 @@ static void render_frame(SDL_Window* window,
     }
 
     if (rend->scroll_mode == AUTO_PAGE)
-        auto_scroll_start_paging(rend, backlogs);
+        auto_scroll_start_paging(rend);
     if (rend->scroll_mode == AUTO_SCROLL)
-        ensure_end_of_selected_process_on_screen(rend, backlogs, shell->selected_process, false);
+        ensure_end_of_selected_process_on_screen(rend, shell->selected_process, false);
     if (shell->attached_process != -1)
-        ensure_prompt_on_screen(rend, backlogs);
+        ensure_prompt_on_screen(rend);
 
     // TODO remove this
     rend->complete_redraw = true;
@@ -538,7 +535,7 @@ static void render_frame(SDL_Window* window,
     rend->selection.bg_color = SDL_MapRGB(window_surface->format, cfg.selection_bg_color.r,
                                           cfg.selection_bg_color.g, cfg.selection_bg_color.b);
 
-    render_backlogs(window_surface, rend, shell, now, backlogs);
+    render_backlogs(window_surface, rend, shell, now);
     render_prompt(window_surface, rend, prompt, shell);
 
     {
@@ -607,7 +604,7 @@ static bool read_process_data(Shell_State* shell,
         Backlog_State* backlog = backlogs[script->id];
         size_t starting_length = backlog->length;
 
-        if (tick_running_node(shell, backlogs, rend, prompt, &script->root, &script->tty, backlog,
+        if (tick_running_node(shell, rend, prompt, &script->root, &script->tty, backlog,
                               force_quit)) {
             if (*force_quit)
                 return true;
@@ -648,11 +645,11 @@ static bool read_process_data(Shell_State* shell,
 // User events
 ///////////////////////////////////////////////////////////////////////////////
 
-static void scroll_down1(Render_State* rend, cz::Slice<Backlog_State*> backlogs, int lines) {
+static void scroll_down1(Render_State* rend, int lines) {
     Visual_Point* start = &rend->backlog_start;
-    if (start->outer < backlogs.len) {
+    if (start->outer < rend->visbacklogs.len) {
         int desired_y = start->y + lines;
-        Backlog_State* backlog = backlogs[start->outer];
+        Backlog_State* backlog = rend->visbacklogs[start->outer];
         uint64_t end = render_length(backlog);
         while (1) {
             if (start->inner >= end) {
@@ -666,9 +663,9 @@ static void scroll_down1(Render_State* rend, cz::Slice<Backlog_State*> backlogs,
 
                 start->outer++;
                 start->inner = 0;
-                if (start->outer == backlogs.len)
+                if (start->outer == rend->visbacklogs.len)
                     break;
-                backlog = backlogs[start->outer];
+                backlog = rend->visbacklogs[start->outer];
                 end = render_length(backlog);
 
                 if (start->y >= desired_y)
@@ -694,23 +691,23 @@ static void scroll_down1(Render_State* rend, cz::Slice<Backlog_State*> backlogs,
         }
     }
 }
-static void scroll_down(Render_State* rend, cz::Slice<Backlog_State*> backlogs, int lines) {
-    scroll_down1(rend, backlogs, lines);
+static void scroll_down(Render_State* rend, int lines) {
+    scroll_down1(rend, lines);
     rend->backlog_start.y = 0;
 }
 
-static void scroll_up(Render_State* rend, cz::Slice<Backlog_State*> backlogs, int lines) {
+static void scroll_up(Render_State* rend, int lines) {
     uint64_t* visual_line_starts = temp_allocator.alloc<uint64_t>(lines);
 
     Visual_Point* point = &rend->backlog_start;
 
     // If the prompt is at the top of the screen then reset the
     // point to the point where the prompt is in the last backlog.
-    if (point->outer == backlogs.len) {
+    if (point->outer == rend->visbacklogs.len) {
         if (point->outer == 0)
             return;
         point->outer--;
-        Backlog_State* backlog = backlogs[point->outer];
+        Backlog_State* backlog = rend->visbacklogs[point->outer];
         uint64_t end = render_length(backlog);
         point->inner = end + 1;
         if (end > 0 && backlog->get(end - 1) != '\n')
@@ -718,7 +715,7 @@ static void scroll_up(Render_State* rend, cz::Slice<Backlog_State*> backlogs, in
     }
 
     while (1) {
-        Backlog_State* backlog = backlogs[point->outer];
+        Backlog_State* backlog = rend->visbacklogs[point->outer];
         uint64_t end = render_length(backlog);
         uint64_t cursor = point->inner;
 
@@ -809,7 +806,7 @@ static void scroll_up(Render_State* rend, cz::Slice<Backlog_State*> backlogs, in
         if (point->outer == 0)
             break;
         point->outer--;
-        backlog = backlogs[point->outer];
+        backlog = rend->visbacklogs[point->outer];
         end = render_length(backlog);
         point->inner = end + 1;
         if (end > 0 && backlog->get(end - 1) != '\n')
@@ -820,23 +817,23 @@ static void scroll_up(Render_State* rend, cz::Slice<Backlog_State*> backlogs, in
     point->x = 0;
 }
 
-void clear_screen(Render_State* rend, Shell_State* shell, cz::Slice<Backlog_State*> backlogs) {
+void clear_screen(Render_State* rend, Shell_State* shell) {
     rend->backlog_start = {};
-    rend->backlog_start.outer = backlogs.len;
+    rend->backlog_start.outer = rend->visbacklogs.len;
     if (shell->scripts.len > 0)
-        scroll_up(rend, backlogs, 2);
+        scroll_up(rend, 2);
     rend->complete_redraw = true;
     rend->scroll_mode = PROMPT_SCROLL;
     shell->attached_process = -1;
     shell->selected_process = shell->attached_process;
 }
 
-static void ensure_prompt_on_screen(Render_State* rend, cz::Slice<Backlog_State*> backlogs) {
+static void ensure_prompt_on_screen(Render_State* rend) {
     if (rend->window_rows > 3) {
         Visual_Point backup = rend->backlog_start;
         rend->backlog_start = {};
-        rend->backlog_start.outer = backlogs.len;
-        scroll_up(rend, backlogs, rend->window_rows - 3);
+        rend->backlog_start.outer = rend->visbacklogs.len;
+        scroll_up(rend, rend->window_rows - 3);
         if (rend->backlog_start.outer > backup.outer)
             rend->complete_redraw = true;
         else if (rend->backlog_start.outer == backup.outer &&
@@ -954,12 +951,11 @@ static void forward_word(cz::Str text, size_t* cursor) {
 
 static void finish_prompt_manipulation(Shell_State* shell,
                                        Render_State* rend,
-                                       cz::Slice<Backlog_State*> backlogs,
                                        Prompt_State* prompt,
                                        bool doing_merge,
                                        bool doing_completion) {
     shell->selected_process = shell->attached_process;
-    ensure_prompt_on_screen(rend, backlogs);
+    ensure_prompt_on_screen(rend);
     rend->scroll_mode = AUTO_SCROLL;
     stop_selecting(rend);
     if (!doing_merge) {
@@ -1521,42 +1517,38 @@ static bool handle_prompt_manipulation_commands(Shell_State* shell,
         return false;
     }
 
-    finish_prompt_manipulation(shell, rend, *backlogs, prompt, doing_merge, doing_completion);
+    finish_prompt_manipulation(shell, rend, prompt, doing_merge, doing_completion);
     return true;
 }
 
-static void ensure_selected_process_on_screen(Render_State* rend,
-                                              cz::Slice<Backlog_State*> backlogs,
-                                              uint64_t selected_process) {
+static void ensure_selected_process_on_screen(Render_State* rend, uint64_t selected_process) {
     if (selected_process <= rend->backlog_start.outer) {
         rend->backlog_start = {};
         rend->backlog_start.outer = selected_process;
     } else {
-        ensure_end_of_selected_process_on_screen(rend, backlogs, selected_process, true);
+        ensure_end_of_selected_process_on_screen(rend, selected_process, true);
     }
 }
 
-static void scroll_to_end_of_selected_process(Render_State* rend,
-                                              cz::Slice<Backlog_State*> backlogs,
-                                              uint64_t selected_process) {
+static void scroll_to_end_of_selected_process(Render_State* rend, uint64_t selected_process) {
     rend->backlog_start = {};
-    rend->backlog_start.outer = (selected_process == -1 ? backlogs.len : selected_process + 1);
+    rend->backlog_start.outer =
+        (selected_process == -1 ? rend->visbacklogs.len : selected_process + 1);
     int lines = cz::max(rend->window_rows, 6) - 3;
-    scroll_up(rend, backlogs, lines);
+    scroll_up(rend, lines);
 }
 
 static void ensure_end_of_selected_process_on_screen(Render_State* rend,
-                                                     cz::Slice<Backlog_State*> backlogs,
                                                      uint64_t selected_process,
                                                      bool gotostart) {
     // Go to the earliest point where the entire process / prompt is visible.
     Visual_Point backup = rend->backlog_start;
-    scroll_to_end_of_selected_process(rend, backlogs, selected_process);
+    scroll_to_end_of_selected_process(rend, selected_process);
 
     if ((rend->backlog_start.outer > backup.outer) ||
         (rend->backlog_start.outer == backup.outer && rend->backlog_start.inner > backup.inner)) {
         if (gotostart && rend->backlog_start.outer ==
-                             (selected_process == -1 ? backlogs.len : selected_process)) {
+                             (selected_process == -1 ? rend->visbacklogs.len : selected_process)) {
             // The process is really long so go to the start instead.
             rend->backlog_start.inner = 0;
         }
@@ -1580,31 +1572,31 @@ static bool handle_scroll_commands(Shell_State* shell,
     Scroll_Mode scroll_mode = MANUAL_SCROLL;
     if ((mod == 0 && key == SDLK_PAGEDOWN) || (mod == KMOD_CTRL && key == SDLK_v)) {
         int lines = cz::max(rend->window_rows, 6) - 3;
-        scroll_down(rend, backlogs, lines);
+        scroll_down(rend, lines);
     } else if ((mod == 0 && key == SDLK_PAGEUP) || (mod == KMOD_ALT && key == SDLK_v)) {
         int lines = cz::max(rend->window_rows, 6) - 3;
-        scroll_up(rend, backlogs, lines);
+        scroll_up(rend, lines);
     } else if ((mod == KMOD_CTRL && key == SDLK_d) &&
                ((shell->attached_process == -1 && prompt->text.len == 0) ||
                 (rend->scroll_mode == MANUAL_SCROLL || rend->scroll_mode == PROMPT_SCROLL))) {
         int lines = rend->window_rows / 2;
-        scroll_down(rend, backlogs, lines);
+        scroll_down(rend, lines);
     } else if (mod == KMOD_CTRL && key == SDLK_u) {
         int lines = rend->window_rows / 2;
-        scroll_up(rend, backlogs, lines);
+        scroll_up(rend, lines);
     } else if (mod == KMOD_ALT && key == SDLK_n) {
-        scroll_down(rend, backlogs, 1);
+        scroll_down(rend, 1);
     } else if (mod == KMOD_ALT && key == SDLK_p) {
-        scroll_up(rend, backlogs, 1);
+        scroll_up(rend, 1);
     } else if ((mod == KMOD_ALT && key == SDLK_LESS) || (mod == KMOD_CTRL && key == SDLK_HOME)) {
         // Goto start of selected process.
         rend->backlog_start = {};
         rend->backlog_start.outer =
-            (shell->selected_process == -1 ? backlogs.len : shell->selected_process);
+            (shell->selected_process == -1 ? rend->visbacklogs.len : shell->selected_process);
         scroll_mode = PROMPT_SCROLL;
     } else if ((mod == KMOD_ALT && key == SDLK_GREATER) || (mod == KMOD_CTRL && key == SDLK_END)) {
         // Goto end of selected process.
-        scroll_to_end_of_selected_process(rend, backlogs, shell->selected_process);
+        scroll_to_end_of_selected_process(rend, shell->selected_process);
         scroll_mode = AUTO_SCROLL;
     } else if (mod == (KMOD_CTRL | KMOD_ALT) && key == SDLK_b) {
         if (rend->scroll_mode == MANUAL_SCROLL) {
@@ -1621,7 +1613,7 @@ static bool handle_scroll_commands(Shell_State* shell,
             } else if (shell->selected_process > 0) {
                 --shell->selected_process;
             }
-            ensure_selected_process_on_screen(rend, backlogs, shell->selected_process);
+            ensure_selected_process_on_screen(rend, shell->selected_process);
         }
         scroll_mode = PROMPT_SCROLL;
     } else if (mod == (KMOD_CTRL | KMOD_ALT) && key == SDLK_f) {
@@ -1631,20 +1623,20 @@ static bool handle_scroll_commands(Shell_State* shell,
                 shell->selected_process++;
             if (shell->selected_process == backlogs.len)
                 shell->selected_process = -1;
-            ensure_selected_process_on_screen(rend, backlogs, shell->selected_process);
+            ensure_selected_process_on_screen(rend, shell->selected_process);
         } else {
             // Select the next process, or the prompt if this is the last process.
             if (shell->selected_process != -1 && shell->selected_process + 1 < backlogs.len)
                 ++shell->selected_process;
             else
                 shell->selected_process = -1;
-            ensure_selected_process_on_screen(rend, backlogs, shell->selected_process);
+            ensure_selected_process_on_screen(rend, shell->selected_process);
         }
         scroll_mode = PROMPT_SCROLL;
     } else if (mod == 0 && key == SDLK_TAB && shell->selected_process != -1) {
         Backlog_State* backlog = backlogs[shell->selected_process];
         backlog->render_collapsed = !backlog->render_collapsed;
-        ensure_selected_process_on_screen(rend, backlogs, shell->selected_process);
+        ensure_selected_process_on_screen(rend, shell->selected_process);
         if (shell->attached_process == backlog->id)
             shell->attached_process = -1;
     } else {
@@ -1689,13 +1681,12 @@ static void append_piece(cz::String* clip,
 
 static void set_clipboard_contents_to_selection(Render_State* rend,
                                                 Shell_State* shell,
-                                                Prompt_State* prompt,
-                                                cz::Slice<Backlog_State*> backlogs) {
+                                                Prompt_State* prompt) {
     cz::String clip = {};
     CZ_DEFER(clip.drop(temp_allocator));
     for (size_t outer = rend->selection.start.outer; outer <= rend->selection.end.outer; ++outer) {
-        if (outer - 1 < backlogs.len) {
-            Backlog_State* backlog = backlogs.get(outer - 1);
+        if (outer - 1 < rend->visbacklogs.len) {
+            Backlog_State* backlog = rend->visbacklogs.get(outer - 1);
 
             size_t inner_start = 0;
             size_t inner_end = backlog->length;
@@ -1762,10 +1753,8 @@ static int word_char_category(char ch) {
     }
 }
 
-static void expand_selection(Selection* selection,
-                             Shell_State* shell,
-                             Prompt_State* prompt,
-                             cz::Slice<Backlog_State*> backlogs) {
+static void expand_selection(Render_State* rend, Shell_State* shell, Prompt_State* prompt) {
+    Selection* selection = &rend->selection;
     CZ_DEBUG_ASSERT(selection->start.outer != 0);
     CZ_DEBUG_ASSERT(selection->end.outer != 0);
 
@@ -1775,7 +1764,8 @@ static void expand_selection(Selection* selection,
     cz::String prompt_buffer = {};
     CZ_DEFER(prompt_buffer.drop(temp_allocator));
 
-    if (selection->start.outer - 1 == backlogs.len || selection->end.outer - 1 == backlogs.len) {
+    if (selection->start.outer - 1 == rend->visbacklogs.len ||
+        selection->end.outer - 1 == rend->visbacklogs.len) {
         if (shell->attached_process == -1) {
             cz::append(temp_allocator, &prompt_buffer, get_wd(&shell->local), prompt->prefix);
         } else {
@@ -1786,8 +1776,8 @@ static void expand_selection(Selection* selection,
 
     if (selection->expand_word) {
         uint64_t* inner = &selection->start.inner;
-        if (selection->start.outer - 1 < backlogs.len) {
-            Backlog_State* backlog = backlogs[selection->start.outer - 1];
+        if (selection->start.outer - 1 < rend->visbacklogs.len) {
+            Backlog_State* backlog = rend->visbacklogs[selection->start.outer - 1];
             if (*inner < backlog->length)
                 ++*inner;
 
@@ -1831,8 +1821,8 @@ static void expand_selection(Selection* selection,
         }
 
         inner = &selection->end.inner;
-        if (selection->end.outer - 1 < backlogs.len) {
-            Backlog_State* backlog = backlogs[selection->end.outer - 1];
+        if (selection->end.outer - 1 < rend->visbacklogs.len) {
+            Backlog_State* backlog = rend->visbacklogs[selection->end.outer - 1];
             // Skip until we find a different category.
             int category = -1;
             while (*inner < backlog->length) {
@@ -1876,8 +1866,8 @@ static void expand_selection(Selection* selection,
     } else if (selection->expand_line) {
         // Goto start of line.
         uint64_t* inner = &selection->start.inner;
-        if (selection->start.outer - 1 < backlogs.len) {
-            Backlog_State* backlog = backlogs[selection->start.outer - 1];
+        if (selection->start.outer - 1 < rend->visbacklogs.len) {
+            Backlog_State* backlog = rend->visbacklogs[selection->start.outer - 1];
             while (*inner > 0) {
                 if (backlog->get(*inner - 1) == '\n')
                     break;
@@ -1893,8 +1883,8 @@ static void expand_selection(Selection* selection,
 
         // Goto start of next line.
         inner = &selection->end.inner;
-        if (selection->end.outer - 1 < backlogs.len) {
-            Backlog_State* backlog = backlogs[selection->end.outer - 1];
+        if (selection->end.outer - 1 < rend->visbacklogs.len) {
+            Backlog_State* backlog = rend->visbacklogs[selection->end.outer - 1];
             while (*inner < backlog->length) {
                 if (backlog->get(*inner) == '\n')
                     break;
@@ -1913,10 +1903,10 @@ static void expand_selection(Selection* selection,
 static void expand_selection_to(Render_State* rend,
                                 Shell_State* shell,
                                 Prompt_State* prompt,
-                                cz::Slice<Backlog_State*> backlogs,
                                 Visual_Tile tile) {
     if (tile.outer == 0) {
-        tile.outer = backlogs.len + 1;
+        // Select the prompt as well.
+        tile.outer = rend->visbacklogs.len + 1;
         tile.inner = get_wd(&shell->local).len + prompt->prefix.len + prompt->text.len;
     }
 
@@ -1933,7 +1923,7 @@ static void expand_selection_to(Render_State* rend,
         rend->selection.end = rend->selection.current;
     }
 
-    expand_selection(&rend->selection, shell, prompt, backlogs);
+    expand_selection(rend, shell, prompt);
 
     rend->complete_redraw = true;
 }
@@ -1975,6 +1965,7 @@ static bool write_selected_backlog_to_file(Shell_State* shell,
 }
 
 static void submit_prompt(Shell_State* shell,
+                          Render_State* rend,
                           cz::Vector<Backlog_State*>* backlogs,
                           Prompt_State* prompt,
                           cz::Str command,
@@ -1986,6 +1977,8 @@ static void submit_prompt(Shell_State* shell,
         backlog = (*backlogs)[process_id];
     } else {
         backlog = push_backlog(backlogs, process_id);
+        rend->visbacklogs.reserve(cz::heap_allocator(), 1);
+        rend->visbacklogs.push(backlog);
         push_backlog_event(backlog, BACKLOG_EVENT_START_DIRECTORY);
         append_text(backlog, get_wd(&shell->local));
         push_backlog_event(backlog, BACKLOG_EVENT_START_PROCESS);
@@ -2045,7 +2038,7 @@ static void user_submit_prompt(Render_State* rend,
         resolve_history_searching(prompt, history);
     }
 
-    submit_prompt(shell, backlogs, prompt, prompt->text, submit);
+    submit_prompt(shell, rend, backlogs, prompt, prompt->text, submit);
 
     // Push the history entry to either the stdin or the shell history list.
     cz::Vector<cz::Str>* history = prompt_history(prompt, shell->attached_process != -1);
@@ -2061,7 +2054,7 @@ static void user_submit_prompt(Render_State* rend,
     stop_completing(prompt);
     prompt->cursor = 0;
 
-    ensure_prompt_on_screen(rend, *backlogs);
+    ensure_prompt_on_screen(rend);
 }
 
 static int process_events(cz::Vector<Backlog_State*>* backlogs,
@@ -2207,7 +2200,7 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
             }
 
             if (mod == KMOD_CTRL && key == SDLK_l) {
-                clear_screen(rend, shell, *backlogs);
+                clear_screen(rend, shell);
                 ++num_events;
                 continue;
             }
@@ -2225,7 +2218,7 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
                         shell->attached_process = -1;
                         shell->selected_process = -1;
 
-                        submit_prompt(shell, backlogs, prompt, command, true);
+                        submit_prompt(shell, rend, backlogs, prompt, command, true);
 
                         shell->attached_process = old_attached;
                         shell->selected_process = old_selected;
@@ -2243,7 +2236,7 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
                 shell->selected_process = shell->attached_process;
                 rend->scroll_mode = AUTO_SCROLL;
                 int lines = cz::max(rend->window_rows, 3) - 3;
-                scroll_up(rend, *backlogs, lines);
+                scroll_up(rend, lines);
                 continue;
             }
 
@@ -2255,7 +2248,7 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
                     rend->selection.type = SELECT_DISABLED;
                     rend->complete_redraw = true;
                     ++num_events;
-                    set_clipboard_contents_to_selection(rend, shell, prompt, *backlogs);
+                    set_clipboard_contents_to_selection(rend, shell, prompt);
                 }
                 continue;
             }
@@ -2371,7 +2364,7 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
             insert_before(prompt, prompt->cursor, text);
             Prompt_Edit* edit = &prompt->edit_history[prompt->edit_index - 1];
             edit->type |= PROMPT_EDIT_MERGE;
-            finish_prompt_manipulation(shell, rend, *backlogs, prompt, true, false);
+            finish_prompt_manipulation(shell, rend, prompt, true, false);
             ++num_events;
         } break;
 
@@ -2403,9 +2396,9 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
                 resize_font(new_font_size, rend);
             } else {
                 if (event.wheel.y < 0) {
-                    scroll_down(rend, *backlogs, -event.wheel.y);
+                    scroll_down(rend, -event.wheel.y);
                 } else if (event.wheel.y > 0) {
-                    scroll_up(rend, *backlogs, event.wheel.y);
+                    scroll_up(rend, event.wheel.y);
                 }
             }
 
@@ -2435,7 +2428,7 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
                             shell->attached_process = -1;
                             shell->selected_process = -1;
 
-                            submit_prompt(shell, backlogs, prompt, command, true);
+                            submit_prompt(shell, rend, backlogs, prompt, command, true);
 
                             shell->attached_process = old_attached;
                             shell->selected_process = old_selected;
@@ -2476,7 +2469,7 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
                 }
 
                 if (holding_shift) {
-                    expand_selection_to(rend, shell, prompt, *backlogs, tile);
+                    expand_selection_to(rend, shell, prompt, tile);
                 } else {
                     shell->selected_process = tile.outer - 1;
                     if (shell->selected_process == backlogs->len)
@@ -2487,14 +2480,14 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
                     rend->selection.start = tile;
                     rend->selection.end = tile;
 
-                    expand_selection(&rend->selection, shell, prompt, *backlogs);
+                    expand_selection(rend, shell, prompt);
 
                     rend->complete_redraw = true;
                     ++num_events;
                 }
             } else if (event.button.button == SDL_BUTTON_MIDDLE) {
                 run_paste(prompt);
-                finish_prompt_manipulation(shell, rend, *backlogs, prompt, false, false);
+                finish_prompt_manipulation(shell, rend, prompt, false, false);
                 ++num_events;
             }
         } break;
@@ -2504,7 +2497,7 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
                 if (rend->selection.type == SELECT_REGION) {
                     rend->selection.type = SELECT_FINISHED;
                     if (cfg.on_select_auto_copy) {
-                        set_clipboard_contents_to_selection(rend, shell, prompt, *backlogs);
+                        set_clipboard_contents_to_selection(rend, shell, prompt);
                     }
                 } else {
                     rend->selection.type = SELECT_DISABLED;
@@ -2530,7 +2523,7 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
             if (rend->selection.type == SELECT_DISABLED || rend->selection.type == SELECT_FINISHED)
                 break;
 
-            expand_selection_to(rend, shell, prompt, *backlogs, tile);
+            expand_selection_to(rend, shell, prompt, tile);
         } break;
         }
     }
@@ -2840,7 +2833,7 @@ int actual_main(int argc, char** argv) {
 
     // Start running ~/.teshrc.
     prompt.text = cz::format(temp_allocator, "source ~/.teshrc");
-    submit_prompt(&shell, &backlogs, &prompt, prompt.text, true);
+    submit_prompt(&shell, &rend, &backlogs, &prompt, prompt.text, true);
     prompt.text = {};
     shell.attached_process = -1;
     shell.selected_process = -1;
@@ -2863,7 +2856,7 @@ int actual_main(int argc, char** argv) {
                 break;
 
             if (rend.complete_redraw || status > 0 || shell.scripts.len > 0 || !rend.grid_is_valid)
-                render_frame(window, &rend, backlogs, &prompt, &shell);
+                render_frame(window, &rend, &prompt, &shell);
         } catch (cz::PanicReachedException& ex) {
             fprintf(stderr, "Fatal error: %s\n", ex.what());
             return 1;

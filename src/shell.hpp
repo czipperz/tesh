@@ -381,7 +381,6 @@ bool finish_line(Shell_State* shell,
 ///////////////////////////////////////////////////////////////////////////////
 
 bool tick_running_node(Shell_State* shell,
-                       cz::Slice<Backlog_State*> backlogs,
                        Render_State* rend,
                        Prompt_State* prompt,
                        Running_Node* node,

@@ -46,6 +46,8 @@ enum Scroll_Mode {
     PROMPT_SCROLL,
 };
 
+struct Backlog_State;
+
 struct Render_State {
     TTF_Font* font;
     int font_size;
@@ -73,6 +75,11 @@ struct Render_State {
     SDL_Cursor* default_cursor;
     // SDL_Cursor * select_cursor;
     SDL_Cursor* click_cursor;
+
+    // We want to be able to change the order to be different than the
+    // order the processes were ran in.  So store the visual order here,
+    // because everything that cares about it also wants the render state.
+    cz::Vector<Backlog_State*> visbacklogs;
 };
 
 void set_icon(SDL_Window* sdl_window);

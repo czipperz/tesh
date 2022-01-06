@@ -24,7 +24,6 @@ static void tick_pipeline(Shell_State* shell,
                           Shell_Local* local,
                           Render_State* rend,
                           Prompt_State* prompt,
-                          cz::Slice<Backlog_State*> backlogs,
                           Backlog_State* backlog,
                           Running_Pipeline* pipeline,
                           Pseudo_Terminal* tty,
@@ -34,7 +33,6 @@ static bool tick_program(Shell_State* shell,
                          Shell_Local* local,
                          Render_State* rend,
                          Prompt_State* prompt,
-                         cz::Slice<Backlog_State*> backlogs,
                          Backlog_State* backlog,
                          cz::Allocator allocator,
                          Running_Program* program,
@@ -53,14 +51,13 @@ static int run_ls(Process_Output out,
                   cz::Str working_directory,
                   cz::Str directory);
 
-void clear_screen(Render_State* rend, Shell_State* shell, cz::Slice<Backlog_State*> backlogs);
+void clear_screen(Render_State* rend, Shell_State* shell);
 
 ///////////////////////////////////////////////////////////////////////////////
 // Tick running node
 ///////////////////////////////////////////////////////////////////////////////
 
 bool tick_running_node(Shell_State* shell,
-                       cz::Slice<Backlog_State*> backlogs,
                        Render_State* rend,
                        Prompt_State* prompt,
                        Running_Node* node,
@@ -69,14 +66,14 @@ bool tick_running_node(Shell_State* shell,
                        bool* force_quit) {
     for (size_t b = 0; b < node->bg.len; ++b) {
         Running_Pipeline* line = &node->bg[b];
-        tick_pipeline(shell, node->local, rend, prompt, backlogs, backlog, line, tty, force_quit);
+        tick_pipeline(shell, node->local, rend, prompt, backlog, line, tty, force_quit);
         if (line->programs.len == 0) {
             finish_line(shell, *tty, node, backlog, line, /*background=*/true);
             --b;
         }
     }
 
-    tick_pipeline(shell, node->local, rend, prompt, backlogs, backlog, &node->fg, tty, force_quit);
+    tick_pipeline(shell, node->local, rend, prompt, backlog, &node->fg, tty, force_quit);
 
     if (*force_quit)
         return true;
@@ -103,7 +100,6 @@ static void tick_pipeline(Shell_State* shell,
                           Shell_Local* local,
                           Render_State* rend,
                           Prompt_State* prompt,
-                          cz::Slice<Backlog_State*> backlogs,
                           Backlog_State* backlog,
                           Running_Pipeline* pipeline,
                           Pseudo_Terminal* tty,
@@ -112,7 +108,7 @@ static void tick_pipeline(Shell_State* shell,
     for (size_t p = 0; p < pipeline->programs.len; ++p) {
         Running_Program* program = &pipeline->programs[p];
         int exit_code = 1;
-        if (tick_program(shell, local, rend, prompt, backlogs, backlog, allocator, program, tty,
+        if (tick_program(shell, local, rend, prompt, backlog, allocator, program, tty,
                          &exit_code, force_quit)) {
             if (!pipeline->has_exit_code && p + 1 == pipeline->programs.len) {
                 pipeline->has_exit_code = true;
@@ -171,7 +167,6 @@ static bool tick_program(Shell_State* shell,
                          Shell_Local* local,
                          Render_State* rend,
                          Prompt_State* prompt,
-                         cz::Slice<Backlog_State*> backlogs,
                          Backlog_State* backlog,
                          cz::Allocator allocator,
                          Running_Program* program,
@@ -188,7 +183,7 @@ static bool tick_program(Shell_State* shell,
         Running_Node* node = &program->v.sub;
         // TODO better rate limiting
         for (int rounds = 0; rounds < 128; ++rounds) {
-            if (!tick_running_node(shell, backlogs, rend, prompt, node, tty, backlog, force_quit)) {
+            if (!tick_running_node(shell, rend, prompt, node, tty, backlog, force_quit)) {
                 break;
             }
         }
@@ -572,7 +567,7 @@ static bool tick_program(Shell_State* shell,
     } break;
 
     case Running_Program::CLEAR: {
-        clear_screen(rend, shell, backlogs);
+        clear_screen(rend, shell);
         goto finish_builtin;
     } break;
 
