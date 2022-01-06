@@ -248,6 +248,9 @@ struct Running_Program {
             int exit_code;
             union {
                 struct {
+                    cz::Str m1, m2;
+                } invalid;
+                struct {
                     size_t outer, inner;
                 } echo;
                 struct {

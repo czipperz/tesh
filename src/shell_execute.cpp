@@ -36,7 +36,8 @@ static Error run_program(Shell_State* shell,
                          Running_Program* program,
                          Parse_Program parse,
                          Stdio_State stdio,
-                         Backlog_State* backlog);
+                         Backlog_State* backlog,
+                         cz::Str error_path);
 
 static void recognize_builtin(Running_Program* program, const Parse_Program& parse);
 static void setup_builtin(Running_Program* program, cz::Allocator allocator, Stdio_State stdio);
@@ -393,20 +394,23 @@ static Error start_execute_pipeline(Shell_State* shell,
             parse_program.err_file = file;
         }
 
+        cz::Str error_path = {};
         cz::String path = {};
         if (parse_program.in_file.buffer) {
             stdio.in_type = File_Type_File;
             if (parse_program.in_file == "/dev/null") {
                 stdio.in = {};
                 stdio.in_count = nullptr;
-            } else {
+            } else if (error_path.len == 0) {
                 path.len = 0;
                 cz::path::make_absolute(parse_program.in_file, get_wd(node->local), temp_allocator,
                                         &path);
-                if (!stdio.in.open(path.buffer))
-                    return Error_InvalidPath;
-                stdio.in_count = allocator.alloc<size_t>();
-                *stdio.in_count = 1;
+                if (stdio.in.open(path.buffer)) {
+                    stdio.in_count = allocator.alloc<size_t>();
+                    *stdio.in_count = 1;
+                } else {
+                    error_path = parse_program.in_file;
+                }
             }
         } else if (p > 0) {
             stdio.in_type = File_Type_Pipe;
@@ -426,15 +430,16 @@ static Error start_execute_pipeline(Shell_State* shell,
             if (parse_program.out_file == "/dev/null") {
                 stdio.out = {};
                 stdio.out_count = nullptr;
-            } else {
+            } else if (error_path.len == 0) {
                 path.len = 0;
                 cz::path::make_absolute(parse_program.out_file, get_wd(node->local), temp_allocator,
                                         &path);
-                if (!stdio.out.open(path.buffer))
-                    return Error_InvalidPath;
-                path.len = 0;
-                stdio.out_count = allocator.alloc<size_t>();
-                *stdio.out_count = 1;
+                if (stdio.out.open(path.buffer)) {
+                    stdio.out_count = allocator.alloc<size_t>();
+                    *stdio.out_count = 1;
+                } else {
+                    error_path = parse_program.out_file;
+                }
             }
         } else if (p + 1 < program_nodes.len) {
             stdio.out_type = File_Type_Pipe;
@@ -448,15 +453,16 @@ static Error start_execute_pipeline(Shell_State* shell,
             if (parse_program.err_file == "/dev/null") {
                 stdio.err = {};
                 stdio.err_count = nullptr;
-            } else {
+            } else if (error_path.len == 0) {
                 path.len = 0;
                 cz::path::make_absolute(parse_program.err_file, get_wd(node->local), temp_allocator,
                                         &path);
-                if (!stdio.err.open(path.buffer))
-                    return Error_InvalidPath;
-                path.len = 0;
-                stdio.err_count = allocator.alloc<size_t>();
-                *stdio.err_count = 1;
+                if (stdio.err.open(path.buffer)) {
+                    stdio.err_count = allocator.alloc<size_t>();
+                    *stdio.err_count = 1;
+                } else {
+                    error_path = parse_program.err_file;
+                }
             }
         } else {
             if (stdio.err_count)
@@ -496,7 +502,7 @@ static Error start_execute_pipeline(Shell_State* shell,
         Running_Program running_program = {};
 
         Error error = run_program(shell, node->local, allocator, tty, &running_program,
-                                  parse_program, stdio, backlog);
+                                  parse_program, stdio, backlog, error_path);
         if (error != Error_Success)
             return error;
 
@@ -524,7 +530,8 @@ static Error run_program(Shell_State* shell,
                          Running_Program* program,
                          Parse_Program parse,
                          Stdio_State stdio,
-                         Backlog_State* backlog) {
+                         Backlog_State* backlog,
+                         cz::Str error_path) {
     {
         cz::Vector<cz::Str> variable_values = {};
         variable_values.reserve_exact(allocator, parse.variable_values.len);
@@ -591,7 +598,14 @@ static Error run_program(Shell_State* shell,
     }
 
     parse.v.args = args;
-    recognize_builtin(program, parse);
+    if (error_path.len > 0) {
+        program->type = Running_Program::INVALID;
+        program->v.builtin.st.invalid = {};
+        program->v.builtin.st.invalid.m1 = "cannot open file";
+        program->v.builtin.st.invalid.m2 = error_path;
+    } else {
+        recognize_builtin(program, parse);
+    }
 
     // If command is a builtin.
     if (program->type != Running_Program::PROCESS) {
@@ -642,6 +656,9 @@ static Error run_program(Shell_State* shell,
     cz::String full_path = {};
     if (!find_in_path(local, args[0], allocator, &full_path)) {
         program->type = Running_Program::INVALID;
+        program->v.builtin.st.invalid = {};
+        program->v.builtin.st.invalid.m1 = "cannot find in path";
+        program->v.builtin.st.invalid.m2 = args[0];
         goto make_builtin;
     }
     args[0] = full_path;
