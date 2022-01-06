@@ -52,6 +52,11 @@ static void finish_hyperlink(Backlog_State* backlog);
 static void load_cursors(Render_State* rend);
 static void set_cursor(Render_State* rend, Visual_Tile tile);
 static const char* get_hyperlink_at(Render_State* rend, Visual_Tile tile);
+static void render_prompt(SDL_Surface* window_surface,
+                          Render_State* rend,
+                          Prompt_State* prompt,
+                          cz::Slice<Backlog_State*> backlogs,
+                          Shell_State* shell);
 
 ///////////////////////////////////////////////////////////////////////////////
 // Renderer methods
@@ -195,6 +200,8 @@ static uint64_t render_length(Backlog_State* backlog) {
 static bool render_backlog(SDL_Surface* window_surface,
                            Render_State* rend,
                            Shell_State* shell,
+                           Prompt_State* prompt,
+                           cz::Slice<Backlog_State*> backlogs,
                            std::chrono::high_resolution_clock::time_point now,
                            Backlog_State* backlog,
                            size_t visindex) {
@@ -277,11 +284,10 @@ static bool render_backlog(SDL_Surface* window_surface,
         }
     }
 
-    rend->backlog_end.outer = visindex;
-    rend->backlog_end.inner = i;
-
-    if (rend->backlog_end.inner == backlog->length && backlog->length > 0 &&
-        backlog->get(backlog->length - 1) != '\n') {
+    if (rend->attached_outer == visindex) {
+        render_prompt(window_surface, rend, prompt, backlogs, shell);
+    } else if (rend->backlog_end.inner == backlog->length && backlog->length > 0 &&
+               backlog->get(backlog->length - 1) != '\n') {
         Visual_Point old_point = *point;
 
         if (!render_code_point(window_surface, rend, point, background, cfg.prompt_fg_color, false,
@@ -316,17 +322,6 @@ static bool render_backlog(SDL_Surface* window_surface,
     return true;
 }
 
-static void render_backlogs(SDL_Surface* window_surface,
-                            Render_State* rend,
-                            Shell_State* shell,
-                            std::chrono::high_resolution_clock::time_point now) {
-    for (size_t i = rend->backlog_start.outer; i < rend->visbacklogs.len; ++i) {
-        if (!render_backlog(window_surface, rend, shell, now, rend->visbacklogs[i], i)) {
-            break;
-        }
-    }
-}
-
 static void render_prompt(SDL_Surface* window_surface,
                           Render_State* rend,
                           Prompt_State* prompt,
@@ -334,9 +329,11 @@ static void render_prompt(SDL_Surface* window_surface,
                           Shell_State* shell) {
     ZoneScoped;
 
-    Visual_Point point = rend->backlog_end;
-    point.outer++;
-    point.inner = 0;
+    Visual_Point* point = &rend->backlog_end;
+    if (rend->attached_outer == -1) {
+        point->outer++;
+        point->inner = 0;
+    }
 
     uint64_t process_id =
         (rend->attached_outer == -1 ? backlogs.len : rend->visbacklogs[rend->attached_outer]->id);
@@ -349,12 +346,10 @@ static void render_prompt(SDL_Surface* window_surface,
     uint32_t background = SDL_MapRGB(window_surface->format, bg_color.r, bg_color.g, bg_color.b);
 
     if (rend->attached_outer == -1) {
-        render_string(window_surface, rend, &point, background, cfg.info_fg_color,
+        render_string(window_surface, rend, point, background, cfg.info_fg_color,
                       get_wd(&shell->local), true);
-        render_string(window_surface, rend, &point, background, cfg.backlog_fg_color,
-                      prompt->prefix, true);
-    } else {
-        render_string(window_surface, rend, &point, background, cfg.backlog_fg_color, "> ", true);
+        render_string(window_surface, rend, point, background, cfg.backlog_fg_color, prompt->prefix,
+                      true);
     }
 
     bool drawn_cursor = false;
@@ -365,7 +360,7 @@ static void render_prompt(SDL_Surface* window_surface,
         bool draw_cursor = (!drawn_cursor && i >= prompt->cursor);
         SDL_Rect cursor_rect;
         if (draw_cursor) {
-            cursor_rect = {point.x * rend->font_width - 1, point.y * rend->font_height, 2,
+            cursor_rect = {point->x * rend->font_width - 1, point->y * rend->font_height, 2,
                            rend->font_height};
             SDL_FillRect(window_surface, &cursor_rect, cursor_color);
             drawn_cursor = true;
@@ -376,18 +371,18 @@ static void render_prompt(SDL_Surface* window_surface,
         i += make_string_code_point(seq, prompt->text, i);
 
         // Render this code point.
-        render_code_point(window_surface, rend, &point, background, cfg.prompt_fg_color, false, seq,
+        render_code_point(window_surface, rend, point, background, cfg.prompt_fg_color, false, seq,
                           true);
 
         // Draw cursor.
-        if (draw_cursor && point.x != 0) {
+        if (draw_cursor && point->x != 0) {
             SDL_FillRect(window_surface, &cursor_rect, cursor_color);
         }
     }
 
     // Fill rest of line.
-    Visual_Point eol = point;
-    render_code_point(window_surface, rend, &point, background, cfg.backlog_fg_color, false, "\n",
+    Visual_Point eol = *point;
+    render_code_point(window_surface, rend, point, background, cfg.backlog_fg_color, false, "\n",
                       true);
 
     if (prompt->cursor == prompt->text.len) {
@@ -399,21 +394,21 @@ static void render_prompt(SDL_Surface* window_surface,
 
     if (prompt->history_searching) {
         cz::Str prefix = "HISTORY: ";
-        render_string(window_surface, rend, &point, background, cfg.backlog_fg_color, prefix, true);
+        render_string(window_surface, rend, point, background, cfg.backlog_fg_color, prefix, true);
         cz::Vector<cz::Str>* history = prompt_history(prompt, rend->attached_outer != -1);
         if (prompt->history_counter < history->len) {
             cz::Str hist = history->get(prompt->history_counter);
-            render_string(window_surface, rend, &point, background, cfg.backlog_fg_color, hist,
+            render_string(window_surface, rend, point, background, cfg.backlog_fg_color, hist,
                           true);
         }
 
-        render_code_point(window_surface, rend, &point, background, cfg.backlog_fg_color, false,
+        render_code_point(window_surface, rend, point, background, cfg.backlog_fg_color, false,
                           "\n", true);
     }
 
     if (prompt->completion.is) {
         cz::Str prefix = "Completions: \n";
-        render_string(window_surface, rend, &point, background, cfg.backlog_fg_color, prefix, true);
+        render_string(window_surface, rend, point, background, cfg.backlog_fg_color, prefix, true);
         size_t longest_entry = 0;
         for (int i = 0; i < prompt->completion.results.len; i++) {
             longest_entry = cz::max(longest_entry, prompt->completion.results[i].len);
@@ -428,22 +423,22 @@ static void render_prompt(SDL_Surface* window_surface,
                 // well because spaces will be invisible otherwise.
                 color = cfg.selected_completion_fg_color;
             }
-            render_string(window_surface, rend, &point, background, color, result, true);
+            render_string(window_surface, rend, point, background, color, result, true);
 
             for (size_t padding = result.len; padding < longest_entry + 1; padding++) {
-                render_code_point(window_surface, rend, &point, background, cfg.backlog_fg_color,
+                render_code_point(window_surface, rend, point, background, cfg.backlog_fg_color,
                                   false, " ", true);
             }
 
             chars_on_line += longest_entry + 1;
             if (chars_on_line + longest_entry + 1 > rend->window_cols) {
-                render_code_point(window_surface, rend, &point, background, cfg.backlog_fg_color,
+                render_code_point(window_surface, rend, point, background, cfg.backlog_fg_color,
                                   false, "\n", true);
                 chars_on_line = 0;
             }
         }
         if (chars_on_line != 0) {
-            render_code_point(window_surface, rend, &point, background, cfg.backlog_fg_color, false,
+            render_code_point(window_surface, rend, point, background, cfg.backlog_fg_color, false,
                               "\n", true);
         }
     }
@@ -536,8 +531,15 @@ static void render_frame(SDL_Window* window,
     rend->selection.bg_color = SDL_MapRGB(window_surface->format, cfg.selection_bg_color.r,
                                           cfg.selection_bg_color.g, cfg.selection_bg_color.b);
 
-    render_backlogs(window_surface, rend, shell, now);
-    render_prompt(window_surface, rend, prompt, backlogs, shell);
+    for (size_t i = rend->backlog_start.outer; i < rend->visbacklogs.len; ++i) {
+        if (!render_backlog(window_surface, rend, shell, prompt, backlogs, now,
+                            rend->visbacklogs[i], i)) {
+            break;
+        }
+    }
+
+    if (rend->attached_outer == -1)
+        render_prompt(window_surface, rend, prompt, backlogs, shell);
 
     {
         const SDL_Rect rects[] = {{0, 0, window_surface->w, window_surface->h}};
@@ -1568,6 +1570,18 @@ static void ensure_end_of_selected_process_on_screen(Render_State* rend,
     }
 }
 
+static bool is_selected_backlog_on_screen(Render_State* rend, uint64_t selected_outer) {
+    if (rend->backlog_start.outer > selected_outer)
+        return false;
+
+    Visual_Point backup = rend->backlog_start;
+    scroll_down(rend, rend->window_rows - 1);
+    Visual_Point new_start = rend->backlog_start;
+    rend->backlog_start = backup;
+
+    return (selected_outer <= new_start.outer);
+}
+
 static bool handle_scroll_commands(Shell_State* shell,
                                    Prompt_State* prompt,
                                    cz::Slice<Backlog_State*> backlogs,
@@ -1604,11 +1618,12 @@ static bool handle_scroll_commands(Shell_State* shell,
         scroll_to_end_of_selected_process(rend, rend->selected_outer);
         scroll_mode = AUTO_SCROLL;
     } else if (mod == (KMOD_CTRL | KMOD_ALT) && key == SDLK_b) {
-        if (rend->scroll_mode == MANUAL_SCROLL) {
+        if (rend->scroll_mode == MANUAL_SCROLL &&
+            !is_selected_backlog_on_screen(rend, rend->selected_outer)) {
             // Reset the selection to the first visible window and scroll to its start.
             rend->selected_outer = rend->backlog_start.outer;
             if (rend->selected_outer == rend->visbacklogs.len)
-                rend->selected_outer = -1;
+                rend->selected_outer = rend->attached_outer;
             rend->backlog_start.inner = 0;
         } else {
             // Select the process before the currently selected
@@ -1622,19 +1637,19 @@ static bool handle_scroll_commands(Shell_State* shell,
         }
         scroll_mode = PROMPT_SCROLL;
     } else if (mod == (KMOD_CTRL | KMOD_ALT) && key == SDLK_f) {
-        if (rend->scroll_mode == MANUAL_SCROLL) {
-            // Show the next window.
-            if (rend->selected_outer < rend->visbacklogs.len)
-                rend->selected_outer++;
-            if (rend->selected_outer == rend->visbacklogs.len)
-                rend->selected_outer = -1;
-            ensure_selected_process_on_screen(rend);
+        if (rend->scroll_mode == MANUAL_SCROLL &&
+            !is_selected_backlog_on_screen(rend, rend->selected_outer)) {
+            // Reset the selection to the second visible window and scroll to its start.
+            rend->selected_outer = rend->backlog_start.outer + 1;
+            if (rend->selected_outer >= rend->visbacklogs.len)
+                rend->selected_outer = rend->attached_outer;
+            rend->backlog_start.inner = 0;
         } else {
             // Select the next process, or the prompt if this is the last process.
             if (rend->selected_outer != -1 && rend->selected_outer + 1 < rend->visbacklogs.len)
-                ++rend->selected_outer;
+                rend->selected_outer++;
             else
-                rend->selected_outer = -1;
+                rend->selected_outer = rend->attached_outer;
             ensure_selected_process_on_screen(rend);
         }
         scroll_mode = PROMPT_SCROLL;
@@ -2170,7 +2185,8 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
                 if (rend->attached_outer == -1) {
                     // If the selected process is still running then attach to it.
                     // Otherwise, attach to the most recently launched process.
-                    if (rend->selected_outer != -1 && !rend->visbacklogs[rend->selected_outer]->done) {
+                    if (rend->selected_outer != -1 &&
+                        !rend->visbacklogs[rend->selected_outer]->done) {
                         rend->attached_outer = rend->selected_outer;
                     } else {
                         for (size_t i = rend->visbacklogs.len; i-- > 0;) {
@@ -2392,7 +2408,6 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
 
         case SDL_MOUSEWHEEL: {
             rend->scroll_mode = MANUAL_SCROLL;
-            rend->attached_outer = -1;
 
             if (event.wheel.direction == SDL_MOUSEWHEEL_FLIPPED) {
                 event.wheel.y *= -1;
@@ -2462,12 +2477,12 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
 
                 bool holding_shift = (mods & KMOD_SHIFT);
                 if (!holding_shift)
-                    rend->selected_outer = -1;
+                    rend->selected_outer = rend->attached_outer;
                 rend->scroll_mode = MANUAL_SCROLL;
                 rend->selection.type = SELECT_DISABLED;
 
                 if (!rend->grid_is_valid) {
-                    rend->selected_outer = -1;
+                    rend->selected_outer = rend->attached_outer;
                     break;
                 }
 
