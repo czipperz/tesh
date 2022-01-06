@@ -54,8 +54,6 @@ struct Shell_State {
     Shell_Local local;
 
     cz::Vector<Running_Script> scripts;
-    uint64_t selected_process = ~0ull;
-    uint64_t attached_process = ~0ull;
 
     cz::Vector<cz::Buffer_Array> arenas;
 };
@@ -89,9 +87,9 @@ void recycle_arena(Shell_State* shell, cz::Buffer_Array arena);
 void append_node(cz::Allocator allocator, cz::String* string, Shell_Node* node, bool add_semicolon);
 
 /// Get the attached process, or `nullptr` if there is none.
-Running_Script* attached_process(Shell_State* shell);
+Running_Script* attached_process(Shell_State* shell, Render_State* rend);
 /// Get the selected process, or `nullptr` if there is none.
-Running_Script* selected_process(Shell_State* shell);
+Running_Script* selected_process(Shell_State* shell, Render_State* rend);
 
 /// Find a process by id, or `nullptr` if no matches.
 Running_Script* lookup_process(Shell_State* shell, uint64_t id);

@@ -325,21 +325,20 @@ void recycle_process(Shell_State* shell, Running_Script* script) {
     if (!script->root.fg_finished)
         recycle_arena(shell, script->root.fg.arena);
 
-    if (script->id == shell->attached_process)
-        shell->attached_process = -1;
-
     shell->scripts.remove(script - shell->scripts.elems);
 }
 
-Running_Script* attached_process(Shell_State* shell) {
-    if (shell->attached_process == -1)
+Running_Script* attached_process(Shell_State* shell, Render_State* rend) {
+    if (rend->attached_outer == -1)
         return nullptr;
-    return lookup_process(shell, shell->attached_process);
+    Backlog_State* backlog = rend->visbacklogs[rend->attached_outer];
+    return lookup_process(shell, backlog->id);
 }
-Running_Script* selected_process(Shell_State* shell) {
-    if (shell->selected_process == -1)
+Running_Script* selected_process(Shell_State* shell, Render_State* rend) {
+    if (rend->selected_outer == -1)
         return nullptr;
-    return lookup_process(shell, shell->selected_process);
+    Backlog_State* backlog = rend->visbacklogs[rend->selected_outer];
+    return lookup_process(shell, backlog->id);
 }
 
 Running_Script* lookup_process(Shell_State* shell, uint64_t id) {

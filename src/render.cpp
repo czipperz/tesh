@@ -6,6 +6,7 @@
 #include <cz/format.hpp>
 #include <cz/string.hpp>
 
+#include "backlog.hpp"
 #include "config.hpp"
 #include "global.hpp"
 #include "unicode.hpp"
@@ -229,4 +230,14 @@ bool render_code_point(SDL_Surface* window_surface,
     }
 
     return true;
+}
+
+size_t find_visbacklog(Render_State* rend, uint64_t the_id) {
+    for (size_t i = 0; i < rend->visbacklogs.len; ++i) {
+        Backlog_State* backlog = rend->visbacklogs[i];
+        if (backlog->id == the_id) {
+            return i;
+        }
+    }
+    return -1;
 }

@@ -80,6 +80,8 @@ struct Render_State {
     // order the processes were ran in.  So store the visual order here,
     // because everything that cares about it also wants the render state.
     cz::Vector<Backlog_State*> visbacklogs;
+    uint64_t selected_outer;
+    uint64_t attached_outer;
 };
 
 void set_icon(SDL_Window* sdl_window);
@@ -98,3 +100,5 @@ bool render_code_point(SDL_Surface* window_surface,
                        const char seq[5],
                        bool set_tile);
 void resize_font(int font_size, Render_State* rend);
+
+size_t find_visbacklog(Render_State* rend, uint64_t the_id);

@@ -108,8 +108,8 @@ static void tick_pipeline(Shell_State* shell,
     for (size_t p = 0; p < pipeline->programs.len; ++p) {
         Running_Program* program = &pipeline->programs[p];
         int exit_code = 1;
-        if (tick_program(shell, local, rend, prompt, backlog, allocator, program, tty,
-                         &exit_code, force_quit)) {
+        if (tick_program(shell, local, rend, prompt, backlog, allocator, program, tty, &exit_code,
+                         force_quit)) {
             if (!pipeline->has_exit_code && p + 1 == pipeline->programs.len) {
                 pipeline->has_exit_code = true;
                 pipeline->last_exit_code = exit_code;
@@ -200,8 +200,7 @@ static bool tick_program(Shell_State* shell,
     case Running_Program::INVALID: {
         auto& builtin = program->v.builtin;
         auto& st = builtin.st.invalid;
-        (void)builtin.err.write(
-            cz::format(temp_allocator, "tesh: ", st.m1, ": ", st.m2, '\n'));
+        (void)builtin.err.write(cz::format(temp_allocator, "tesh: ", st.m1, ": ", st.m2, '\n'));
         goto finish_builtin;
     } break;
 
@@ -653,15 +652,26 @@ static bool tick_program(Shell_State* shell,
     case Running_Program::ATTACH: {
         uint64_t this_process = backlog->id;
         rend->scroll_mode = AUTO_SCROLL;
-        shell->selected_process = this_process;
-        shell->attached_process = this_process;
+
+        // Reorder the attached process to be last.
+        size_t visindex = find_visbacklog(rend, this_process);
+        if (visindex != -1) {
+            CZ_DEBUG_ASSERT(rend->visbacklogs[visindex]->id == backlog->id);
+            rend->visbacklogs.remove(visindex);
+            rend->visbacklogs.push(backlog);
+            rend->selected_outer = rend->visbacklogs.len - 1;
+            rend->attached_outer = rend->selected_outer;
+        }
         goto finish_builtin;
     } break;
 
     case Running_Program::FOLLOW: {
         uint64_t this_process = backlog->id;
         rend->scroll_mode = AUTO_SCROLL;
-        shell->selected_process = this_process;
+
+        size_t visindex = find_visbacklog(rend, this_process);
+        if (visindex != -1)
+            rend->selected_outer = visindex;
         goto finish_builtin;
     } break;
 

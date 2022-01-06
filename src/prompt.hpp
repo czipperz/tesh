@@ -29,8 +29,6 @@ struct Prompt_State {
     size_t edit_index;
     cz::Buffer_Array edit_arena;
 
-    uint64_t process_id;
-
     uint64_t history_counter;
     cz::Vector<cz::Str> history;
     cz::Vector<cz::Str> stdin_history;
