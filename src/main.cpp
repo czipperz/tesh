@@ -2405,17 +2405,19 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
                         Visual_Tile tile = rend->grid[row * rend->window_cols + column];
                         const char* hyperlink = get_hyperlink_at(rend, *backlogs, tile);
 
-                        cz::Str command = cz::format("__tesh_open ", hyperlink);
+                        if (hyperlink) {
+                            cz::Str command = cz::format("__tesh_open ", hyperlink);
 
-                        uint64_t old_attached = shell->attached_process;
-                        uint64_t old_selected = shell->selected_process;
-                        shell->attached_process = -1;
-                        shell->selected_process = -1;
+                            uint64_t old_attached = shell->attached_process;
+                            uint64_t old_selected = shell->selected_process;
+                            shell->attached_process = -1;
+                            shell->selected_process = -1;
 
-                        submit_prompt(shell, backlogs, prompt, command, true);
+                            submit_prompt(shell, backlogs, prompt, command, true);
 
-                        shell->attached_process = old_attached;
-                        shell->selected_process = old_selected;
+                            shell->attached_process = old_attached;
+                            shell->selected_process = old_selected;
+                        }
                     }
                     break;
                 }
@@ -2928,7 +2930,7 @@ static const char* get_hyperlink_at(Render_State* rend,
                                     cz::Slice<Backlog_State*> backlogs,
                                     Visual_Tile tile) {
     const char* hyperlink = nullptr;
-    if ((SDL_GetModState() & KMOD_CTRL) && tile.outer != 0) {
+    if ((SDL_GetModState() & KMOD_CTRL) && tile.outer > 0 && tile.outer - 1 < backlogs.len) {
         Backlog_State* backlog = backlogs[tile.outer - 1];
         for (size_t event_index = 0; event_index < backlog->events.len; ++event_index) {
             Backlog_Event* event = &backlog->events[event_index];
