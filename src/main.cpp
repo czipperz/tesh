@@ -1405,6 +1405,27 @@ static bool handle_prompt_manipulation_commands(Shell_State* shell,
     } else if ((mod == KMOD_SHIFT && key == SDLK_INSERT) ||
                (mod == (KMOD_CTRL | KMOD_SHIFT) && key == SDLK_v)) {
         run_paste(prompt);
+    } else if (mod == (KMOD_CTRL | KMOD_SHIFT) && key == SDLK_d) {
+        // _d_uplicate the selected line's prompt and paste it at the cursor.
+        if (shell->selected_process != -1) {
+            Backlog_State* backlog = (*backlogs)[shell->selected_process];
+            // @PromptBacklogEventIndex
+            Backlog_Event* start = &backlog->events[2];
+            Backlog_Event* end = &backlog->events[3];
+            CZ_DEBUG_ASSERT(start->type == BACKLOG_EVENT_START_INPUT);
+            CZ_DEBUG_ASSERT(end->type == BACKLOG_EVENT_START_PROCESS);
+
+            // Copy the entire thing to a separate string for simplicity reasons.
+            // TODO: copy pieces out of the backlog at a time without temporary allocations.
+            cz::String string = {};
+            CZ_DEFER(string.drop(cz::heap_allocator()));
+            string.reserve_exact(cz::heap_allocator(), end->index - start->index);
+            for (uint64_t i = start->index; i < end->index; ++i) {
+                string.push(backlog->get(i));
+            }
+
+            insert_before(prompt, prompt->cursor, string);
+        }
     }
 
     ///////////////////////////////////////////////////////////////////////
@@ -1970,6 +1991,7 @@ static void submit_prompt(Shell_State* shell,
         push_backlog_event(backlog, BACKLOG_EVENT_START_PROCESS);
         append_text(backlog, prompt->prefix);
     }
+    // @PromptBacklogEventIndex
     push_backlog_event(backlog, BACKLOG_EVENT_START_INPUT);
     append_text(backlog, command);
     push_backlog_event(backlog, BACKLOG_EVENT_START_PROCESS);
