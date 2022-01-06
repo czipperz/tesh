@@ -2861,6 +2861,9 @@ int actual_main(int argc, char** argv) {
     submit_prompt(&shell, &rend, &backlogs, &prompt, prompt.text, true);
     prompt.text = {};
 
+    rend.attached_outer = -1;
+    rend.selected_outer = -1;
+
     while (1) {
         uint32_t start_frame = SDL_GetTicks();
 
