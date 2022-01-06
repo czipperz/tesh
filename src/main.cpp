@@ -617,12 +617,7 @@ static bool read_process_data(Shell_State* shell,
             if (!backlog->done) {
                 backlog->done = true;
                 backlog->end = std::chrono::high_resolution_clock::now();
-            }
 
-            // Wait for one second after the process ends so the pipes flush.
-            using namespace std::chrono;
-            high_resolution_clock::duration elapsed = (high_resolution_clock::now() - backlog->end);
-            if (duration_cast<milliseconds>(elapsed).count() >= 1000) {
                 // If we're attached then we auto scroll but we can hit an edge case where the
                 // final output isn't scrolled to.  So we stop halfway through the output.  I
                 // think it would be better if this just called `ensure_prompt_on_screen`.
@@ -632,7 +627,12 @@ static bool read_process_data(Shell_State* shell,
                     rend->scroll_mode = AUTO_SCROLL;
                     rend->attached_outer = -1;
                 }
+            }
 
+            // Wait for one second after the process ends so the pipes flush.
+            using namespace std::chrono;
+            high_resolution_clock::duration elapsed = (high_resolution_clock::now() - backlog->end);
+            if (duration_cast<milliseconds>(elapsed).count() >= 1000) {
                 recycle_process(shell, script);
                 finish_hyperlink(backlog);
 
@@ -2170,7 +2170,7 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
                 if (rend->attached_outer == -1) {
                     // If the selected process is still running then attach to it.
                     // Otherwise, attach to the most recently launched process.
-                    if (selected_process(shell, rend)) {
+                    if (rend->selected_outer != -1 && !rend->visbacklogs[rend->selected_outer]->done) {
                         rend->attached_outer = rend->selected_outer;
                     } else {
                         for (size_t i = rend->visbacklogs.len; i-- > 0;) {
