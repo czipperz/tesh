@@ -1575,13 +1575,13 @@ static bool handle_scroll_commands(Shell_State* shell,
         scroll_down(rend, backlogs, 1);
     } else if (mod == KMOD_ALT && key == SDLK_p) {
         scroll_up(rend, backlogs, 1);
-    } else if (mod == KMOD_ALT && key == SDLK_LESS) {
+    } else if ((mod == KMOD_ALT && key == SDLK_LESS) || (mod == KMOD_CTRL && key == SDLK_HOME)) {
         // Goto start of selected process.
         rend->backlog_start = {};
         rend->backlog_start.outer =
             (shell->selected_process == -1 ? backlogs.len : shell->selected_process);
         scroll_mode = PROMPT_SCROLL;
-    } else if (mod == KMOD_ALT && key == SDLK_GREATER) {
+    } else if ((mod == KMOD_ALT && key == SDLK_GREATER) || (mod == KMOD_CTRL && key == SDLK_END)) {
         // Goto end of selected process.
         scroll_to_end_of_selected_process(rend, backlogs, shell->selected_process);
         scroll_mode = AUTO_SCROLL;
