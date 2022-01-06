@@ -595,6 +595,7 @@ static Error run_program(Shell_State* shell,
 
     // If command is a builtin.
     if (program->type != Running_Program::PROCESS) {
+    make_builtin:
         setup_builtin(program, allocator, stdio);
 
         if (stdio.in_type == File_Type_Pipe && !stdio.in.set_non_blocking())
@@ -640,10 +641,8 @@ static Error run_program(Shell_State* shell,
 
     cz::String full_path = {};
     if (!find_in_path(local, args[0], allocator, &full_path)) {
-        cz::Str program = args[0];
-        cz::dbreak();
-        (void)program;
-        return Error_InvalidProgram;
+        program->type = Running_Program::INVALID;
+        goto make_builtin;
     }
     args[0] = full_path;
 

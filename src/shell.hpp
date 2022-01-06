@@ -207,6 +207,7 @@ struct Running_Program {
     enum Type {
         PROCESS,
         SUB,
+        INVALID,
         ECHO,
         CAT,
         EXIT,

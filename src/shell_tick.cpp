@@ -202,6 +202,13 @@ static bool tick_program(Shell_State* shell,
         }
     } break;
 
+    case Running_Program::INVALID: {
+        auto& builtin = program->v.builtin;
+        (void)builtin.err.write(
+            cz::format(temp_allocator, "tesh: cannot find in path: ", builtin.args[0], '\n'));
+        goto finish_builtin;
+    } break;
+
     case Running_Program::ECHO: {
         auto& builtin = program->v.builtin;
         auto& st = builtin.st.echo;
