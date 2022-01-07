@@ -478,11 +478,13 @@ static void auto_scroll_start_paging(Render_State* rend) {
     }
 }
 
-static void stop_selecting(Render_State* rend) {
+static bool stop_selecting(Render_State* rend) {
     if (rend->selection.type != SELECT_DISABLED) {
         rend->selection.type = SELECT_DISABLED;
         rend->complete_redraw = true;
+        return true;
     }
+    return false;
 }
 
 static void render_frame(SDL_Window* window,
@@ -2188,10 +2190,15 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
             SDL_Keycode key = event.key.keysym.sym;
 
             if (key == SDLK_ESCAPE) {
-                if (cfg.escape_closes)
+                if (cfg.escape_closes) {
                     return -1;
-                else
-                    stop_selecting(rend);
+                } else if (stop_selecting(rend)) {
+                    // We were selecting.
+                } else {
+                    // Detach and select the prompt.
+                    rend->attached_outer = -1;
+                    rend->selected_outer = rend->attached_outer;
+                }
             }
 
             if (handle_prompt_manipulation_commands(shell, prompt, backlogs, rend, mod, key)) {
@@ -2504,7 +2511,18 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
                             // TODO reorder attached to last
                             rend->attached_outer = old_attached;
                             rend->selected_outer = old_selected;
+                            break;
                         }
+
+                        // No hyperlink, so instead attach to the clicked backlog.
+                        rend->attached_outer = -1;
+                        if (tile.outer != 0) {
+                            Backlog_State* backlog = rend->visbacklogs[tile.outer - 1];
+                            if (!backlog->done) {
+                                rend->attached_outer = tile.outer - 1;
+                            }
+                        }
+                        rend->selected_outer = rend->attached_outer;
                     }
                     break;
                 }
