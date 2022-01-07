@@ -26,8 +26,10 @@ struct Config_State {
     // 256 colors.
     const SDL_Color* theme;  // [256]
     uint8_t backlog_fg_color;
+    uint8_t directory_fg_color;
     uint8_t prompt_fg_color;
-    uint8_t info_fg_color;
+    uint8_t info_success_fg_color;
+    uint8_t info_failure_fg_color;
     uint8_t info_running_fg_color;
     uint8_t selection_fg_color;
     uint8_t selected_completion_fg_color;

@@ -179,7 +179,7 @@ static void render_info(SDL_Surface* window_surface,
                         Visual_Point info_end,
                         uint32_t background,
                         cz::Str info,
-                        bool done) {
+                        Backlog_State* backlog) {
     if (rend->selection.type == SELECT_REGION || rend->selection.type == SELECT_FINISHED) {
         bool inside_start = ((info_end.outer > rend->selection.start.outer - 1) ||
                              (info_end.outer == rend->selection.start.outer - 1 &&
@@ -191,7 +191,13 @@ static void render_info(SDL_Surface* window_surface,
             return;
     }
 
-    uint8_t foreground = (done ? cfg.info_fg_color : cfg.info_running_fg_color);
+    uint8_t foreground = cfg.info_running_fg_color;
+    if (backlog->done) {
+        if (backlog->exit_code == 0)
+            foreground = cfg.info_success_fg_color;
+        else
+            foreground = cfg.info_failure_fg_color;
+    }
     render_string(window_surface, rend, &info_start, background, foreground, info, false);
 }
 
@@ -252,7 +258,7 @@ static bool render_backlog(SDL_Surface* window_surface,
             } else if (event->type == BACKLOG_EVENT_START_INPUT) {
                 fg_color = cfg.prompt_fg_color;
             } else if (event->type == BACKLOG_EVENT_START_DIRECTORY) {
-                fg_color = cfg.info_fg_color;
+                fg_color = cfg.directory_fg_color;
             } else if (event->type == BACKLOG_EVENT_SET_GRAPHIC_RENDITION) {
                 uint64_t gr = event->payload;
                 fg_color = (uint8_t)((gr & GR_FOREGROUND_MASK) >> GR_FOREGROUND_SHIFT);
@@ -313,7 +319,7 @@ static bool render_backlog(SDL_Surface* window_surface,
         if (!info_has_end)
             info_end = info_start;
         info_start.x = info_x_start;
-        render_info(window_surface, rend, info_start, info_end, background, info, backlog->done);
+        render_info(window_surface, rend, info_start, info_end, background, info, backlog);
     }
 
     bg_color = {};
@@ -350,7 +356,7 @@ static void render_prompt(SDL_Surface* window_surface,
     uint32_t background = SDL_MapRGB(window_surface->format, bg_color.r, bg_color.g, bg_color.b);
 
     if (rend->attached_outer == -1) {
-        render_string(window_surface, rend, point, background, cfg.info_fg_color,
+        render_string(window_surface, rend, point, background, cfg.directory_fg_color,
                       get_wd(&shell->local), true);
         render_string(window_surface, rend, point, background, cfg.backlog_fg_color, prompt->prefix,
                       true);
@@ -2758,8 +2764,10 @@ static void load_default_configuration() {
 
     cfg.backlog_fg_color = 7;
     cfg.prompt_fg_color = 51;
-    cfg.info_fg_color = 201;
-    cfg.info_running_fg_color = 154;
+    cfg.directory_fg_color = 201;
+    cfg.info_success_fg_color = 154;
+    cfg.info_failure_fg_color = 160;
+    cfg.info_running_fg_color = 201;
     cfg.selection_fg_color = 7;
     cfg.selection_bg_color = {0x66, 0x00, 0x66, 0xff};
     cfg.selected_completion_fg_color = 201;
