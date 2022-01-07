@@ -1583,6 +1583,9 @@ static void ensure_end_of_selected_process_on_screen(Render_State* rend,
 }
 
 static bool is_selected_backlog_on_screen(Render_State* rend, uint64_t selected_outer) {
+    if (selected_outer == -1)
+        selected_outer = rend->visbacklogs.len;
+
     if (rend->backlog_start.outer > selected_outer)
         return false;
 
