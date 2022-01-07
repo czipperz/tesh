@@ -57,6 +57,10 @@ static void render_prompt(SDL_Surface* window_surface,
                           Prompt_State* prompt,
                           cz::Slice<Backlog_State*> backlogs,
                           Shell_State* shell);
+static void kill_process(Shell_State* shell,
+                         Render_State* rend,
+                         Backlog_State* backlog,
+                         Running_Script* script);
 
 ///////////////////////////////////////////////////////////////////////////////
 // Renderer methods
@@ -1659,6 +1663,29 @@ static bool handle_scroll_commands(Shell_State* shell,
         ensure_selected_process_on_screen(rend);
         if (rend->attached_outer == rend->selected_outer)
             rend->attached_outer = -1;
+    } else if (mod == KMOD_CTRL && key == SDLK_DELETE && rend->selected_outer != -1) {
+        Backlog_State* backlog = rend->visbacklogs[rend->selected_outer];
+
+        Running_Script* script = lookup_process(shell, backlog->id);
+        if (script) {
+            kill_process(shell, rend, backlog, script);
+        }
+
+        cleanup_backlog(backlog);
+        rend->visbacklogs.remove(rend->selected_outer);
+        backlogs[backlog->id] = nullptr;
+
+        // Detach if attached to killed.
+        if (rend->attached_outer == rend->selected_outer)
+            rend->attached_outer = -1;
+
+        // Fix attached off by one error.
+        if (rend->attached_outer != -1 && rend->attached_outer > rend->selected_outer)
+            rend->attached_outer--;
+
+        // Fix selected.
+        if (rend->selected_outer == rend->visbacklogs.len)
+            rend->selected_outer = -1;
     } else {
         return false;
     }
@@ -1984,6 +2011,28 @@ static bool write_selected_backlog_to_file(Shell_State* shell,
     return true;
 }
 
+static void kill_process(Shell_State* shell,
+                         Render_State* rend,
+                         Backlog_State* backlog,
+                         Running_Script* script) {
+#ifdef TRACY_ENABLE
+    // cz::String message =
+    //     cz::format(temp_allocator, "End: ", script->root.fg.pipeline.command_line);
+    // TracyMessage(message.buffer, message.len);
+#endif
+
+    backlog->exit_code = -1;
+    backlog->done = true;
+    backlog->end = std::chrono::high_resolution_clock::now();
+    finish_hyperlink(backlog);
+    recycle_process(shell, script);
+
+    // Detach if the backlog is done.
+    if (rend->attached_outer != -1 && rend->visbacklogs[rend->attached_outer]->done) {
+        rend->attached_outer = -1;
+    }
+}
+
 static void submit_prompt(Shell_State* shell,
                           Render_State* rend,
                           cz::Vector<Backlog_State*>* backlogs,
@@ -2026,22 +2075,7 @@ static void submit_prompt(Shell_State* shell,
         }
     } else {
         if (script) {
-#ifdef TRACY_ENABLE
-            // cz::String message =
-            //     cz::format(temp_allocator, "End: ", script->root.fg.pipeline.command_line);
-            // TracyMessage(message.buffer, message.len);
-#endif
-
-            backlog->exit_code = -1;
-            backlog->done = true;
-            backlog->end = std::chrono::high_resolution_clock::now();
-            finish_hyperlink(backlog);
-            recycle_process(shell, script);
-
-            // Detach if the backlog is done.
-            if (rend->attached_outer != -1 && rend->visbacklogs[rend->attached_outer]->done) {
-                rend->attached_outer = -1;
-            }
+            kill_process(shell, rend, backlog, script);
         } else {
             backlog->done = true;
             backlog->cancelled = true;
@@ -2948,6 +2982,7 @@ static Backlog_State* push_backlog(cz::Vector<Backlog_State*>* backlogs, uint64_
     *backlog = {};
 
     backlog->id = id;
+    backlog->arena.init();
     backlog->max_length = cfg.max_length;
     backlog->buffers.reserve(cz::heap_allocator(), 1);
     backlog->buffers.push(buffer);

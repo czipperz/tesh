@@ -2,6 +2,7 @@
 
 #include <stdint.h>
 #include <chrono>
+#include <cz/buffer_array.hpp>
 #include <cz/string.hpp>
 #include <cz/vector.hpp>
 
@@ -13,6 +14,8 @@ struct Backlog_Event;
 
 struct Backlog_State {
     uint64_t id;
+
+    cz::Buffer_Array arena;
 
     uint64_t max_length;
     cz::Vector<char*> buffers;
@@ -36,6 +39,7 @@ struct Backlog_State {
 
 uint64_t append_text(Backlog_State* backlog, cz::Str text);
 void backlog_flush(Backlog_State* backlog);
+void cleanup_backlog(Backlog_State* backlog);
 
 ///////////////////////////////////////////////////////////////////////////////
 

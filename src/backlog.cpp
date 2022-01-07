@@ -4,15 +4,43 @@
 #include <cz/parse.hpp>
 #include "global.hpp"
 
+///////////////////////////////////////////////////////////////////////////////
+// Module Configuration
+///////////////////////////////////////////////////////////////////////////////
+
 #define OUTER_INDEX(index) ((index) >> 12)
 #define INNER_INDEX(index) ((index)&0xfff)
 
+///////////////////////////////////////////////////////////////////////////////
+// Forward Declarations
+///////////////////////////////////////////////////////////////////////////////
+
 static void truncate_to(Backlog_State* backlog, uint64_t new_length);
+
+///////////////////////////////////////////////////////////////////////////////
+// Module Code
+///////////////////////////////////////////////////////////////////////////////
+
+void cleanup_backlog(Backlog_State* backlog) {
+    for (size_t i = 0; i < backlog->buffers.len; ++i) {
+        char* buffer = backlog->buffers[i];
+        cz::heap_allocator().dealloc({buffer, BACKLOG_BUFFER_SIZE});
+    }
+    backlog->buffers.drop(cz::heap_allocator());
+    backlog->lines.drop(cz::heap_allocator());
+    backlog->events.drop(cz::heap_allocator());
+    backlog->escape_backlog.drop(cz::heap_allocator());
+    backlog->arena.drop();
+}
 
 char Backlog_State::get(size_t i) {
     CZ_DEBUG_ASSERT(i < length);
     return buffers[OUTER_INDEX(i)][INNER_INDEX(i)];
 }
+
+///////////////////////////////////////////////////////////////////////////////
+// Module Code - append chunk
+///////////////////////////////////////////////////////////////////////////////
 
 static int64_t append_chunk(Backlog_State* backlog, cz::Str text) {
     if (backlog->length == backlog->max_length)
@@ -55,6 +83,10 @@ finish:
     backlog->length += text.len;
     return text.len;
 }
+
+///////////////////////////////////////////////////////////////////////////////
+// Module Code - Escape sequences - Utility
+///////////////////////////////////////////////////////////////////////////////
 
 static bool ensure_char(Backlog_State* backlog, size_t it, cz::Str fresh, size_t* skip) {
     if (it < backlog->escape_backlog.len)
@@ -142,6 +174,10 @@ static void set_graphics_rendition(Backlog_State* backlog, uint64_t graphics_ren
     backlog->events.push(event);
     backlog->graphics_rendition = graphics_rendition;
 }
+
+///////////////////////////////////////////////////////////////////////////////
+// Module Code - Escape sequences - Parsing complicated ones
+///////////////////////////////////////////////////////////////////////////////
 
 static bool parse_extended_color(uint64_t* color, cz::Slice<int32_t> args, size_t* i) {
     if (*i + 2 >= args.len) {
@@ -253,8 +289,7 @@ static bool parse_hyperlink(Backlog_State* backlog, cz::Str fresh, size_t* skip)
         }
 
         cz::Str url = text->slice(5, text->len - 1);
-        // TODO: maybe don't permanently allocate this?  Right now it is permanent so it's fine.
-        event.payload = (uint64_t)url.clone_null_terminate(permanent_allocator).buffer;
+        event.payload = (uint64_t)url.clone_null_terminate(backlog->arena.allocator()).buffer;
         event.type = BACKLOG_EVENT_START_HYPERLINK;
     }
 
@@ -288,6 +323,10 @@ static bool parse_set_window_title(Backlog_State* backlog, cz::Str fresh, size_t
     // Ignore the event.
     return true;
 }
+
+///////////////////////////////////////////////////////////////////////////////
+// Module Code - Escape sequences - Wrapper and simple ones
+///////////////////////////////////////////////////////////////////////////////
 
 /// Attempt to process an escape sequence.  Returns `true` if it
 /// was processed, `false` if we need more input to process it.
@@ -533,6 +572,10 @@ static void truncate_to(Backlog_State* backlog, uint64_t new_length) {
         backlog->buffers.pop();
     }
 }
+
+///////////////////////////////////////////////////////////////////////////////
+// Module Code - Escape sequences - Main loop
+///////////////////////////////////////////////////////////////////////////////
 
 uint64_t append_text(Backlog_State* backlog, cz::Str text) {
     const char escape = 0x1b;
