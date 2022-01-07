@@ -2199,6 +2199,7 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
                     rend->attached_outer = -1;
                     rend->selected_outer = rend->attached_outer;
                 }
+                continue;
             }
 
             if (handle_prompt_manipulation_commands(shell, prompt, backlogs, rend, mod, key)) {
