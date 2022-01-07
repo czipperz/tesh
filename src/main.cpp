@@ -2027,9 +2027,9 @@ static void submit_prompt(Shell_State* shell,
     } else {
         if (script) {
 #ifdef TRACY_ENABLE
-            cz::String message =
-                cz::format(temp_allocator, "End: ", script->root.fg.pipeline.command_line);
-            TracyMessage(message.buffer, message.len);
+            // cz::String message =
+            //     cz::format(temp_allocator, "End: ", script->root.fg.pipeline.command_line);
+            // TracyMessage(message.buffer, message.len);
 #endif
 
             backlog->exit_code = -1;
