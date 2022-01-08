@@ -1703,6 +1703,32 @@ static bool handle_scroll_commands(Shell_State* shell,
             ensure_selected_process_on_screen(rend);
         }
         scroll_mode = PROMPT_SCROLL;
+    } else if (mod == (KMOD_CTRL | KMOD_ALT | KMOD_SHIFT) && key == SDLK_b) {
+        // Shift backward the selected backlog.
+        if (rend->selected_outer != -1 && rend->selected_outer > 0) {
+            std::swap(rend->visbacklogs[rend->selected_outer],
+                      rend->visbacklogs[rend->selected_outer - 1]);
+            if (rend->attached_outer == rend->selected_outer)
+                rend->attached_outer = rend->selected_outer - 1;
+            else if (rend->attached_outer == rend->selected_outer - 1)
+                rend->attached_outer = rend->selected_outer;
+            --rend->selected_outer;
+        }
+        ensure_selected_process_on_screen(rend);
+        scroll_mode = PROMPT_SCROLL;
+    } else if (mod == (KMOD_CTRL | KMOD_ALT | KMOD_SHIFT) && key == SDLK_f) {
+        // Shift forward the selected backlog.
+        if (rend->selected_outer != -1 && rend->selected_outer + 1 < rend->visbacklogs.len) {
+            std::swap(rend->visbacklogs[rend->selected_outer],
+                      rend->visbacklogs[rend->selected_outer + 1]);
+            if (rend->attached_outer == rend->selected_outer)
+                rend->attached_outer = rend->selected_outer + 1;
+            else if (rend->attached_outer == rend->selected_outer + 1)
+                rend->attached_outer = rend->selected_outer;
+            ++rend->selected_outer;
+        }
+        ensure_selected_process_on_screen(rend);
+        scroll_mode = PROMPT_SCROLL;
     } else if (mod == 0 && key == SDLK_TAB && rend->selected_outer != -1) {
         Backlog_State* backlog = rend->visbacklogs[rend->selected_outer];
         backlog->render_collapsed = !backlog->render_collapsed;
