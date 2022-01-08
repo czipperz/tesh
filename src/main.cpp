@@ -2128,13 +2128,14 @@ static void kill_process(Shell_State* shell,
     }
 }
 
-static void submit_prompt(Shell_State* shell,
+static bool submit_prompt(Shell_State* shell,
                           Render_State* rend,
                           cz::Vector<Backlog_State*>* backlogs,
                           Prompt_State* prompt,
                           cz::Str command,
-                          bool submit) {
-    Running_Script* script = attached_process(shell, rend);
+                          bool submit,
+                          bool allow_attached) {
+    Running_Script* script = (allow_attached ? attached_process(shell, rend) : nullptr);
     uint64_t process_id = (script ? script->id : backlogs->len);
     Backlog_State* backlog;
     if (script) {
@@ -2160,14 +2161,8 @@ static void submit_prompt(Shell_State* shell,
             (void)tty_write(&script->tty, message);
         } else {
             cz::Buffer_Array arena = alloc_arena(shell);
-            cz::String script = command.clone_null_terminate(arena.allocator());
-            if (run_script(shell, backlog, arena, script)) {
-                if (cfg.on_spawn_attach) {
-                    rend->attached_outer = rend->visbacklogs.len - 1;
-                    prompt->history_counter = prompt->stdin_history.len;
-                }
-            }
-            rend->selected_outer = rend->visbacklogs.len - 1;
+            cz::String command2 = command.clone_null_terminate(arena.allocator());
+            return run_script(shell, backlog, arena, command2);
         }
     } else {
         if (script) {
@@ -2177,38 +2172,43 @@ static void submit_prompt(Shell_State* shell,
             backlog->cancelled = true;
         }
     }
+    return true;
 }
 
 static void user_submit_prompt(Render_State* rend,
                                Shell_State* shell,
                                cz::Vector<Backlog_State*>* backlogs,
                                Prompt_State* prompt,
-                               bool submit) {
-    rend->scroll_mode = AUTO_SCROLL;
+                               cz::Str command,
+                               bool submit,
+                               bool attached) {
+    cz::Vector<cz::Str>* history = prompt_history(prompt, attached);
 
-    if (submit && rend->attached_outer == -1)
+    bool starting_script = (submit && !attached);
+    if (starting_script)
         rend->scroll_mode = cfg.on_spawn_scroll_mode;
+    else
+        rend->scroll_mode = AUTO_SCROLL;
 
-    {
-        cz::Vector<cz::Str>* history = prompt_history(prompt, rend->attached_outer != -1);
-        resolve_history_searching(prompt, history);
+    bool success = submit_prompt(shell, rend, backlogs, prompt, command, submit, attached);
+    if (starting_script) {
+        // Starting a new script (enter key while detached).
+        if (success) {
+            if (cfg.on_spawn_attach) {
+                rend->attached_outer = rend->visbacklogs.len - 1;
+                prompt->history_counter = prompt->stdin_history.len;
+            }
+        }
+        rend->selected_outer = rend->visbacklogs.len - 1;
     }
-
-    submit_prompt(shell, rend, backlogs, prompt, prompt->text, submit);
 
     // Push the history entry to either the stdin or the shell history list.
-    cz::Vector<cz::Str>* history = prompt_history(prompt, rend->attached_outer != -1);
-    if (prompt->text.len > 0) {
-        if (history->len == 0 || history->last() != prompt->text) {
+    if (command.len > 0) {
+        if (history->len == 0 || history->last() != command) {
             history->reserve(cz::heap_allocator(), 1);
-            history->push(prompt->text.clone(prompt->history_arena.allocator()));
+            history->push(command.clone(prompt->history_arena.allocator()));
         }
     }
-    prompt->history_counter = history->len;
-
-    stop_merging_edits(prompt);
-    stop_completing(prompt);
-    prompt->cursor = 0;
 
     ensure_prompt_on_screen(rend);
 }
@@ -2310,7 +2310,20 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
             if ((mod == KMOD_CTRL && event.key.keysym.sym == SDLK_c) ||
                 event.key.keysym.sym == SDLK_RETURN) {
                 bool submit = (event.key.keysym.sym == SDLK_RETURN);
-                user_submit_prompt(rend, shell, backlogs, prompt, submit);
+                bool attached = (rend->attached_outer != -1);
+
+                cz::Vector<cz::Str>* history = prompt_history(prompt, attached);
+                resolve_history_searching(prompt, history);
+
+                user_submit_prompt(rend, shell, backlogs, prompt, prompt->text, submit, attached);
+
+                history = prompt_history(prompt, attached);
+                prompt->history_counter = history->len;
+
+                stop_merging_edits(prompt);
+                stop_completing(prompt);
+                prompt->cursor = 0;
+
                 clear_undo_tree(prompt);
                 prompt->text.len = 0;
                 ++num_events;
@@ -2387,19 +2400,9 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
                 char temp_path[L_tmpnam];
                 if (tmpnam(temp_path)) {
                     if (write_selected_backlog_to_file(shell, prompt, rend, temp_path)) {
-                        size_t old_attached = rend->attached_outer;
-                        size_t old_selected = rend->selected_outer;
-
                         cz::Str command = cz::format(temp_allocator, "__tesh_edit ", temp_path);
-
-                        rend->attached_outer = -1;
-                        rend->selected_outer = -1;
-
-                        submit_prompt(shell, rend, backlogs, prompt, command, true);
-
+                        submit_prompt(shell, rend, backlogs, prompt, command, true, false);
                         // TODO reorder attached to last
-                        rend->attached_outer = old_attached;
-                        rend->selected_outer = old_selected;
                     }
                 }
                 continue;
@@ -2474,21 +2477,12 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
 
                 Shell_Node* value;
                 if (get_alias_or_function(&shell->local, name, name, &value)) {
-                    cz::String old_text = prompt->text;
-                    size_t old_cursor = prompt->cursor;
-
-                    prompt->text = {};
-                    append_node(cz::heap_allocator(), &prompt->text, value,
+                    cz::String command = {};
+                    append_node(temp_allocator, &command, value,
                                 /*add_semicolon=*/false);
-                    prompt->cursor = 0;
 
-                    user_submit_prompt(rend, shell, backlogs, prompt, true);
+                    user_submit_prompt(rend, shell, backlogs, prompt, command, true, false);
                     ++num_events;
-
-                    prompt->text.drop(cz::heap_allocator());
-                    prompt->text = old_text;
-                    prompt->cursor = old_cursor;
-
                     continue;
                 }
             }
@@ -2599,17 +2593,8 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
 
                         if (hyperlink) {
                             cz::Str command = cz::format("__tesh_open ", hyperlink);
-
-                            size_t old_attached = rend->attached_outer;
-                            size_t old_selected = rend->selected_outer;
-                            rend->attached_outer = -1;
-                            rend->selected_outer = -1;
-
-                            submit_prompt(shell, rend, backlogs, prompt, command, true);
-
+                            submit_prompt(shell, rend, backlogs, prompt, command, true, false);
                             // TODO reorder attached to last
-                            rend->attached_outer = old_attached;
-                            rend->selected_outer = old_selected;
                             break;
                         }
 
@@ -3027,13 +3012,11 @@ int actual_main(int argc, char** argv) {
     rend.attached_outer = -1;
     rend.selected_outer = -1;
 
-    // Start running ~/.teshrc.
-    prompt.text = cz::format(temp_allocator, "source ~/.teshrc");
-    submit_prompt(&shell, &rend, &backlogs, &prompt, prompt.text, true);
-    prompt.text = {};
-
-    rend.attached_outer = -1;
-    rend.selected_outer = -1;
+    {
+        // Start running ~/.teshrc.
+        cz::String source_command = cz::format(temp_allocator, "source ~/.teshrc");
+        submit_prompt(&shell, &rend, &backlogs, &prompt, source_command, true, false);
+    }
 
     while (1) {
         uint32_t start_frame = SDL_GetTicks();
