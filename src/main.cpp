@@ -1203,6 +1203,23 @@ static void start_completing(Prompt_State* prompt, Shell_State* shell) {
             }
         }
 
+        // Complete builtins.
+        if (!slash) {
+            for (size_t i = 0; i <= cfg.builtin_level; ++i) {
+                cz::Slice<const Builtin> builtins = builtin_levels[i];
+                for (size_t j = 0; j < builtins.len; ++j) {
+                    const Builtin& builtin = builtins[j];
+                    if (cfg.case_sensitive_completion
+                            ? builtin.name.starts_with(prefix)
+                            : builtin.name.starts_with_case_insensitive(prefix)) {
+                        prompt->completion.results.reserve(cz::heap_allocator(), 1);
+                        prompt->completion.results.push(builtin.name);
+                        return;
+                    }
+                }
+            }
+        }
+
         // Don't also show file completion because this
         // isn't a valid position to insert a file anyway.
         return;
