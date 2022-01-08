@@ -621,6 +621,7 @@ fail:;
     append_text(backlog, "\n");
     backlog->done = true;
     backlog->end = std::chrono::high_resolution_clock::now();
+    // Decrement refcount in caller.
 
     recycle_arena(shell, arena);
     return false;
@@ -648,7 +649,7 @@ static bool read_process_data(Shell_State* shell,
             if (!backlog->done) {
                 backlog->done = true;
                 backlog->end = std::chrono::high_resolution_clock::now();
-                backlog_dec_refcount(backlogs, backlog);
+                // Decrement refcount when read finishes below.
 
                 // If we're attached then we auto scroll but we can hit an edge case where the
                 // final output isn't scrolled to.  So we stop halfway through the output.  I
@@ -668,6 +669,7 @@ static bool read_process_data(Shell_State* shell,
             if (duration_cast<milliseconds>(elapsed).count() >= 1000) {
                 recycle_process(shell, script);
                 finish_hyperlink(backlog);
+                backlog_dec_refcount(backlogs, backlog);
 
                 changes = true;
                 --i;
@@ -2122,9 +2124,9 @@ static void kill_process(Shell_State* shell,
     backlog->exit_code = -1;
     backlog->done = true;
     backlog->end = std::chrono::high_resolution_clock::now();
-    backlog_dec_refcount(backlogs, backlog);
     finish_hyperlink(backlog);
     recycle_process(shell, script);
+    backlog_dec_refcount(backlogs, backlog);
 
     // Detach if the backlog is done.
     if (rend->attached_outer != -1 && rend->visbacklogs[rend->attached_outer]->done) {
@@ -2181,7 +2183,7 @@ static bool submit_prompt(Shell_State* shell,
         } else {
             backlog->done = true;
             backlog->cancelled = true;
-            backlog_dec_refcount(*backlogs, backlog);
+            // Don't decrement refcount!
         }
     }
     return true;
@@ -2413,7 +2415,7 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
                 if (tmpnam(temp_path)) {
                     if (write_selected_backlog_to_file(shell, prompt, rend, temp_path)) {
                         cz::Str command = cz::format(temp_allocator, "__tesh_edit ", temp_path);
-                        submit_prompt(shell, rend, backlogs, prompt, command, true, false);
+                        submit_prompt(shell, nullptr, backlogs, prompt, command, true, false);
                         // TODO reorder attached to last
                     }
                 }
@@ -2605,7 +2607,7 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
 
                         if (hyperlink) {
                             cz::Str command = cz::format("__tesh_open ", hyperlink);
-                            submit_prompt(shell, rend, backlogs, prompt, command, true, false);
+                            submit_prompt(shell, nullptr, backlogs, prompt, command, true, false);
                             // TODO reorder attached to last
                             break;
                         }
