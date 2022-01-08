@@ -7,15 +7,28 @@ This repository is licensed under GPL3.  If you wish to
 purchase a different license, email czipperz AT gmail DOT com.
 
 Features:
-* Unique color -- each script (a line of input) is given a unique background
-  color allowing you to easily see which script cause which outputs.
-* Auto paging -- terminal scrolls until the prompt is at the top of the screen.
-* Easily distinguished input -- all user input has a
-  teal foreground color making it easily stand out.
-* Script navigation -- `Ctrl + Alt + b` and `Ctrl + Alt + f`
-  seek backwards and forwards based on prompt.
-* Attach -- toggle having the terminal attached to a script with `Ctrl + Z`.
-  When attached, user input is sent to the process's `stdin`.
+* Separate command output
+  - You can run multiple asynchronous commands can run at once
+    without having them trample each-others' outputs or trampling the prompt.
+  - Each command has a unique background color.
+  - Commands are automatically timed and timestamped to ease comprehension.
+* Auto paging
+  - Tesh scrolls until the prompt is at the top of the screen.
+  - No more piping to `less` to be able to page through your results!
+* Easily distinguished input
+  - All user input has a teal foreground color making it easily stand out.
+* Script navigation
+  - `Ctrl + Alt + b` and `Ctrl + Alt + f` seek backwards and forwards based on prompt.
+  - Scripts can be reordered and/or hidden.
+* Detach
+  - Toggle having the terminal attached to a script with `Ctrl + Z`.
+  - When attached, user input is sent to the process's `stdin`.
+  - When detached, user input is appended to the prompt.
+* Instantaneous path, file, and history completion.
+* Customizable key bindings via shell functions.
+  - `__tesh_F7` will run when `F7` is pressed.
+  - Modifier keys `ctrl`, `alt`, and `shift` can be used as well:
+    `__tesh_ctrl_alt_shift_F7`.
 
 ## Building
 
