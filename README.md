@@ -25,6 +25,7 @@ Features:
   - When attached, user input is sent to the process's `stdin`.
   - When detached, user input is appended to the prompt.
 * Instantaneous path, file, and history completion.
+* Full prompt manipulation available when editing `stdin` (a la readline) for every command.
 * Customizable key bindings via shell functions.
   - `__tesh_F7` will run when `F7` is pressed.
   - Modifier keys `ctrl`, `alt`, and `shift` can be used as well:
