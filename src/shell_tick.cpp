@@ -51,7 +51,7 @@ static int run_ls(Process_Output out,
                   cz::Str working_directory,
                   cz::Str directory);
 
-void clear_screen(Render_State* rend, Shell_State* shell);
+void clear_screen(Render_State* rend, Shell_State* shell, Prompt_State* prompt);
 
 ///////////////////////////////////////////////////////////////////////////////
 // Tick running node
@@ -566,7 +566,7 @@ static bool tick_program(Shell_State* shell,
     } break;
 
     case Running_Program::CLEAR: {
-        clear_screen(rend, shell);
+        clear_screen(rend, shell, prompt);
         goto finish_builtin;
     } break;
 
@@ -661,6 +661,7 @@ static bool tick_program(Shell_State* shell,
             rend->visbacklogs.push(backlog);
             rend->selected_outer = rend->visbacklogs.len - 1;
             rend->attached_outer = rend->selected_outer;
+            prompt->history_counter = prompt->stdin_history.len;
         }
         goto finish_builtin;
     } break;

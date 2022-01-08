@@ -59,6 +59,7 @@ static void render_prompt(SDL_Surface* window_surface,
                           Shell_State* shell);
 static void kill_process(Shell_State* shell,
                          Render_State* rend,
+                         Prompt_State* prompt,
                          Backlog_State* backlog,
                          Running_Script* script);
 
@@ -640,6 +641,7 @@ static bool read_process_data(Shell_State* shell,
                 {
                     rend->scroll_mode = AUTO_SCROLL;
                     rend->attached_outer = -1;
+                    prompt->history_counter = prompt->history.len;
                 }
             }
 
@@ -837,13 +839,15 @@ static void scroll_up(Render_State* rend, int lines) {
     point->x = 0;
 }
 
-void clear_screen(Render_State* rend, Shell_State* shell) {
+void clear_screen(Render_State* rend, Shell_State* shell, Prompt_State* prompt) {
     rend->backlog_start = {};
     rend->backlog_start.outer = rend->visbacklogs.len;
     if (shell->scripts.len > 0)
         scroll_up(rend, 2);
     rend->complete_redraw = true;
     rend->scroll_mode = PROMPT_SCROLL;
+    if (rend->attached_outer != -1)
+        prompt->history_counter = prompt->history.len;
     rend->attached_outer = -1;
     rend->selected_outer = rend->attached_outer;
 }
@@ -1672,14 +1676,16 @@ static bool handle_scroll_commands(Shell_State* shell,
         Backlog_State* backlog = rend->visbacklogs[rend->selected_outer];
         backlog->render_collapsed = !backlog->render_collapsed;
         ensure_selected_process_on_screen(rend);
-        if (rend->attached_outer == rend->selected_outer)
+        if (rend->attached_outer == rend->selected_outer) {
             rend->attached_outer = -1;
+            prompt->history_counter = prompt->history.len;
+        }
     } else if (mod == KMOD_CTRL && key == SDLK_DELETE && rend->selected_outer != -1) {
         Backlog_State* backlog = rend->visbacklogs[rend->selected_outer];
 
         Running_Script* script = lookup_process(shell, backlog->id);
         if (script) {
-            kill_process(shell, rend, backlog, script);
+            kill_process(shell, rend, prompt, backlog, script);
         }
 
         cleanup_backlog(backlog);
@@ -1687,8 +1693,10 @@ static bool handle_scroll_commands(Shell_State* shell,
         backlogs[backlog->id] = nullptr;
 
         // Detach if attached to killed.
-        if (rend->attached_outer == rend->selected_outer)
+        if (rend->attached_outer == rend->selected_outer) {
             rend->attached_outer = -1;
+            prompt->history_counter = prompt->history.len;
+        }
 
         // Fix attached off by one error.
         if (rend->attached_outer != -1 && rend->attached_outer > rend->selected_outer)
@@ -2024,6 +2032,7 @@ static bool write_selected_backlog_to_file(Shell_State* shell,
 
 static void kill_process(Shell_State* shell,
                          Render_State* rend,
+                         Prompt_State* prompt,
                          Backlog_State* backlog,
                          Running_Script* script) {
 #ifdef TRACY_ENABLE
@@ -2041,6 +2050,7 @@ static void kill_process(Shell_State* shell,
     // Detach if the backlog is done.
     if (rend->attached_outer != -1 && rend->visbacklogs[rend->attached_outer]->done) {
         rend->attached_outer = -1;
+        prompt->history_counter = prompt->history.len;
     }
 }
 
@@ -2080,13 +2090,14 @@ static void submit_prompt(Shell_State* shell,
             if (run_script(shell, backlog, arena, script)) {
                 if (cfg.on_spawn_attach) {
                     rend->attached_outer = rend->visbacklogs.len - 1;
+                    prompt->history_counter = prompt->stdin_history.len;
                 }
             }
             rend->selected_outer = rend->visbacklogs.len - 1;
         }
     } else {
         if (script) {
-            kill_process(shell, rend, backlog, script);
+            kill_process(shell, rend, prompt, backlog, script);
         } else {
             backlog->done = true;
             backlog->cancelled = true;
@@ -2207,6 +2218,7 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
                     // Detach and select the prompt.
                     rend->attached_outer = -1;
                     rend->selected_outer = rend->attached_outer;
+                    prompt->history_counter = prompt->history.len;
                 }
                 continue;
             }
@@ -2237,8 +2249,10 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
                     // If the selected process is still running then attach to it.
                     // Otherwise, attach to the most recently launched process.
                     if (rend->selected_outer != -1 &&
-                        !rend->visbacklogs[rend->selected_outer]->done) {
+                        !rend->visbacklogs[rend->selected_outer]->done)  //
+                    {
                         rend->attached_outer = rend->selected_outer;
+                        prompt->history_counter = prompt->stdin_history.len;
                     } else {
                         for (size_t i = rend->visbacklogs.len; i-- > 0;) {
                             Backlog_State* backlog = rend->visbacklogs[i];
@@ -2282,13 +2296,14 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
 
                     rend->attached_outer = -1;
                     rend->selected_outer = rend->attached_outer;
+                    prompt->history_counter = prompt->history.len;
                     ++num_events;
                 }
                 continue;
             }
 
             if (mod == KMOD_CTRL && key == SDLK_l) {
-                clear_screen(rend, shell);
+                clear_screen(rend, shell, prompt);
                 ++num_events;
                 continue;
             }
@@ -2525,11 +2540,14 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
                         }
 
                         // No hyperlink, so instead attach to the clicked backlog.
+                        if (rend->attached_outer != -1)
+                            prompt->history_counter = prompt->history.len;
                         rend->attached_outer = -1;
                         if (tile.outer != 0) {
                             Backlog_State* backlog = rend->visbacklogs[tile.outer - 1];
                             if (!backlog->done) {
                                 rend->attached_outer = tile.outer - 1;
+                                prompt->history_counter = prompt->stdin_history.len;
                             }
                         }
                         rend->selected_outer = rend->attached_outer;
