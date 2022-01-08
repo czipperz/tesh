@@ -21,7 +21,9 @@ static void truncate_to(Backlog_State* backlog, uint64_t new_length);
 // Module Code
 ///////////////////////////////////////////////////////////////////////////////
 
-void cleanup_backlog(Backlog_State* backlog) {
+void cleanup_backlog(cz::Slice<Backlog_State*> backlogs, Backlog_State* backlog) {
+    CZ_DEBUG_ASSERT(backlog->refcount == 0);
+    backlogs[backlog->id] = nullptr;
     for (size_t i = 0; i < backlog->buffers.len; ++i) {
         char* buffer = backlog->buffers[i];
         cz::heap_allocator().dealloc({buffer, BACKLOG_BUFFER_SIZE});
@@ -31,6 +33,13 @@ void cleanup_backlog(Backlog_State* backlog) {
     backlog->events.drop(cz::heap_allocator());
     backlog->escape_backlog.drop(cz::heap_allocator());
     backlog->arena.drop();
+}
+
+void backlog_dec_refcount(cz::Slice<Backlog_State*> backlogs, Backlog_State* backlog) {
+    CZ_DEBUG_ASSERT(backlog->refcount > 0);
+    --backlog->refcount;
+    if (backlog->refcount == 0)
+        cleanup_backlog(backlogs, backlog);
 }
 
 char Backlog_State::get(size_t i) {

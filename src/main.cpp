@@ -60,6 +60,7 @@ static void render_prompt(SDL_Surface* window_surface,
 static void kill_process(Shell_State* shell,
                          Render_State* rend,
                          Prompt_State* prompt,
+                         cz::Slice<Backlog_State*> backlogs,
                          Backlog_State* backlog,
                          Running_Script* script);
 
@@ -647,6 +648,7 @@ static bool read_process_data(Shell_State* shell,
             if (!backlog->done) {
                 backlog->done = true;
                 backlog->end = std::chrono::high_resolution_clock::now();
+                backlog_dec_refcount(backlogs, backlog);
 
                 // If we're attached then we auto scroll but we can hit an edge case where the
                 // final output isn't scrolled to.  So we stop halfway through the output.  I
@@ -1757,14 +1759,15 @@ static bool handle_scroll_commands(Shell_State* shell,
     } else if (mod == KMOD_CTRL && key == SDLK_DELETE && rend->selected_outer != -1) {
         Backlog_State* backlog = rend->visbacklogs[rend->selected_outer];
 
-        Running_Script* script = lookup_process(shell, backlog->id);
-        if (script) {
-            kill_process(shell, rend, prompt, backlog, script);
+        if (cfg.control_delete_kill_process) {
+            Running_Script* script = lookup_process(shell, backlog->id);
+            if (script) {
+                kill_process(shell, rend, prompt, backlogs, backlog, script);
+            }
+            CZ_DEBUG_ASSERT(backlog->refcount == 1);
         }
-
-        cleanup_backlog(backlog);
+        backlog_dec_refcount(backlogs, backlog);
         rend->visbacklogs.remove(rend->selected_outer);
-        backlogs[backlog->id] = nullptr;
 
         // Detach if attached to killed.
         if (rend->attached_outer == rend->selected_outer) {
@@ -2107,6 +2110,7 @@ static bool write_selected_backlog_to_file(Shell_State* shell,
 static void kill_process(Shell_State* shell,
                          Render_State* rend,
                          Prompt_State* prompt,
+                         cz::Slice<Backlog_State*> backlogs,
                          Backlog_State* backlog,
                          Running_Script* script) {
 #ifdef TRACY_ENABLE
@@ -2118,6 +2122,7 @@ static void kill_process(Shell_State* shell,
     backlog->exit_code = -1;
     backlog->done = true;
     backlog->end = std::chrono::high_resolution_clock::now();
+    backlog_dec_refcount(backlogs, backlog);
     finish_hyperlink(backlog);
     recycle_process(shell, script);
 
@@ -2142,8 +2147,11 @@ static bool submit_prompt(Shell_State* shell,
         backlog = (*backlogs)[process_id];
     } else {
         backlog = push_backlog(backlogs, process_id);
-        rend->visbacklogs.reserve(cz::heap_allocator(), 1);
-        rend->visbacklogs.push(backlog);
+        if (rend) {
+            rend->visbacklogs.reserve(cz::heap_allocator(), 1);
+            rend->visbacklogs.push(backlog);
+            backlog->refcount++;
+        }
         push_backlog_event(backlog, BACKLOG_EVENT_START_DIRECTORY);
         append_text(backlog, get_wd(&shell->local));
         push_backlog_event(backlog, BACKLOG_EVENT_START_PROCESS);
@@ -2162,14 +2170,18 @@ static bool submit_prompt(Shell_State* shell,
         } else {
             cz::Buffer_Array arena = alloc_arena(shell);
             cz::String command2 = command.clone_null_terminate(arena.allocator());
-            return run_script(shell, backlog, arena, command2);
+            if (!run_script(shell, backlog, arena, command2)) {
+                backlog_dec_refcount(*backlogs, backlog);
+                return false;
+            }
         }
     } else {
         if (script) {
-            kill_process(shell, rend, prompt, backlog, script);
+            kill_process(shell, rend, prompt, *backlogs, backlog, script);
         } else {
             backlog->done = true;
             backlog->cancelled = true;
+            backlog_dec_refcount(*backlogs, backlog);
         }
     }
     return true;
@@ -2813,6 +2825,8 @@ static void load_default_configuration() {
 
     cfg.on_select_auto_copy = true;
 
+    cfg.control_delete_kill_process = true;
+
 #ifdef _WIN32
     cfg.font_path = "C:/Windows/Fonts/MesloLGM-Regular.ttf";
 #else
@@ -3087,6 +3101,7 @@ static Backlog_State* push_backlog(cz::Vector<Backlog_State*>* backlogs, uint64_
     *backlog = {};
 
     backlog->id = id;
+    backlog->refcount = 1;
     backlog->arena.init();
     backlog->max_length = cfg.max_length;
     backlog->buffers.reserve(cz::heap_allocator(), 1);

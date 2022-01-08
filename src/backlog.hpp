@@ -15,6 +15,7 @@ struct Backlog_Event;
 struct Backlog_State {
     uint64_t id;
 
+    uint64_t refcount;
     cz::Buffer_Array arena;
 
     uint64_t max_length;
@@ -39,7 +40,8 @@ struct Backlog_State {
 
 uint64_t append_text(Backlog_State* backlog, cz::Str text);
 void backlog_flush(Backlog_State* backlog);
-void cleanup_backlog(Backlog_State* backlog);
+void cleanup_backlog(cz::Slice<Backlog_State*> backlogs, Backlog_State* backlog);
+void backlog_dec_refcount(cz::Slice<Backlog_State*> backlogs, Backlog_State* backlog);
 
 ///////////////////////////////////////////////////////////////////////////////
 
