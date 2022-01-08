@@ -8,7 +8,7 @@ purchase a different license, email czipperz AT gmail DOT com.
 
 Features:
 * Separate command output
-  - You can run multiple asynchronous commands can run at once
+  - You can run multiple asynchronous commands at once
     without having them trample each-others' outputs or trampling the prompt.
   - Each command has a unique background color.
   - Commands are automatically timed and timestamped to ease comprehension.
@@ -29,6 +29,9 @@ Features:
   - `__tesh_F7` will run when `F7` is pressed.
   - Modifier keys `ctrl`, `alt`, and `shift` can be used as well:
     `__tesh_ctrl_alt_shift_F7`.
+  - Control + Click on a link runs `__tesh_open`.
+  - Control + Shift + E will dump the selected command's
+    output to a file and run `__tesh_edit $FILE`.
 
 ## Building
 
