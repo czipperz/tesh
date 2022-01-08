@@ -936,6 +936,7 @@ static void resolve_history_searching(Prompt_State* prompt, cz::Vector<cz::Str>*
         stop_merging_edits(prompt);
         stop_completing(prompt);
         prompt->text.len = 0;
+        prompt->cursor = 0;
         if (prompt->history_counter < history->len) {
             cz::Str hist = history->get(prompt->history_counter);
             insert_before(prompt, prompt->text.len, hist);
