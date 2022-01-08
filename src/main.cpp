@@ -154,7 +154,7 @@ static size_t make_backlog_code_point(char sequence[5], Backlog_State* backlog, 
     return width;
 }
 
-static void render_string(SDL_Surface* window_surface,
+static bool render_string(SDL_Surface* window_surface,
                           Render_State* rend,
                           Visual_Point* info_start,
                           uint32_t background,
@@ -169,9 +169,10 @@ static void render_string(SDL_Surface* window_surface,
         // Render this code point.
         if (!render_code_point(window_surface, rend, info_start, background, foreground, false, seq,
                                set_tile)) {
-            break;
+            return false;
         }
     }
+    return true;
 }
 
 static void render_info(SDL_Surface* window_surface,
@@ -404,13 +405,27 @@ static void render_prompt(SDL_Surface* window_surface,
     }
 
     if (prompt->history_searching) {
-        cz::Str prefix = "HISTORY: ";
+        cz::Str prefix = "History:\n";
         render_string(window_surface, rend, point, background, cfg.backlog_fg_color, prefix, true);
+
         cz::Vector<cz::Str>* history = prompt_history(prompt, rend->attached_outer != -1);
-        if (prompt->history_counter < history->len) {
-            cz::Str hist = history->get(prompt->history_counter);
-            render_string(window_surface, rend, point, background, cfg.backlog_fg_color, hist,
-                          true);
+        for (size_t i = history->len; i-- > 0;) {
+            cz::Str hist = (*history)[i];
+            if (hist.contains_case_insensitive(prompt->text)) {
+                uint8_t color = cfg.backlog_fg_color;
+                if (prompt->history_counter == i) {
+                    // TODO: we should probably have a custom bg color as
+                    // well because spaces will be invisible otherwise.
+                    color = cfg.selected_completion_fg_color;
+                }
+                if (!render_string(window_surface, rend, point, background, color, hist, true)) {
+                    break;
+                }
+                if (!render_code_point(window_surface, rend, point, background,
+                                       cfg.backlog_fg_color, false, "\n", true)) {
+                    break;
+                }
+            }
         }
 
         render_code_point(window_surface, rend, point, background, cfg.backlog_fg_color, false,
@@ -418,7 +433,7 @@ static void render_prompt(SDL_Surface* window_surface,
     }
 
     if (prompt->completion.is) {
-        cz::Str prefix = "Completions: \n";
+        cz::Str prefix = "Completions:\n";
         render_string(window_surface, rend, point, background, cfg.backlog_fg_color, prefix, true);
         size_t longest_entry = 0;
         for (int i = 0; i < prompt->completion.results.len; i++) {
@@ -974,11 +989,25 @@ static void forward_word(cz::Str text, size_t* cursor) {
     }
 }
 
+static void goto_previous_history_match(Prompt_State* prompt, cz::Slice<cz::Str> history) {
+    while (1) {
+        if (prompt->history_counter == 0) {
+            prompt->history_counter = history.len;
+            break;
+        }
+        --prompt->history_counter;
+        cz::Str hist = history[prompt->history_counter];
+        if (hist.contains_case_insensitive(prompt->text))
+            break;
+    }
+}
+
 static void finish_prompt_manipulation(Shell_State* shell,
                                        Render_State* rend,
                                        Prompt_State* prompt,
                                        bool doing_merge,
-                                       bool doing_completion) {
+                                       bool doing_completion,
+                                       bool doing_history) {
     rend->selected_outer = rend->attached_outer;
     ensure_prompt_on_screen(rend);
     rend->scroll_mode = AUTO_SCROLL;
@@ -988,6 +1017,13 @@ static void finish_prompt_manipulation(Shell_State* shell,
     }
     if (!doing_completion) {
         stop_completing(prompt);
+    }
+    if (!doing_history) {
+        if (prompt->history_searching) {
+            prompt->history_counter = prompt->history.len;
+            cz::Vector<cz::Str>* history = prompt_history(prompt, rend->attached_outer != -1);
+            goto_previous_history_match(prompt, *history);
+        }
     }
 }
 
@@ -1283,6 +1319,7 @@ static bool handle_prompt_manipulation_commands(Shell_State* shell,
                                                 SDL_Keycode key) {
     bool doing_merge = false;
     bool doing_completion = false;
+    bool doing_history = false;
     cz::Vector<cz::Str>* history = prompt_history(prompt, rend->attached_outer != -1);
 
     ///////////////////////////////////////////////////////////////////////
@@ -1476,21 +1513,14 @@ static bool handle_prompt_manipulation_commands(Shell_State* shell,
             prompt->cursor = prompt->text.len;
         }
     } else if (mod == KMOD_CTRL && key == SDLK_r) {
+        doing_history = true;
         if (!prompt->history_searching) {
             prompt->history_searching = true;
             prompt->history_counter = history->len;
         }
-        while (1) {
-            if (prompt->history_counter == 0) {
-                prompt->history_counter = history->len;
-                break;
-            }
-            --prompt->history_counter;
-            cz::Str hist = (*history)[prompt->history_counter];
-            if (hist.contains_case_insensitive(prompt->text))
-                break;
-        }
+        goto_previous_history_match(prompt, *history);
     } else if (mod == KMOD_ALT && key == SDLK_r) {
+        doing_history = true;
         if (prompt->history_searching) {
             while (1) {
                 ++prompt->history_counter;
@@ -1542,7 +1572,7 @@ static bool handle_prompt_manipulation_commands(Shell_State* shell,
         return false;
     }
 
-    finish_prompt_manipulation(shell, rend, prompt, doing_merge, doing_completion);
+    finish_prompt_manipulation(shell, rend, prompt, doing_merge, doing_completion, doing_history);
     return true;
 }
 
@@ -2469,7 +2499,7 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
             insert_before(prompt, prompt->cursor, text);
             Prompt_Edit* edit = &prompt->edit_history[prompt->edit_index - 1];
             edit->type |= PROMPT_EDIT_MERGE;
-            finish_prompt_manipulation(shell, rend, prompt, true, false);
+            finish_prompt_manipulation(shell, rend, prompt, true, false, false);
             ++num_events;
         } break;
 
@@ -2606,7 +2636,7 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
                 }
             } else if (event.button.button == SDL_BUTTON_MIDDLE) {
                 run_paste(prompt);
-                finish_prompt_manipulation(shell, rend, prompt, false, false);
+                finish_prompt_manipulation(shell, rend, prompt, false, false, false);
                 ++num_events;
             }
         } break;
