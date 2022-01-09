@@ -2331,6 +2331,7 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
 
                 user_submit_prompt(rend, shell, backlogs, prompt, prompt->text, submit, attached);
 
+                attached = (rend->attached_outer != -1);
                 history = prompt_history(prompt, attached);
                 prompt->history_counter = history->len;
 
