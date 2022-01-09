@@ -22,12 +22,28 @@ static Error start_execute_line(Shell_State* shell,
                                 Running_Pipeline* pipeline,
                                 bool background);
 
-static Error start_execute_pipeline(Shell_State* shell,
-                                    const Pseudo_Terminal& tty,
-                                    Running_Node* node,
-                                    Backlog_State* backlog,
-                                    Running_Pipeline* pipeline,
-                                    bool bind_stdin);
+static void start_execute_pipeline(Shell_State* shell,
+                                   const Pseudo_Terminal& tty,
+                                   Running_Node* node,
+                                   Backlog_State* backlog,
+                                   Running_Pipeline* pipeline,
+                                   bool bind_stdin);
+
+static void expand_file_arguments(Parse_Program* parse_program,
+                                  Shell_Local* local,
+                                  cz::Allocator allocator);
+static Error link_stdio(Stdio_State* stdio,
+                        cz::Input_File* pipe_in,
+                        const Parse_Program& parse_program,
+                        cz::Allocator allocator,
+                        cz::Slice<Shell_Node> program_nodes,
+                        size_t p,
+                        bool bind_stdin);
+static void open_redirected_files(Stdio_State* stdio,
+                                  cz::Str* error_path,
+                                  const Parse_Program& parse_program,
+                                  cz::Allocator allocator,
+                                  Shell_Local* local);
 
 static Error run_program(Shell_State* shell,
                          Shell_Local* local,
@@ -298,9 +314,7 @@ static Error start_execute_line(Shell_State* shell,
         }
 
         bool bind_stdin = !(background || async);
-        Error error = start_execute_pipeline(shell, tty, node, backlog, pipeline, bind_stdin);
-        if (error != Error_Success)
-            return error;
+        start_execute_pipeline(shell, tty, node, backlog, pipeline, bind_stdin);
 
         if (!async) {
             return Error_Success;
@@ -324,12 +338,12 @@ static Error start_execute_line(Shell_State* shell,
 // Start execute pipeline
 ///////////////////////////////////////////////////////////////////////////////
 
-static Error start_execute_pipeline(Shell_State* shell,
-                                    const Pseudo_Terminal& tty,
-                                    Running_Node* node,
-                                    Backlog_State* backlog,
-                                    Running_Pipeline* pipeline,
-                                    bool bind_stdin) {
+static void start_execute_pipeline(Shell_State* shell,
+                                   const Pseudo_Terminal& tty,
+                                   Running_Node* node,
+                                   Backlog_State* backlog,
+                                   Running_Pipeline* pipeline,
+                                   bool bind_stdin) {
     ZoneScoped;
 
     // TODO async stuff inside our children needs to be allocated separately.
@@ -363,157 +377,195 @@ static Error start_execute_pipeline(Shell_State* shell,
         CZ_ASSERT(program_node->type == Shell_Node::PROGRAM);  // TODO
         Parse_Program parse_program = *program_node->v.program;
 
-        // Expand file arguments.
-        if (parse_program.in_file.buffer) {
-            cz::String file = {};
-            expand_arg_single(node->local, parse_program.in_file, allocator, &file);
-            // Reallocate to ensure the file isn't null and also don't waste space.
-            file.realloc_null_terminate(allocator);
-            parse_program.in_file = file;
-        }
-        if (parse_program.out_file.buffer) {
-            cz::String file = {};
-            expand_arg_single(node->local, parse_program.out_file, allocator, &file);
-            // Reallocate to ensure the file isn't null and also don't waste space.
-            file.realloc_null_terminate(allocator);
-            parse_program.out_file = file;
-        }
-        if (parse_program.err_file.buffer) {
-            cz::String file = {};
-            expand_arg_single(node->local, parse_program.err_file, allocator, &file);
-            // Reallocate to ensure the file isn't null and also don't waste space.
-            file.realloc_null_terminate(allocator);
-            parse_program.err_file = file;
-        }
+        expand_file_arguments(&parse_program, node->local, allocator);
 
         Stdio_State stdio = node->stdio;
-        if (parse_program.in_file.buffer) {
-            stdio.in_type = File_Type_File;
-        } else if (p > 0) {
-            stdio.in_type = File_Type_Pipe;
-            stdio.in = pipe_in;
-            stdio.in_count = allocator.alloc<size_t>();
-            *stdio.in_count = 1;
-        } else if (!bind_stdin) {
-            stdio.in_type = File_Type_None;
-        } else {
-            if (stdio.in_count)
-                ++*stdio.in_count;
-        }
-        pipe_in = {};
-
-        if (parse_program.out_file.buffer) {
-            stdio.out_type = File_Type_File;
-        } else if (p + 1 < program_nodes.len) {
-            stdio.out_type = File_Type_Pipe;
-        } else {
-            if (stdio.out_count)
-                ++*stdio.out_count;
-        }
-
-        if (parse_program.err_file.buffer) {
-            stdio.err_type = File_Type_File;
-        } else {
-            if (stdio.err_count)
-                ++*stdio.err_count;
-        }
-
-        // Make pipes for the next iteration.
-        if ((stdio.out_type == File_Type_Pipe || stdio.err_type == File_Type_Pipe) &&
-            (p + 1 < program_nodes.len)) {
-            Shell_Node* next = &program_nodes[p + 1];
-            CZ_ASSERT(next->type == Shell_Node::PROGRAM);  // TODO
-            if (!next->v.program->in_file.buffer) {
-                cz::Output_File pipe_out;
-                if (!cz::create_pipe(&pipe_in, &pipe_out))
-                    return Error_IO;
-
-                if (!pipe_in.set_non_inheritable())
-                    return Error_IO;
-                if (!pipe_out.set_non_inheritable())
-                    return Error_IO;
-
-                size_t* count = allocator.alloc<size_t>();
-                *count = 0;
-                if (stdio.out_type == File_Type_Pipe) {
-                    stdio.out = pipe_out;
-                    stdio.out_count = count;
-                    ++*count;
-                }
-                if (stdio.err_type == File_Type_Pipe) {
-                    stdio.err = pipe_out;
-                    stdio.err_count = count;
-                    ++*count;
-                }
+        Error error =
+            link_stdio(&stdio, &pipe_in, parse_program, allocator, program_nodes, p, bind_stdin);
+        if (error != Error_Success) {
+        handle_error:
+            Process_Output err = {};
+            if (node->stdio.err_type == File_Type_Terminal) {
+                err.type = Process_Output::BACKLOG;
+                err.v.backlog = backlog;
+            } else {
+                err.type = Process_Output::FILE;
+                err.v.file = node->stdio.err;
             }
+
+            (void)err.write(cz::format(temp_allocator, "tesh: Error: ", error_string(error), "\n"));
+            return;
         }
 
         cz::Str error_path = {};
-        cz::String path = {};
-        if (stdio.in_type == File_Type_File) {
-            if (parse_program.in_file == "/dev/null") {
-                stdio.in = {};
-                stdio.in_count = nullptr;
-            } else if (error_path.len == 0) {
-                path.len = 0;
-                cz::path::make_absolute(parse_program.in_file, get_wd(node->local), temp_allocator,
-                                        &path);
-                if (stdio.in.open(path.buffer)) {
-                    stdio.in_count = allocator.alloc<size_t>();
-                    *stdio.in_count = 1;
-                } else {
-                    error_path = parse_program.in_file;
-                }
-            }
-        }
-
-        if (stdio.out_type == File_Type_File) {
-            if (parse_program.out_file == "/dev/null") {
-                stdio.out = {};
-                stdio.out_count = nullptr;
-            } else if (error_path.len == 0) {
-                path.len = 0;
-                cz::path::make_absolute(parse_program.out_file, get_wd(node->local), temp_allocator,
-                                        &path);
-                if (stdio.out.open(path.buffer)) {
-                    stdio.out_count = allocator.alloc<size_t>();
-                    *stdio.out_count = 1;
-                } else {
-                    error_path = parse_program.out_file;
-                }
-            }
-        }
-
-        if (stdio.err_type == File_Type_File) {
-            if (parse_program.err_file == "/dev/null") {
-                stdio.err = {};
-                stdio.err_count = nullptr;
-            } else if (error_path.len == 0) {
-                path.len = 0;
-                cz::path::make_absolute(parse_program.err_file, get_wd(node->local), temp_allocator,
-                                        &path);
-                if (stdio.err.open(path.buffer)) {
-                    stdio.err_count = allocator.alloc<size_t>();
-                    *stdio.err_count = 1;
-                } else {
-                    error_path = parse_program.err_file;
-                }
-            }
-        }
+        open_redirected_files(&stdio, &error_path, parse_program, allocator, node->local);
 
         Running_Program running_program = {};
-
-        Error error = run_program(shell, node->local, allocator, tty, &running_program,
-                                  parse_program, stdio, backlog, error_path);
+        error = run_program(shell, node->local, allocator, tty, &running_program, parse_program,
+                            stdio, backlog, error_path);
         if (error != Error_Success)
-            return error;
+            goto handle_error;
 
         programs.reserve(cz::heap_allocator(), 1);
         programs.push(running_program);
     }
 
     pipeline->programs = programs.clone(allocator);
+}
+
+static void expand_file_arguments(Parse_Program* parse_program,
+                                  Shell_Local* local,
+                                  cz::Allocator allocator) {
+    if (parse_program->in_file.buffer) {
+        cz::String file = {};
+        expand_arg_single(local, parse_program->in_file, allocator, &file);
+        // Reallocate to ensure the file isn't null and also don't waste space.
+        file.realloc_null_terminate(allocator);
+        parse_program->in_file = file;
+    }
+    if (parse_program->out_file.buffer) {
+        cz::String file = {};
+        expand_arg_single(local, parse_program->out_file, allocator, &file);
+        // Reallocate to ensure the file isn't null and also don't waste space.
+        file.realloc_null_terminate(allocator);
+        parse_program->out_file = file;
+    }
+    if (parse_program->err_file.buffer) {
+        cz::String file = {};
+        expand_arg_single(local, parse_program->err_file, allocator, &file);
+        // Reallocate to ensure the file isn't null and also don't waste space.
+        file.realloc_null_terminate(allocator);
+        parse_program->err_file = file;
+    }
+}
+
+static Error link_stdio(Stdio_State* stdio,
+                        cz::Input_File* pipe_in,
+                        const Parse_Program& parse_program,
+                        cz::Allocator allocator,
+                        cz::Slice<Shell_Node> program_nodes,
+                        size_t p,
+                        bool bind_stdin) {
+    // Bind stdin.
+    if (parse_program.in_file.buffer) {
+        stdio->in_type = File_Type_File;
+    } else if (p > 0) {
+        stdio->in_type = File_Type_Pipe;
+        stdio->in = *pipe_in;
+        stdio->in_count = allocator.alloc<size_t>();
+        *stdio->in_count = 1;
+    } else if (!bind_stdin) {
+        stdio->in_type = File_Type_None;
+    } else {
+        if (stdio->in_count)
+            ++*stdio->in_count;
+    }
+    *pipe_in = {};
+
+    // Bind stdout.
+    if (parse_program.out_file.buffer) {
+        stdio->out_type = File_Type_File;
+    } else if (p + 1 < program_nodes.len) {
+        stdio->out_type = File_Type_Pipe;
+    } else {
+        if (stdio->out_count)
+            ++*stdio->out_count;
+    }
+
+    // Bind stderr.
+    if (parse_program.err_file.buffer) {
+        stdio->err_type = File_Type_File;
+    } else {
+        if (stdio->err_count)
+            ++*stdio->err_count;
+    }
+
+    // Make pipes for the next iteration.
+    if ((stdio->out_type == File_Type_Pipe || stdio->err_type == File_Type_Pipe) &&
+        (p + 1 < program_nodes.len)) {
+        Shell_Node* next = &program_nodes[p + 1];
+        CZ_ASSERT(next->type == Shell_Node::PROGRAM);  // TODO
+        if (!next->v.program->in_file.buffer) {
+            cz::Output_File pipe_out;
+            if (!cz::create_pipe(pipe_in, &pipe_out))
+                return Error_IO;
+
+            if (!pipe_in->set_non_inheritable())
+                return Error_IO;
+            if (!pipe_out.set_non_inheritable())
+                return Error_IO;
+
+            size_t* count = allocator.alloc<size_t>();
+            *count = 0;
+            if (stdio->out_type == File_Type_Pipe) {
+                stdio->out = pipe_out;
+                stdio->out_count = count;
+                ++*count;
+            }
+            if (stdio->err_type == File_Type_Pipe) {
+                stdio->err = pipe_out;
+                stdio->err_count = count;
+                ++*count;
+            }
+        }
+    }
+
     return Error_Success;
+}
+
+static void open_redirected_files(Stdio_State* stdio,
+                                  cz::Str* error_path,
+                                  const Parse_Program& parse_program,
+                                  cz::Allocator allocator,
+                                  Shell_Local* local) {
+    cz::String path = {};
+    if (stdio->in_type == File_Type_File) {
+        if (parse_program.in_file == "/dev/null") {
+            stdio->in = {};
+            stdio->in_count = nullptr;
+        } else if (error_path->len == 0) {
+            path.len = 0;
+            cz::path::make_absolute(parse_program.in_file, get_wd(local), temp_allocator, &path);
+            if (stdio->in.open(path.buffer)) {
+                stdio->in_count = allocator.alloc<size_t>();
+                *stdio->in_count = 1;
+            } else {
+                *error_path = parse_program.in_file;
+            }
+        }
+    }
+
+    if (stdio->out_type == File_Type_File) {
+        if (parse_program.out_file == "/dev/null") {
+            stdio->out = {};
+            stdio->out_count = nullptr;
+        } else if (error_path->len == 0) {
+            path.len = 0;
+            cz::path::make_absolute(parse_program.out_file, get_wd(local), temp_allocator, &path);
+            if (stdio->out.open(path.buffer)) {
+                stdio->out_count = allocator.alloc<size_t>();
+                *stdio->out_count = 1;
+            } else {
+                *error_path = parse_program.out_file;
+            }
+        }
+    }
+
+    if (stdio->err_type == File_Type_File) {
+        if (parse_program.err_file == "/dev/null") {
+            stdio->err = {};
+            stdio->err_count = nullptr;
+        } else if (error_path->len == 0) {
+            path.len = 0;
+            cz::path::make_absolute(parse_program.err_file, get_wd(local), temp_allocator, &path);
+            if (stdio->err.open(path.buffer)) {
+                stdio->err_count = allocator.alloc<size_t>();
+                *stdio->err_count = 1;
+            } else {
+                *error_path = parse_program.err_file;
+            }
+        }
+    }
 }
 
 ///////////////////////////////////////////////////////////////////////////////
