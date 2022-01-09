@@ -363,8 +363,6 @@ static Error start_execute_pipeline(Shell_State* shell,
         CZ_ASSERT(program_node->type == Shell_Node::PROGRAM);  // TODO
         Parse_Program parse_program = *program_node->v.program;
 
-        Stdio_State stdio = node->stdio;
-
         // Expand file arguments.
         if (parse_program.in_file.buffer) {
             cz::String file = {};
@@ -388,24 +386,9 @@ static Error start_execute_pipeline(Shell_State* shell,
             parse_program.err_file = file;
         }
 
-        cz::Str error_path = {};
-        cz::String path = {};
+        Stdio_State stdio = node->stdio;
         if (parse_program.in_file.buffer) {
             stdio.in_type = File_Type_File;
-            if (parse_program.in_file == "/dev/null") {
-                stdio.in = {};
-                stdio.in_count = nullptr;
-            } else if (error_path.len == 0) {
-                path.len = 0;
-                cz::path::make_absolute(parse_program.in_file, get_wd(node->local), temp_allocator,
-                                        &path);
-                if (stdio.in.open(path.buffer)) {
-                    stdio.in_count = allocator.alloc<size_t>();
-                    *stdio.in_count = 1;
-                } else {
-                    error_path = parse_program.in_file;
-                }
-            }
         } else if (p > 0) {
             stdio.in_type = File_Type_Pipe;
             stdio.in = pipe_in;
@@ -421,20 +404,6 @@ static Error start_execute_pipeline(Shell_State* shell,
 
         if (parse_program.out_file.buffer) {
             stdio.out_type = File_Type_File;
-            if (parse_program.out_file == "/dev/null") {
-                stdio.out = {};
-                stdio.out_count = nullptr;
-            } else if (error_path.len == 0) {
-                path.len = 0;
-                cz::path::make_absolute(parse_program.out_file, get_wd(node->local), temp_allocator,
-                                        &path);
-                if (stdio.out.open(path.buffer)) {
-                    stdio.out_count = allocator.alloc<size_t>();
-                    *stdio.out_count = 1;
-                } else {
-                    error_path = parse_program.out_file;
-                }
-            }
         } else if (p + 1 < program_nodes.len) {
             stdio.out_type = File_Type_Pipe;
         } else {
@@ -444,20 +413,6 @@ static Error start_execute_pipeline(Shell_State* shell,
 
         if (parse_program.err_file.buffer) {
             stdio.err_type = File_Type_File;
-            if (parse_program.err_file == "/dev/null") {
-                stdio.err = {};
-                stdio.err_count = nullptr;
-            } else if (error_path.len == 0) {
-                path.len = 0;
-                cz::path::make_absolute(parse_program.err_file, get_wd(node->local), temp_allocator,
-                                        &path);
-                if (stdio.err.open(path.buffer)) {
-                    stdio.err_count = allocator.alloc<size_t>();
-                    *stdio.err_count = 1;
-                } else {
-                    error_path = parse_program.err_file;
-                }
-            }
         } else {
             if (stdio.err_count)
                 ++*stdio.err_count;
@@ -489,6 +444,59 @@ static Error start_execute_pipeline(Shell_State* shell,
                     stdio.err = pipe_out;
                     stdio.err_count = count;
                     ++*count;
+                }
+            }
+        }
+
+        cz::Str error_path = {};
+        cz::String path = {};
+        if (stdio.in_type == File_Type_File) {
+            if (parse_program.in_file == "/dev/null") {
+                stdio.in = {};
+                stdio.in_count = nullptr;
+            } else if (error_path.len == 0) {
+                path.len = 0;
+                cz::path::make_absolute(parse_program.in_file, get_wd(node->local), temp_allocator,
+                                        &path);
+                if (stdio.in.open(path.buffer)) {
+                    stdio.in_count = allocator.alloc<size_t>();
+                    *stdio.in_count = 1;
+                } else {
+                    error_path = parse_program.in_file;
+                }
+            }
+        }
+
+        if (stdio.out_type == File_Type_File) {
+            if (parse_program.out_file == "/dev/null") {
+                stdio.out = {};
+                stdio.out_count = nullptr;
+            } else if (error_path.len == 0) {
+                path.len = 0;
+                cz::path::make_absolute(parse_program.out_file, get_wd(node->local), temp_allocator,
+                                        &path);
+                if (stdio.out.open(path.buffer)) {
+                    stdio.out_count = allocator.alloc<size_t>();
+                    *stdio.out_count = 1;
+                } else {
+                    error_path = parse_program.out_file;
+                }
+            }
+        }
+
+        if (stdio.err_type == File_Type_File) {
+            if (parse_program.err_file == "/dev/null") {
+                stdio.err = {};
+                stdio.err_count = nullptr;
+            } else if (error_path.len == 0) {
+                path.len = 0;
+                cz::path::make_absolute(parse_program.err_file, get_wd(node->local), temp_allocator,
+                                        &path);
+                if (stdio.err.open(path.buffer)) {
+                    stdio.err_count = allocator.alloc<size_t>();
+                    *stdio.err_count = 1;
+                } else {
+                    error_path = parse_program.err_file;
                 }
             }
         }
