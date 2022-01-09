@@ -16,6 +16,7 @@ struct Config_State {
     bool windows_wide_terminal;
     bool case_sensitive_completion;
     bool control_delete_kill_process;
+    bool backlog_info_render_date;
 
     /// 0 = absolute minimum, 1 = compromise, 2 = everything builtin.
     int builtin_level;

@@ -849,7 +849,7 @@ static void setup_builtin(Running_Program* program, cz::Allocator allocator, Std
         program->v.builtin.st.source.stdio = stdio;
     } else if (program->type == Running_Program::SLEEP) {
         program->v.builtin.st.sleep = {};
-        program->v.builtin.st.sleep.start = std::chrono::high_resolution_clock::now();
+        program->v.builtin.st.sleep.start = std::chrono::steady_clock::now();
     } else if (program->type == Running_Program::ECHO) {
         program->v.builtin.st.echo = {};
         program->v.builtin.st.echo.outer = 1;

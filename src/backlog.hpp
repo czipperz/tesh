@@ -28,7 +28,8 @@ struct Backlog_State {
     uint64_t graphics_rendition;
     bool inside_hyperlink;
 
-    std::chrono::high_resolution_clock::time_point start, end;
+    std::chrono::system_clock::time_point start2;
+    std::chrono::steady_clock::time_point start, end;
     bool done;
     bool cancelled;  // Subset of done where the backlog wasn't ran.
     int exit_code;

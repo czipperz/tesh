@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <Tracy.hpp>
 #include <cz/binary_search.hpp>
+#include <cz/date.hpp>
 #include <cz/dedup.hpp>
 #include <cz/defer.hpp>
 #include <cz/directory.hpp>
@@ -73,11 +74,11 @@ static void make_info(cz::String* info,
                       Shell_State* shell,
                       Backlog_State* backlog,
                       uint64_t first_line_index,
-                      std::chrono::high_resolution_clock::time_point now) {
+                      std::chrono::steady_clock::time_point now) {
     if (backlog->cancelled)
         return;
 
-    std::chrono::high_resolution_clock::time_point end = backlog->end;
+    std::chrono::steady_clock::time_point end = backlog->end;
     if (!backlog->done)
         end = now;
 
@@ -105,6 +106,14 @@ static void make_info(cz::String* info,
             cz::append(temp_allocator, info, "..  ");
         else
             cz::append(temp_allocator, info, "... ");
+    }
+
+    if (cfg.backlog_info_render_date) {
+        time_t tm = std::chrono::system_clock::to_time_t(backlog->start2);
+        cz::Date date = cz::time_t_to_date_local(tm);
+        cz::append_sprintf(temp_allocator, info, "%04d/%02d/%02d %02d:%02d:%02d", date.year,
+                           date.month, date.day_of_month, date.hour, date.minute, date.second);
+        cz::append(temp_allocator, info, ' ');
     }
 
     uint64_t seconds = millis / 1000;
@@ -215,7 +224,7 @@ static bool render_backlog(SDL_Surface* window_surface,
                            Shell_State* shell,
                            Prompt_State* prompt,
                            cz::Slice<Backlog_State*> backlogs,
-                           std::chrono::high_resolution_clock::time_point now,
+                           std::chrono::steady_clock::time_point now,
                            Backlog_State* backlog,
                            size_t visindex) {
     ZoneScoped;
@@ -517,7 +526,7 @@ static void render_frame(SDL_Window* window,
                          Shell_State* shell) {
     ZoneScoped;
 
-    std::chrono::high_resolution_clock::time_point now = std::chrono::high_resolution_clock::now();
+    std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
 
     SDL_Surface* window_surface = SDL_GetWindowSurface(window);
     rend->window_rows = window_surface->h / rend->font_height;
@@ -620,7 +629,7 @@ fail:;
     append_text(backlog, error_string(error));
     append_text(backlog, "\n");
     backlog->done = true;
-    backlog->end = std::chrono::high_resolution_clock::now();
+    backlog->end = std::chrono::steady_clock::now();
     // Decrement refcount in caller.
 
     recycle_arena(shell, arena);
@@ -648,7 +657,7 @@ static bool read_process_data(Shell_State* shell,
         if (script->root.fg_finished && script->root.bg.len == 0) {
             if (!backlog->done) {
                 backlog->done = true;
-                backlog->end = std::chrono::high_resolution_clock::now();
+                backlog->end = std::chrono::steady_clock::now();
                 // Decrement refcount when read finishes below.
 
                 // If we're attached then we auto scroll but we can hit an edge case where the
@@ -665,7 +674,7 @@ static bool read_process_data(Shell_State* shell,
 
             // Wait for one second after the process ends so the pipes flush.
             using namespace std::chrono;
-            high_resolution_clock::duration elapsed = (high_resolution_clock::now() - backlog->end);
+            steady_clock::duration elapsed = (steady_clock::now() - backlog->end);
             if (duration_cast<milliseconds>(elapsed).count() >= 1000) {
                 recycle_process(shell, script);
                 finish_hyperlink(backlog);
@@ -2123,7 +2132,7 @@ static void kill_process(Shell_State* shell,
 
     backlog->exit_code = -1;
     backlog->done = true;
-    backlog->end = std::chrono::high_resolution_clock::now();
+    backlog->end = std::chrono::steady_clock::now();
     finish_hyperlink(backlog);
     recycle_process(shell, script);
     backlog_dec_refcount(backlogs, backlog);
@@ -2830,6 +2839,8 @@ static void load_default_configuration() {
 
     cfg.control_delete_kill_process = true;
 
+    cfg.backlog_info_render_date = false;
+
 #ifdef _WIN32
     cfg.font_path = "C:/Windows/Fonts/MesloLGM-Regular.ttf";
 #else
@@ -3109,7 +3120,8 @@ static Backlog_State* push_backlog(cz::Vector<Backlog_State*>* backlogs, uint64_
     backlog->max_length = cfg.max_length;
     backlog->buffers.reserve(cz::heap_allocator(), 1);
     backlog->buffers.push(buffer);
-    backlog->start = std::chrono::high_resolution_clock::now();
+    backlog->start2 = std::chrono::system_clock::now();
+    backlog->start = std::chrono::steady_clock::now();
     backlog->graphics_rendition = (7 << GR_FOREGROUND_SHIFT);
 
     backlogs->reserve(cz::heap_allocator(), 1);

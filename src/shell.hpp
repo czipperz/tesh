@@ -263,7 +263,7 @@ struct Running_Program {
                     cz::Slice<const cz::Str> values;
                 } variables;
                 struct {
-                    std::chrono::high_resolution_clock::time_point start;
+                    std::chrono::steady_clock::time_point start;
                 } sleep;
                 struct {
                     size_t outer, inner;

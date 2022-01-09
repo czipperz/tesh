@@ -114,7 +114,7 @@ static void tick_pipeline(Shell_State* shell,
                 pipeline->has_exit_code = true;
                 pipeline->last_exit_code = exit_code;
             }
-            backlog->end = std::chrono::high_resolution_clock::now();
+            backlog->end = std::chrono::steady_clock::now();
             pipeline->programs.remove(p);
             --p;
             if (pipeline->programs.len == 0)
@@ -643,7 +643,7 @@ static bool tick_program(Shell_State* shell,
             goto finish_builtin;
         }
 
-        auto now = std::chrono::high_resolution_clock::now();
+        auto now = std::chrono::steady_clock::now();
         uint64_t actual = std::chrono::duration_cast<std::chrono::seconds>(now - st.start).count();
         if (actual >= max)
             goto finish_builtin;
