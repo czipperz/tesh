@@ -234,9 +234,9 @@ static bool render_backlog(SDL_Surface* window_surface,
 
     SDL_Color bg_color = cfg.process_colors[backlog->id % cfg.process_colors.len];
     if (rend->selected_outer == visindex) {
-        bg_color.r *= 2;
-        bg_color.g *= 2;
-        bg_color.b *= 2;
+        bg_color.r *= 3;
+        bg_color.g *= 3;
+        bg_color.b *= 3;
     }
     uint32_t background = SDL_MapRGB(window_surface->format, bg_color.r, bg_color.g, bg_color.b);
 
@@ -2617,7 +2617,7 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
                         if (rend->attached_outer != -1)
                             prompt->history_counter = prompt->history.len;
                         rend->attached_outer = -1;
-                        if (tile.outer != 0) {
+                        if (tile.outer != 0 && tile.outer <= rend->visbacklogs.len) {
                             Backlog_State* backlog = rend->visbacklogs[tile.outer - 1];
                             if (!backlog->done) {
                                 rend->attached_outer = tile.outer - 1;
