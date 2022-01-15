@@ -243,9 +243,9 @@ static bool render_backlog(SDL_Surface* window_surface,
 
     SDL_Color bg_color = cfg.process_colors[backlog->id % cfg.process_colors.len];
     if (rend->selected_outer == visindex) {
-        bg_color.r *= 3;
-        bg_color.g *= 3;
-        bg_color.b *= 3;
+        bg_color.r *= 2;
+        bg_color.g *= 2;
+        bg_color.b *= 2;
     }
     uint32_t background = SDL_MapRGB(window_surface->format, bg_color.r, bg_color.g, bg_color.b);
 
