@@ -2505,7 +2505,15 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
                     append_node(temp_allocator, &command, value,
                                 /*add_semicolon=*/false);
 
+                    bool attached = (rend->attached_outer != -1);
+                    cz::Vector<cz::Str>* history = prompt_history(prompt, attached);
+                    bool at_end = (prompt->history_counter == history->len);
+
                     user_submit_prompt(rend, shell, backlogs, prompt, command, true, false);
+
+                    if (at_end)
+                        prompt->history_counter = history->len;
+
                     ++num_events;
                     continue;
                 }
