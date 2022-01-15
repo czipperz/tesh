@@ -5,6 +5,7 @@ static const Builtin level0[] = {
     {"return", Running_Program::RETURN},
     {"cd", Running_Program::CD},
     {"alias", Running_Program::ALIAS},
+    {"function", Running_Program::FUNCTION},
     {"export", Running_Program::EXPORT},
     {"unset", Running_Program::UNSET},
     {"clear", Running_Program::CLEAR},

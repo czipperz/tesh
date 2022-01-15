@@ -464,6 +464,34 @@ static bool tick_program(Shell_State* shell,
         goto finish_builtin;
     } break;
 
+    case Running_Program::FUNCTION: {
+        auto& builtin = program->v.builtin;
+        for (size_t i = 1; i < builtin.args.len; ++i) {
+            cz::Str arg = builtin.args[i];
+
+            size_t f = 0;
+            for (; f < local->function_names.len; ++f) {
+                if (arg == local->function_names[f]) {
+                    (void)builtin.out.write("function: ");
+                    (void)builtin.out.write(local->function_names[f]);
+                    (void)builtin.out.write(" is defined as: ");
+                    cz::String string = {};
+                    append_node(temp_allocator, &string, local->function_values[f], false);
+                    (void)builtin.out.write(string);
+                    string.drop(temp_allocator);
+                    (void)builtin.out.write("\n");
+                    break;
+                }
+            }
+            if (f == local->function_names.len) {
+                builtin.exit_code = 1;
+                (void)builtin.err.write(
+                    cz::format(temp_allocator, "function: ", arg, ": undefined function\n"));
+            }
+        }
+        goto finish_builtin;
+    } break;
+
     case Running_Program::CONFIGURE: {
         auto& builtin = program->v.builtin;
         if (builtin.args.len != 3) {

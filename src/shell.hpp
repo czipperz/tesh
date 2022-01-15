@@ -214,6 +214,7 @@ struct Running_Program {
         CD,
         LS,
         ALIAS,
+        FUNCTION,
         VARIABLES,
         WHICH,
         TRUE_,
