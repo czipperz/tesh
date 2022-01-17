@@ -204,6 +204,7 @@ static bool tick_program(Shell_State* shell,
         auto& builtin = program->v.builtin;
         auto& st = builtin.st.invalid;
         (void)builtin.err.write(cz::format(temp_allocator, "tesh: ", st.m1, ": ", st.m2, '\n'));
+        builtin.exit_code = 1;
         goto finish_builtin;
     } break;
 
