@@ -1410,7 +1410,7 @@ static bool handle_prompt_manipulation_commands(Shell_State* shell,
             remove_after(prompt, point, point + 1);
             remove(prompt, point - 1, point);
             insert(prompt, point - 1, cz::Str{&ch2, 1});
-            insert_after(prompt, point, cz::Str{&ch1, 1});
+            insert_before(prompt, point, cz::Str{&ch1, 1});
             end_combo(prompt);
         }
     } else if (mod == KMOD_ALT && key == SDLK_t) {
@@ -1432,7 +1432,7 @@ static bool handle_prompt_manipulation_commands(Shell_State* shell,
             remove_after(prompt, start2, end2);
             remove(prompt, start1, end1);
             insert(prompt, start1, word2);
-            insert_after(prompt, start2 + word2.len - word1.len, word1);
+            insert_before(prompt, start2 + word2.len - word1.len, word1);
             end_combo(prompt);
         }
     } else if ((mod & ~KMOD_SHIFT) == 0 && key == SDLK_TAB &&
