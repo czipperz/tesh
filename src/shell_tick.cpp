@@ -53,6 +53,9 @@ static int run_ls(Process_Output out,
 
 void clear_screen(Render_State* rend, Shell_State* shell, Prompt_State* prompt);
 
+static Shell_Node* get_alias(const Shell_Local* local, cz::Str name);
+static Shell_Node* get_function(const Shell_Local* local, cz::Str name);
+
 ///////////////////////////////////////////////////////////////////////////////
 // Tick running node
 ///////////////////////////////////////////////////////////////////////////////
@@ -440,21 +443,18 @@ static bool tick_program(Shell_State* shell,
 
                 set_alias(local, key, node);
             } else {
-                size_t i = 0;
-                for (; i < local->alias_names.len; ++i) {
-                    if (arg == local->alias_names[i]) {
-                        (void)builtin.out.write("alias: ");
-                        (void)builtin.out.write(local->alias_names[i]);
-                        (void)builtin.out.write(" is aliased to: ");
-                        cz::String string = {};
-                        append_node(temp_allocator, &string, local->alias_values[i], false);
-                        (void)builtin.out.write(string);
-                        string.drop(temp_allocator);
-                        (void)builtin.out.write("\n");
-                        break;
-                    }
-                }
-                if (i == local->alias_names.len) {
+                Shell_Node* alias = get_alias(local, arg);
+                if (alias) {
+                    (void)builtin.out.write("alias: ");
+                    (void)builtin.out.write(arg);
+                    (void)builtin.out.write(" is aliased to: ");
+                    cz::String string = {};
+                    append_node(temp_allocator, &string, alias, false);
+                    (void)builtin.out.write(string);
+                    string.drop(temp_allocator);
+                    (void)builtin.out.write("\n");
+                    break;
+                } else {
                     builtin.exit_code = 1;
                     (void)builtin.err.write(
                         cz::format(temp_allocator, "alias: ", arg, ": unbound alias\n"));
@@ -468,22 +468,17 @@ static bool tick_program(Shell_State* shell,
         auto& builtin = program->v.builtin;
         for (size_t i = 1; i < builtin.args.len; ++i) {
             cz::Str arg = builtin.args[i];
-
-            size_t f = 0;
-            for (; f < local->function_names.len; ++f) {
-                if (arg == local->function_names[f]) {
-                    (void)builtin.out.write("function: ");
-                    (void)builtin.out.write(local->function_names[f]);
-                    (void)builtin.out.write(" is defined as: ");
-                    cz::String string = {};
-                    append_node(temp_allocator, &string, local->function_values[f], false);
-                    (void)builtin.out.write(string);
-                    string.drop(temp_allocator);
-                    (void)builtin.out.write("\n");
-                    break;
-                }
-            }
-            if (f == local->function_names.len) {
+            Shell_Node* func = get_function(local, arg);
+            if (func) {
+                (void)builtin.out.write("function: ");
+                (void)builtin.out.write(arg);
+                (void)builtin.out.write(" is defined as: ");
+                cz::String string = {};
+                append_node(temp_allocator, &string, func, false);
+                (void)builtin.out.write(string);
+                string.drop(temp_allocator);
+                (void)builtin.out.write("\n");
+            } else {
                 builtin.exit_code = 1;
                 (void)builtin.err.write(
                     cz::format(temp_allocator, "function: ", arg, ": undefined function\n"));
@@ -846,4 +841,28 @@ static int run_ls(Process_Output out,
 
     iterator.drop();
     return result;
+}
+
+///////////////////////////////////////////////////////////////////////////////
+
+static Shell_Node* get_alias(const Shell_Local* local, cz::Str name) {
+    for (const Shell_Local* elem = local; elem; elem = elem->parent) {
+        for (size_t i = 0; i < elem->alias_names.len; ++i) {
+            if (name == elem->alias_names[i]) {
+                return elem->alias_values[i];
+            }
+        }
+    }
+    return nullptr;
+}
+
+static Shell_Node* get_function(const Shell_Local* local, cz::Str name) {
+    for (const Shell_Local* elem = local; elem; elem = elem->parent) {
+        for (size_t i = 0; i < elem->function_names.len; ++i) {
+            if (name == elem->function_names[i]) {
+                return elem->function_values[i];
+            }
+        }
+    }
+    return nullptr;
 }
