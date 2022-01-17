@@ -867,17 +867,19 @@ static void scroll_up(Render_State* rend, int lines) {
     point->x = 0;
 }
 
-void clear_screen(Render_State* rend, Shell_State* shell, Prompt_State* prompt) {
+void clear_screen(Render_State* rend, Shell_State* shell, Prompt_State* prompt, bool in_script) {
     rend->backlog_start = {};
     rend->backlog_start.outer = rend->visbacklogs.len;
-    if (shell->scripts.len > 0)
+    if (in_script)
         scroll_up(rend, 2);
     rend->complete_redraw = true;
     rend->scroll_mode = PROMPT_SCROLL;
-    if (rend->attached_outer != -1)
-        prompt->history_counter = prompt->history.len;
-    rend->attached_outer = -1;
-    rend->selected_outer = rend->attached_outer;
+    if (!in_script) {
+        if (rend->attached_outer != -1)
+            prompt->history_counter = prompt->history.len;
+        rend->attached_outer = -1;
+        rend->selected_outer = rend->attached_outer;
+    }
 }
 
 static void ensure_prompt_on_screen(Render_State* rend) {
@@ -2414,7 +2416,7 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
             }
 
             if (mod == KMOD_CTRL && key == SDLK_l) {
-                clear_screen(rend, shell, prompt);
+                clear_screen(rend, shell, prompt, false);
                 ++num_events;
                 continue;
             }

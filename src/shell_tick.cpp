@@ -51,7 +51,7 @@ static int run_ls(Process_Output out,
                   cz::Str working_directory,
                   cz::Str directory);
 
-void clear_screen(Render_State* rend, Shell_State* shell, Prompt_State* prompt);
+void clear_screen(Render_State* rend, Shell_State* shell, Prompt_State* prompt, bool in_script);
 
 static Shell_Node* get_alias(const Shell_Local* local, cz::Str name);
 static Shell_Node* get_function(const Shell_Local* local, cz::Str name);
@@ -589,7 +589,7 @@ static bool tick_program(Shell_State* shell,
     } break;
 
     case Running_Program::CLEAR: {
-        clear_screen(rend, shell, prompt);
+        clear_screen(rend, shell, prompt, true);
         goto finish_builtin;
     } break;
 
