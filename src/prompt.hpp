@@ -29,11 +29,13 @@ struct Prompt_State {
     size_t edit_index;
     cz::Buffer_Array edit_arena;
 
-    uint64_t history_counter;
+    uint64_t            history_counter;
+    cz::String          history_path;
     cz::Vector<cz::Str> history;
     cz::Vector<cz::Str> stdin_history;
-    cz::Buffer_Array history_arena;
-    bool history_searching;
+    cz::Buffer_Array    history_arena;
+    bool                history_searching;
+    
 
     struct {
         bool is;

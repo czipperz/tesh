@@ -56,6 +56,9 @@ void clear_screen(Render_State* rend, Shell_State* shell, Prompt_State* prompt, 
 static Shell_Node* get_alias(const Shell_Local* local, cz::Str name);
 static Shell_Node* get_function(const Shell_Local* local, cz::Str name);
 
+void load_history(Prompt_State* prompt, Shell_State* shell);
+void save_history(Prompt_State* prompt, Shell_State* shell);
+
 ///////////////////////////////////////////////////////////////////////////////
 // Tick running node
 ///////////////////////////////////////////////////////////////////////////////
@@ -496,6 +499,13 @@ static bool tick_program(Shell_State* shell,
         }
 
         cz::Str option = builtin.args[1];
+
+        if (option == "history_file") {
+            prompt->history_path = builtin.args[2].clone_null_terminate(cz::heap_allocator());
+            load_history(prompt, shell);
+            goto finish_builtin;
+        }
+
         int value;
         if (!cz::parse(builtin.args[2], &value)) {
             (void)builtin.err.write("configure: Usage: configure [option] [value]\n");

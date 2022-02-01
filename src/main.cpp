@@ -2745,15 +2745,9 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
 // History control
 ///////////////////////////////////////////////////////////////////////////////
 
-static void load_history(Prompt_State* prompt, Shell_State* shell) {
-    cz::Str home = {};
-    if (!get_var(&shell->local, "HOME", &home))
-        return;
-
-    cz::String path = cz::format(temp_allocator, home, "/.tesh_history");
-
+void load_history(Prompt_State* prompt, Shell_State* shell) {
     cz::Input_File file;
-    if (!file.open(path.buffer))
+    if (!file.open(prompt->history_path.buffer))
         return;
     CZ_DEFER(file.close());
 
@@ -2791,15 +2785,9 @@ static void load_history(Prompt_State* prompt, Shell_State* shell) {
     prompt->history_counter = prompt->history.len;
 }
 
-static void save_history(Prompt_State* prompt, Shell_State* shell) {
-    cz::Str home = {};
-    if (!get_var(&shell->local, "HOME", &home))
-        return;
-
-    cz::String path = cz::format(temp_allocator, home, "/.tesh_history");
-
+void save_history(Prompt_State* prompt, Shell_State* shell) {
     cz::Output_File file;
-    if (!file.open(path.buffer))
+    if (!file.open(prompt->history_path.buffer))
         return;
     CZ_DEFER(file.close());
 
@@ -2984,9 +2972,10 @@ int actual_main(int argc, char** argv) {
     }
 
     load_environment_variables(&shell);
-
-    load_history(&prompt, &shell);
-    CZ_DEFER(save_history(&prompt, &shell));
+    cz::Str home = {};
+    if (get_var(&shell.local, "HOME", &home)) {
+        prompt.history_path = cz::format(temp_allocator, home, "/.tesh_history");
+    }
 
 #ifdef _WIN32
     SetProcessDpiAwareness(PROCESS_PER_MONITOR_DPI_AWARE);
@@ -3055,6 +3044,10 @@ int actual_main(int argc, char** argv) {
         cz::String source_command = cz::format(temp_allocator, "source ~/.teshrc");
         submit_prompt(&shell, &rend, &backlogs, &prompt, source_command, true, false);
     }
+
+
+    load_history(&prompt, &shell);
+    CZ_DEFER(save_history(&prompt, &shell));
 
     while (1) {
         uint32_t start_frame = SDL_GetTicks();
