@@ -2962,6 +2962,10 @@ int actual_main(int argc, char** argv) {
 
     rend.font_size = cfg.default_font_size;
 
+    if (argc == 2) {
+        cz::set_working_directory(argv[1]);
+    }
+
     {
         cz::String working_directory = {};
         if (!cz::get_working_directory(temp_allocator, &working_directory)) {
