@@ -3062,7 +3062,6 @@ int actual_main(int argc, char** argv) {
         submit_prompt(&shell, &rend, &backlogs, &prompt, source_command, true, false);
     }
 
-
     load_history(&prompt, &shell);
     CZ_DEFER(save_history(&prompt, &shell));
 
