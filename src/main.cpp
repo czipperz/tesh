@@ -1201,6 +1201,7 @@ static void start_completing(Prompt_State* prompt, Shell_State* shell) {
                         executable = is_executable(temp_path.buffer);
 #endif
                         if (executable) {
+                            // Put space after executable.
                             cz::String file = {};
                             file.reserve(path_allocator, name.len + 2);
                             file.append(name);
@@ -2366,31 +2367,24 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
             if (mod == KMOD_CTRL && key == SDLK_z) {
                 rend->scroll_mode = AUTO_SCROLL;
                 if (rend->attached_outer == -1) {
-                    // If the selected process is still running then attach to it.
-                    // Otherwise, attach to the most recently launched process.
                     if (rend->selected_outer != -1 &&
-                        !rend->visbacklogs[rend->selected_outer]->done)  //
-                    {
+                        !rend->visbacklogs[rend->selected_outer]->done) {
+                        // The selected process is still running so attach to it.
                         rend->attached_outer = rend->selected_outer;
-                        prompt->history_counter = prompt->stdin_history.len;
                     } else {
+                        // Attach to the most recently launched process.
                         for (size_t i = rend->visbacklogs.len; i-- > 0;) {
                             Backlog_State* backlog = rend->visbacklogs[i];
                             if (!backlog->done) {
                                 rend->attached_outer = i;
-                                prompt->history_counter = prompt->stdin_history.len;
                                 break;
                             }
                         }
                     }
 
                     if (rend->attached_outer != -1) {
-                        // Reorder the attached process to be last.
-                        Backlog_State* backlog = rend->visbacklogs[rend->attached_outer];
-                        rend->visbacklogs.remove(rend->attached_outer);
-                        rend->visbacklogs.push(backlog);
-                        rend->attached_outer = rend->visbacklogs.len - 1;
-                        rend->selected_outer = rend->attached_outer;
+                        reorder_attached_to_last(rend);
+                        prompt->history_counter = prompt->stdin_history.len;
                     }
                 } else {
                     rend->attached_outer = -1;
@@ -2746,6 +2740,18 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
         }
     }
     return num_events;
+}
+
+void reorder_attached_to_last(Render_State* rend) {
+    Backlog_State* backlog = rend->visbacklogs[rend->attached_outer];
+    rend->visbacklogs.remove(rend->attached_outer);
+    rend->visbacklogs.push(backlog);
+    rend->attached_outer = rend->visbacklogs.len - 1;
+    rend->selected_outer = rend->attached_outer;
+    rend->backlog_start = {};
+    rend->backlog_start.outer = rend->visbacklogs.len;
+    int lines = cz::max(rend->window_rows, 3) - 3;
+    scroll_up(rend, lines);
 }
 
 ///////////////////////////////////////////////////////////////////////////////

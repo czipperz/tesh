@@ -102,3 +102,5 @@ bool render_code_point(SDL_Surface* window_surface,
 void resize_font(int font_size, Render_State* rend);
 
 size_t find_visbacklog(Render_State* rend, uint64_t the_id);
+
+void reorder_attached_to_last(Render_State * rend);

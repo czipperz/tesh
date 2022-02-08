@@ -691,10 +691,8 @@ static bool tick_program(Shell_State* shell,
         size_t visindex = find_visbacklog(rend, this_process);
         if (visindex != -1) {
             CZ_DEBUG_ASSERT(rend->visbacklogs[visindex]->id == backlog->id);
-            rend->visbacklogs.remove(visindex);
-            rend->visbacklogs.push(backlog);
-            rend->selected_outer = rend->visbacklogs.len - 1;
-            rend->attached_outer = rend->selected_outer;
+            rend->attached_outer = rend->visbacklogs.len - 1;
+            reorder_attached_to_last(rend);
             prompt->history_counter = prompt->stdin_history.len;
         }
         goto finish_builtin;
