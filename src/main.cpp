@@ -1201,7 +1201,11 @@ static void start_completing(Prompt_State* prompt, Shell_State* shell) {
                         executable = is_executable(temp_path.buffer);
 #endif
                         if (executable) {
-                            cz::String file = name.clone_null_terminate(path_allocator);
+                            cz::String file = {};
+                            file.reserve(path_allocator, name.len + 2);
+                            file.append(name);
+                            file.push(' ');
+                            file.null_terminate();
                             prompt->completion.results.reserve(cz::heap_allocator(), 1);
                             prompt->completion.results.push(file);
                         }
