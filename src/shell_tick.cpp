@@ -246,8 +246,8 @@ static bool tick_program(Shell_State* shell,
         if (st.outer == builtin.args.len)
             result = builtin.out.write("\n");
 
-        if (result > 0) {
-            CZ_DEBUG_ASSERT(st.outer == builtin.args.len);
+        if (result >= 0) {
+            // If completely done or found eof then stop.
             goto finish_builtin;
         }
     } break;
