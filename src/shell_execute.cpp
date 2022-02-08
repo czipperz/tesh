@@ -519,7 +519,7 @@ static void open_redirected_files(Stdio_State* stdio,
                                   cz::Allocator allocator,
                                   Shell_Local* local) {
     cz::String path = {};
-    if (stdio->in_type == File_Type_File) {
+    if (stdio->in_type == File_Type_File && parse_program.in_file.buffer) {
         if (parse_program.in_file == "/dev/null") {
             stdio->in = {};
             stdio->in_count = nullptr;
@@ -535,7 +535,7 @@ static void open_redirected_files(Stdio_State* stdio,
         }
     }
 
-    if (stdio->out_type == File_Type_File) {
+    if (stdio->out_type == File_Type_File && parse_program.out_file.buffer) {
         if (parse_program.out_file == "/dev/null") {
             stdio->out = {};
             stdio->out_count = nullptr;
@@ -551,7 +551,7 @@ static void open_redirected_files(Stdio_State* stdio,
         }
     }
 
-    if (stdio->err_type == File_Type_File) {
+    if (stdio->err_type == File_Type_File && parse_program.err_file.buffer) {
         if (parse_program.err_file == "/dev/null") {
             stdio->err = {};
             stdio->err_count = nullptr;
