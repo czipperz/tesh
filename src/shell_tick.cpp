@@ -501,6 +501,7 @@ static bool tick_program(Shell_State* shell,
         cz::Str option = builtin.args[1];
 
         if (option == "history_file") {
+            prompt->history_path.drop(cz::heap_allocator());
             prompt->history_path = builtin.args[2].clone_null_terminate(cz::heap_allocator());
             load_history(prompt, shell);
             goto finish_builtin;

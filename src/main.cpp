@@ -2991,7 +2991,7 @@ int actual_main(int argc, char** argv) {
     load_environment_variables(&shell);
     cz::Str home = {};
     if (get_var(&shell.local, "HOME", &home)) {
-        prompt.history_path = cz::format(temp_allocator, home, "/.tesh_history");
+        prompt.history_path = cz::format(cz::heap_allocator(), home, "/.tesh_history");
     }
 
 #ifdef _WIN32
