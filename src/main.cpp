@@ -2616,7 +2616,7 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
             if (event.button.button == SDL_BUTTON_LEFT) {
                 SDL_Keymod mods = SDL_GetModState();
 
-                // Control click for open link.
+                // Control click for open link or attach.
                 if (mods & KMOD_CTRL) {
                     if (rend->grid_is_valid) {
                         int x, y;
@@ -2644,7 +2644,7 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
                                 prompt->history_counter = prompt->stdin_history.len;
                             }
                         }
-                        rend->selected_outer = rend->attached_outer;
+                        reorder_attached_to_last(rend);
                     }
                     break;
                 }
