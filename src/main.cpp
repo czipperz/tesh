@@ -494,7 +494,7 @@ static void auto_scroll_start_paging(Render_State* rend) {
     // If we put the previous prompt at the top what happens.
     Visual_Point top_prompt = {};
     top_prompt = {};
-    top_prompt.outer = rend->visbacklogs.last()->id;
+    top_prompt.outer = (rend->visbacklogs.len == 0 ? 0 : rend->visbacklogs.len - 1);
 
     rend->backlog_start = top_prompt;
     scroll_down1(rend, rend->window_rows - 3);
