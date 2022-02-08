@@ -510,13 +510,12 @@ static void auto_scroll_start_paging(Render_State* rend) {
     }
 }
 
-static bool stop_selecting(Render_State* rend) {
-    if (rend->selection.type != SELECT_DISABLED) {
-        rend->selection.type = SELECT_DISABLED;
-        rend->complete_redraw = true;
-        return true;
-    }
-    return false;
+static void stop_selecting(Render_State* rend) {
+    if (rend->selection.type == SELECT_DISABLED)
+        return;
+
+    rend->selection.type = SELECT_DISABLED;
+    rend->complete_redraw = true;
 }
 
 static void render_frame(SDL_Window* window,
@@ -2309,16 +2308,20 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
             SDL_Keycode key = event.key.keysym.sym;
 
             if (key == SDLK_ESCAPE) {
-                if (cfg.escape_closes) {
-                    return -1;
-                } else if (stop_selecting(rend)) {
-                    // We were selecting.
-                } else {
+                if (rend->selection.type != SELECT_DISABLED) {
+                    stop_selecting(rend);
+                } else if (prompt->completion.is || prompt->history_searching) {
+                    stop_completing(prompt);
+                    prompt->history_searching = false;
+                } else if (!cfg.escape_closes) {
                     // Detach and select the prompt.
                     rend->attached_outer = -1;
                     rend->selected_outer = rend->attached_outer;
                     prompt->history_counter = prompt->history.len;
+                } else {
+                    return -1;
                 }
+                ++num_events;
                 continue;
             }
 
