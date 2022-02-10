@@ -64,6 +64,7 @@ static void kill_process(Shell_State* shell,
                          cz::Slice<Backlog_State*> backlogs,
                          Backlog_State* backlog,
                          Running_Script* script);
+void escape_arg(cz::Str arg, cz::String* script, cz::Allocator allocator);
 
 ///////////////////////////////////////////////////////////////////////////////
 // Renderer methods
@@ -1201,10 +1202,9 @@ static void start_completing(Prompt_State* prompt, Shell_State* shell) {
                         executable = is_executable(temp_path.buffer);
 #endif
                         if (executable) {
-                            // Put space after executable.
                             cz::String file = {};
                             file.reserve(path_allocator, name.len + 2);
-                            file.append(name);
+                            escape_arg(name, &file, path_allocator);
                             file.push(' ');
                             file.null_terminate();
                             prompt->completion.results.reserve(cz::heap_allocator(), 1);
@@ -1285,14 +1285,14 @@ skip_absolute:
         if (cfg.case_sensitive_completion ? name.starts_with(prefix)
                                           : name.starts_with_case_insensitive(prefix)) {
             temp_path.len = temp_path_orig_len;
-            temp_path.reserve(temp_allocator, name.len + 1);
+            temp_path.reserve(temp_allocator, name.len + 2);
             temp_path.append(name);
             temp_path.null_terminate();
             bool is_dir = cz::file::is_directory(temp_path.buffer);
 
             cz::String file = {};
             file.reserve_exact(path_allocator, name.len + is_dir + 1);
-            file.append(name);
+            escape_arg(name, &file, path_allocator);
             if (is_dir)
                 file.push('/');
             file.null_terminate();
@@ -3197,4 +3197,95 @@ static void set_cursor(Render_State* rend, Visual_Tile tile) {
     const char* hyperlink = get_hyperlink_at(rend, tile);
     SDL_Cursor* cursor = (hyperlink ? rend->click_cursor : rend->default_cursor);
     SDL_SetCursor(cursor);
+}
+
+static bool shell_escape_inside(char c) {
+    switch (c) {
+        case '!':
+        case '"':
+        case '$':
+        case '\\':
+        case '`':
+            return true;
+
+        default:
+            return false;
+    }
+}
+
+static bool shell_escape_outside(char c) {
+    switch (c) {
+        case ' ':
+        case '!':
+        case '"':
+        case '#':
+        case '$':
+        case '&':
+        case '\'':
+        case '(':
+        case ')':
+        case '*':
+        case ',':
+        case ';':
+        case '<':
+        case '>':
+        case '?':
+        case '[':
+        case '\\':
+        case ']':
+        case '^':
+        case '`':
+        case '{':
+        case '|':
+        case '}':
+            return true;
+
+        default:
+            return false;
+    }
+}
+
+void escape_arg(cz::Str arg, cz::String* script, cz::Allocator allocator) {
+
+    size_t escaped_outside = 0;
+    size_t escaped_inside = 0;
+    bool use_string = false;
+    for (size_t i = 0; i < arg.len; ++i) {
+        bool out = shell_escape_outside(arg[i]);
+        bool in = shell_escape_inside(arg[i]);
+        if (out) {
+            escaped_outside++;
+        }
+        if (in) {
+            escaped_inside++;
+        }
+        if (out && !in) {
+            use_string = true;
+        }
+    }
+
+    if (use_string) {
+        script->reserve(allocator, 3 + arg.len + escaped_inside);
+        script->push('"');
+
+        for (size_t i = 0; i < arg.len; ++i) {
+            if (shell_escape_inside(arg[i])) {
+                script->push('\\');
+            }
+
+            script->push(arg[i]);
+        }
+
+        script->push('"');
+    } else {
+        script->reserve(allocator, 1 + arg.len + escaped_outside);
+
+        for (size_t i = 0; i < arg.len; ++i) {
+            if (shell_escape_outside(arg[i])) {
+                script->push('\\');
+            }
+
+            script->push(arg[i]);
+        }
+    }
 }
