@@ -2341,8 +2341,8 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
             }
 
             if ((mod == KMOD_CTRL && event.key.keysym.sym == SDLK_c) ||
-                event.key.keysym.sym == SDLK_RETURN) {
-                bool submit = (event.key.keysym.sym == SDLK_RETURN);
+                event.key.keysym.sym == SDLK_RETURN || event.key.keysym.sym == SDLK_KP_ENTER) {
+                bool submit = (event.key.keysym.sym == SDLK_RETURN) || (event.key.keysym.sym == SDLK_KP_ENTER);
                 bool attached = (rend->attached_outer != -1);
 
                 cz::Vector<cz::Str>* history = prompt_history(prompt, attached);
