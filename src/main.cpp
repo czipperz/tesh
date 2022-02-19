@@ -64,7 +64,7 @@ static void kill_process(Shell_State* shell,
                          cz::Slice<Backlog_State*> backlogs,
                          Backlog_State* backlog,
                          Running_Script* script);
-void escape_arg(cz::Str arg, cz::String* script, cz::Allocator allocator);
+void escape_arg(cz::Str arg, cz::String* script, cz::Allocator allocator, size_t extra);
 
 ///////////////////////////////////////////////////////////////////////////////
 // Renderer methods
@@ -1204,7 +1204,7 @@ static void start_completing(Prompt_State* prompt, Shell_State* shell) {
                         if (executable) {
                             cz::String file = {};
                             file.reserve(path_allocator, name.len + 2);
-                            escape_arg(name, &file, path_allocator);
+                            escape_arg(name, &file, path_allocator, 1);
                             file.push(' ');
                             file.null_terminate();
                             prompt->completion.results.reserve(cz::heap_allocator(), 1);
@@ -1292,7 +1292,7 @@ skip_absolute:
 
             cz::String file = {};
             file.reserve_exact(path_allocator, name.len + is_dir + 1);
-            escape_arg(name, &file, path_allocator);
+            escape_arg(name, &file, path_allocator, 2);
             if (is_dir)
                 file.push('/');
             file.null_terminate();
@@ -3245,7 +3245,7 @@ static bool shell_escape_outside(char c) {
     }
 }
 
-void escape_arg(cz::Str arg, cz::String* script, cz::Allocator allocator) {
+void escape_arg(cz::Str arg, cz::String* script, cz::Allocator allocator, size_t reserve_extra) {
 
     size_t escaped_outside = 0;
     size_t escaped_inside = 0;
@@ -3265,7 +3265,7 @@ void escape_arg(cz::Str arg, cz::String* script, cz::Allocator allocator) {
     }
 
     if (use_string) {
-        script->reserve(allocator, 3 + arg.len + escaped_inside);
+        script->reserve(allocator, 3 + arg.len + escaped_inside + reserve_extra);
         script->push('"');
 
         for (size_t i = 0; i < arg.len; ++i) {
@@ -3278,7 +3278,7 @@ void escape_arg(cz::Str arg, cz::String* script, cz::Allocator allocator) {
 
         script->push('"');
     } else {
-        script->reserve(allocator, 1 + arg.len + escaped_outside);
+        script->reserve(allocator, 1 + arg.len + escaped_outside + reserve_extra);
 
         for (size_t i = 0; i < arg.len; ++i) {
             if (shell_escape_outside(arg[i])) {
