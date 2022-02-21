@@ -963,7 +963,7 @@ static void expand_arg(const Shell_Local* local,
                     }
 
                     for (size_t i = 0; i < value.len;) {
-                        if (cz::is_blank(value[i])) {
+                        if (cz::is_space(value[i])) {
                             if (has_word || word->len > 0) {
                                 words->reserve(cz::heap_allocator(), 1);
                                 words->push(*word);
@@ -973,12 +973,12 @@ static void expand_arg(const Shell_Local* local,
                             ++i;
                         }
                         for (; i < value.len; ++i) {
-                            if (!cz::is_blank(value[i]))
+                            if (!cz::is_space(value[i]))
                                 break;
                         }
 
                         for (; i < value.len; ++i) {
-                            if (cz::is_blank(value[i]))
+                            if (cz::is_space(value[i]))
                                 break;
                             word->reserve(allocator, 1);
                             word->push(value[i]);
