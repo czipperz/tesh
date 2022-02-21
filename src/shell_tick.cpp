@@ -790,6 +790,8 @@ static bool tick_program(Shell_State* shell,
                 st.value.reserve(cz::heap_allocator(), result);
                 st.value.append({buffer, (size_t)result});
             } else if (result == 0) {
+                if (st.value.ends_with('\n'))
+                    st.value.len--; // Remove trailing newline.
                 set_var(local, builtin.args[1], st.value);
                 st.value.drop(cz::heap_allocator());
                 goto finish_builtin;
