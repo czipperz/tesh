@@ -2,9 +2,11 @@
 
 #include <cz/char_type.hpp>
 #include <cz/defer.hpp>
+#include <cz/directory.hpp>
 #include <cz/format.hpp>
 #include <cz/heap.hpp>
 #include <cz/parse.hpp>
+#include <cz/path.hpp>
 
 #include "global.hpp"
 
@@ -806,11 +808,13 @@ static Error deal_with_token(cz::Allocator allocator,
 // Argument expansion
 ///////////////////////////////////////////////////////////////////////////////
 
-void expand_arg(const Shell_Local* local,
-                cz::Str text,
-                cz::Allocator allocator,
-                cz::Vector<cz::Str>* words,
-                cz::String* word) {
+#define SPECIAL_STAR ((char)1)
+
+static void expand_arg(const Shell_Local* local,
+                       cz::Str text,
+                       cz::Allocator allocator,
+                       cz::Vector<cz::Str>* words,
+                       cz::String* word) {
     bool has_word = false;
     for (size_t index = 0; index < text.len;) {
         switch (text[index]) {
@@ -968,6 +972,12 @@ void expand_arg(const Shell_Local* local,
             ++index;
         } break;
 
+        case '*': {
+            word->reserve(allocator, 1);
+            word->push(SPECIAL_STAR);
+            ++index;
+        } break;
+
         case '\\': {
             ++index;
             if (index < text.len) {
@@ -1006,19 +1016,252 @@ void expand_arg(const Shell_Local* local,
     }
 }
 
+struct Pattern {
+    bool flex_start, flex_end;
+    cz::Vector<cz::Str> pieces;
+};
+
+static void expand_matching_pattern(cz::Str dir, Pattern* pattern, cz::Vector<cz::Str>* results);
+static bool find_name_with_star(cz::Str path, cz::Str* name);
+static void parse_pattern(cz::Str name, Pattern* pattern);
+static bool pattern_matches(Pattern* pattern, cz::Str name);
+
+static bool expand_star(const Shell_Local* local,
+                        cz::Str word,
+                        cz::Allocator allocator,
+                        cz::Vector<cz::Str>* results_out,
+                        cz::String* result_out) {
+    cz::Str name;
+    if (!find_name_with_star(word, &name))
+        return false;
+
+    cz::Vector<cz::Str> results[2] = {};
+    CZ_DEFER(results[0].drop(cz::heap_allocator()));
+    CZ_DEFER(results[1].drop(cz::heap_allocator()));
+    results[0].reserve_exact(cz::heap_allocator(), 1);
+
+    cz::Str start_path = word.slice_end(name.buffer);
+    if (start_path.len == 0 || start_path == ".") {
+        results[0].push(get_wd(local));
+    } else if (cz::path::is_absolute(start_path)) {
+        results[0].push(start_path);
+    } else {
+        cz::String first_dir = {};
+        cz::path::make_absolute(start_path, get_wd(local), temp_allocator, &first_dir);
+        results[0].push(first_dir);
+    }
+
+    Pattern pattern = {};
+    CZ_DEFER(pattern.pieces.drop(cz::heap_allocator()));
+
+    int cur = 0;
+    while (1) {
+        parse_pattern(name, &pattern);
+
+        results[1 - cur].len = 0;
+        for (size_t i = 0; i < results[cur].len; ++i) {
+            expand_matching_pattern(results[cur][i], &pattern, &results[1 - cur]);
+        }
+
+        cur = 1 - cur;
+
+        cz::Str name2;
+        if (!find_name_with_star(word.slice_start(name.end()), &name2))
+            break;
+        name = name2;
+    }
+
+    // If there are no results then abort.
+    if (results[cur].len == 0) {
+        return false;
+    }
+
+    if (results_out) {
+        // Output is an array of strings so just append the results.
+        results_out->reserve(cz::heap_allocator(), results[cur].len);
+        results_out->append(results[cur]);
+    } else {
+        // Output is a space separated string so just format the results.
+        size_t total = results[cur].len - 1;
+        for (size_t i = 0; i < results[cur].len; ++i) {
+            total += results[cur][i].len;
+        }
+        result_out->reserve(cz::heap_allocator(), total);
+        for (size_t i = 0; i < results[cur].len; ++i) {
+            if (i != 0)
+                result_out->push(' ');
+            result_out->append(results[cur][i]);
+        }
+    }
+    return true;
+}
+
+static bool find_name_with_star(cz::Str path, cz::Str* name) {
+    const char* first_star = path.find(SPECIAL_STAR);
+    if (!first_star)
+        return false;
+
+    const char* start = first_star;
+    while (1) {
+        if (cz::path::is_dir_sep(*start)) {
+            ++start;
+            break;
+        }
+        if (start == path.buffer)
+            break;
+        --start;
+    }
+
+    const char* end = first_star;
+    while (1) {
+        if (cz::path::is_dir_sep(*end))
+            break;
+        if (end == path.end())
+            break;
+        ++end;
+    }
+
+    *name = path.slice(start, end);
+    return true;
+}
+
+static void parse_pattern(cz::Str name, Pattern* pattern) {
+    pattern->flex_start = false;
+    pattern->flex_end = false;
+    pattern->pieces.len = 0;
+
+    size_t start = 0;
+    size_t end = name.len;
+
+    if (name.starts_with(SPECIAL_STAR)) {
+        pattern->flex_start = true;
+        ++start;
+    }
+    if (name.ends_with(SPECIAL_STAR)) {
+        pattern->flex_end = true;
+        --end;
+    }
+
+    while (start < end && name[end - 1] == SPECIAL_STAR)
+        --end;
+
+    while (1) {
+        while (start < end && name[start] == SPECIAL_STAR)
+            ++start;
+        if (start >= end)
+            break;
+
+        size_t end2 = name.slice(start, end).find_index(SPECIAL_STAR);
+        cz::Str piece = name.slice(start, start + end2);
+        pattern->pieces.reserve(cz::heap_allocator(), 1);
+        pattern->pieces.push(piece);
+        start += end2;
+    }
+}
+
+static void expand_matching_pattern(cz::Str dir, Pattern* pattern, cz::Vector<cz::Str>* results) {
+    cz::Directory_Iterator iterator;
+    cz::String copy = dir.clone_null_terminate(temp_allocator);
+    int result = iterator.init(copy.buffer);
+    copy.drop(temp_allocator);
+
+    if (result <= 0)
+        return;
+    CZ_DEFER(iterator.drop());
+
+    if (dir.ends_with('/'))
+        dir.len--;
+
+    while (1) {
+        cz::Str name = iterator.str_name();
+        if (pattern_matches(pattern, name)) {
+            results->reserve(cz::heap_allocator(), 1);
+            results->push(cz::format(temp_allocator, dir, '/', name));
+        }
+
+        result = iterator.advance();
+        if (result <= 0)
+            break;
+    }
+}
+
+static bool pattern_matches(Pattern* pattern, cz::Str name) {
+    if (pattern->pieces.len == 0) {
+        if (pattern->flex_start)
+            return true;
+        else
+            return name.len == 0;
+    }
+
+    // By definition there must be a star at the start, in the middle, or at the end.
+    CZ_DEBUG_ASSERT(pattern->pieces.len >= 2 || pattern->flex_start || pattern->flex_end);
+
+    // Resolve hard start and end requirements.
+    cz::Slice<cz::Str> pieces = pattern->pieces;
+    if (!pattern->flex_start) {
+        if (!name.starts_with(pieces[0]))
+            return false;
+        name = name.slice_start(pieces[0].len);
+        pieces = pieces.slice_start(1);
+        if (pieces.len == 0)
+            return true;
+    }
+    if (!pattern->flex_end) {
+        if (!name.ends_with(pieces.last()))
+            return false;
+        name = name.slice_end(name.len - pieces[0].len);
+        pieces = pieces.slice_end(pieces.len - 1);
+        if (pieces.len == 0)
+            return true;
+    }
+
+    // Resolve middle pieces.
+    size_t i = 0;
+    for (size_t p = 0; p < pattern->pieces.len; ++p) {
+        cz::Str piece = pattern->pieces[p];
+        const char* ptr = name.slice_start(i).find(piece);
+        if (!ptr)
+            return false;
+        i = ptr - name.buffer;
+    }
+    return true;
+}
+
 void expand_arg_single(const Shell_Local* local,
                        cz::Str text,
                        cz::Allocator allocator,
                        cz::String* word) {
     expand_arg(local, text, allocator, nullptr, word);
+
+    cz::String result = {};
+    if (expand_star(local, *word, allocator, nullptr, &result)) {
+        *word = result;
+    } else {
+        word->replace(SPECIAL_STAR, '*');
+    }
 }
 
 void expand_arg_split(const Shell_Local* local,
                       cz::Str text,
                       cz::Allocator allocator,
                       cz::Vector<cz::Str>* output) {
+    cz::Vector<cz::Str> results = {};
+    CZ_DEFER(results.drop(cz::heap_allocator()));
+
     cz::String word = {};
-    expand_arg(local, text, allocator, output, &word);
+    expand_arg(local, text, allocator, &results, &word);
+
+    for (size_t i = 0; i < results.len; ++i) {
+        cz::Str str = results[i];
+        if (expand_star(local, str, allocator, output, nullptr)) {
+            // Nothing to do, star has been expanded.
+        } else {
+            cz::String temp = {(char*)str.buffer, str.len, str.len};
+            temp.replace(SPECIAL_STAR, '*');
+            output->reserve(cz::heap_allocator(), 1);
+            output->push(str);
+        }
+    }
 }
 
 static void deref_var_at_point(const Shell_Local* local,
