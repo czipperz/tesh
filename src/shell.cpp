@@ -238,6 +238,7 @@ static void kill_program(Running_Program* program) {
 
     default: {
         // TODO: close CAT's file.
+        // TODO: free SET_VAR's value.
         cleanup_builtin(program);
     } break;
     }

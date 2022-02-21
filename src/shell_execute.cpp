@@ -917,5 +917,7 @@ static void setup_builtin(Running_Program* program, cz::Allocator allocator, Std
         program->v.builtin.st.cat = {};
         program->v.builtin.st.cat.buffer = (char*)allocator.alloc({4096, 1});
         program->v.builtin.st.cat.outer = 0;
+    } else if (program->type == Running_Program::SET_VAR) {
+        program->v.builtin.st.set_var = {};
     }
 }

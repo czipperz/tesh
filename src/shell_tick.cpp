@@ -775,6 +775,30 @@ static bool tick_program(Shell_State* shell,
         }
     } break;
 
+    case Running_Program::SET_VAR: {
+        auto& builtin = program->v.builtin;
+        auto& st = builtin.st.set_var;
+
+        if (builtin.args.len != 2) {
+            goto finish_builtin;
+        }
+
+        for (int rounds = 0; rounds < 128; ++rounds) {
+            char buffer[4096];
+            int64_t result = builtin.in.read(buffer, sizeof(buffer));
+            if (result > 0) {
+                st.value.reserve(cz::heap_allocator(), result);
+                st.value.append({buffer, (size_t)result});
+            } else if (result == 0) {
+                set_var(local, builtin.args[1], st.value);
+                st.value.drop(cz::heap_allocator());
+                goto finish_builtin;
+            } else {
+                break;
+            }
+        }
+    } break;
+
     default:
         CZ_PANIC("unreachable");
     }

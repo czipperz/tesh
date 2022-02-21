@@ -231,6 +231,7 @@ struct Running_Program {
         VARDUMP,
         SHIFT,
         HISTORY,
+        SET_VAR,
     } type;
     union {
         cz::Process process;
@@ -272,6 +273,9 @@ struct Running_Program {
                 struct {
                     Stdio_State stdio;
                 } source;
+                struct {
+                    cz::String value;
+                } set_var;
             } st;
         } builtin;
     } v;
