@@ -3,6 +3,8 @@
 #include "global.hpp"
 #include "shell.hpp"
 
+extern uint64_t tesh_sub_counter;
+
 static void test_append_node(cz::Allocator allocator,
                              cz::String* string,
                              Shell_Node* node,
@@ -62,9 +64,10 @@ static void test_append_node(cz::Allocator allocator,
     } break;
 
     case Shell_Node::SEQUENCE: {
-        if (node->async) {
-            append(allocator, string, cz::many(' ', depth * spd), "async:\n");
-            depth++;
+        if (node->async || depth > 0) {
+            append(allocator, string, cz::many(' ', depth * spd),
+                   (node->async ? "async:\n" : "sync:\n"));
+            ++depth;
         }
         for (size_t i = 0; i < node->v.sequence.len; ++i) {
             test_append_node(allocator, string, &node->v.sequence[i], depth);
@@ -663,10 +666,11 @@ TEST_CASE("parse_script ()") {
 and:\n\
     program:\n\
         sub:\n\
-            program:\n\
-                arg0: a\n\
-            program:\n\
-                arg0: b\n\
+            sync:\n\
+                program:\n\
+                    arg0: a\n\
+                program:\n\
+                    arg0: b\n\
     program:\n\
         sub:\n\
             or:\n\
@@ -761,6 +765,7 @@ function:\n\
 TEST_CASE("parse_script subexpr $()") {
     // Temporary hack.
     permanent_allocator = cz::heap_allocator();
+    tesh_sub_counter = 0;
 
     Shell_State shell = {};
     cz::String string = {};
@@ -768,14 +773,21 @@ TEST_CASE("parse_script subexpr $()") {
     REQUIRE(error == Error_Success);
     CHECK(string.as_str() ==
           "\
-program:\n\
-    sub0:\n\
+pipeline:\n\
+    sync:\n\
+        pipeline:\n\
+            program:\n\
+                arg0: y\n\
+            program:\n\
+                arg0: __tesh_set_var\n\
+                arg1: __tesh_sub0\n\
         program:\n\
-            sub0:\n\
-                program:\n\
-                    arg0: y\n\
             arg0: c\n\
             arg1: x${__tesh_sub0}z\n\
             arg2: d\n\
-    arg0: a${__tesh_sub0}b\n");
+    program:\n\
+        arg0: __tesh_set_var\n\
+        arg1: __tesh_sub1\n\
+program:\n\
+    arg0: a${__tesh_sub1}b\n");
 }
