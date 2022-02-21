@@ -791,3 +791,33 @@ pipeline:\n\
 program:\n\
     arg0: a${__tesh_sub1}b\n");
 }
+
+TEST_CASE("parse_script subexpr $() inside quotes") {
+    // Temporary hack.
+    permanent_allocator = cz::heap_allocator();
+    tesh_sub_counter = 0;
+
+    Shell_State shell = {};
+    cz::String string = {};
+    Error error = parse_and_emit(&shell, &string, "a\"$(c x$(y)z d)\"b");
+    REQUIRE(error == Error_Success);
+    CHECK(string.as_str() ==
+          "\
+pipeline:\n\
+    sync:\n\
+        pipeline:\n\
+            program:\n\
+                arg0: y\n\
+            program:\n\
+                arg0: __tesh_set_var\n\
+                arg1: __tesh_sub0\n\
+        program:\n\
+            arg0: c\n\
+            arg1: x${__tesh_sub0}z\n\
+            arg2: d\n\
+    program:\n\
+        arg0: __tesh_set_var\n\
+        arg1: __tesh_sub1\n\
+program:\n\
+    arg0: a\"${__tesh_sub1}\"b\n");
+}

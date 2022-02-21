@@ -14,6 +14,17 @@
 uint64_t tesh_sub_counter = 0;
 
 ///////////////////////////////////////////////////////////////////////////////
+// Type Definitions
+///////////////////////////////////////////////////////////////////////////////
+
+// See deal_with_token.
+struct Slice_State {
+    cz::Vector<size_t> outs;
+    size_t removed;
+    size_t added;
+};
+
+///////////////////////////////////////////////////////////////////////////////
 // Forward declarations
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -26,11 +37,13 @@ static Error advance_through_token(cz::Str text,
 static Error advance_through_single_quote_string(cz::Str text, size_t* index);
 static Error advance_through_double_quote_string(cz::Str text,
                                                  size_t* index,
+                                                 Slice_State* slice,
                                                  cz::Vector<Shell_Node>* subexprs,
                                                  bool force_alloc,
                                                  cz::Allocator allocator);
 static Error advance_through_dollar_sign(cz::Str text,
                                          size_t* index,
+                                         Slice_State* slice,
                                          cz::Vector<Shell_Node>* subexprs,
                                          bool force_alloc,
                                          cz::Allocator allocator);
@@ -243,14 +256,15 @@ static Error advance_through_token(cz::Str text,
 
         case '"': {
             *any_special = true;
-            Error error = advance_through_double_quote_string(text, index, nullptr, false, {});
+            Error error =
+                advance_through_double_quote_string(text, index, nullptr, nullptr, false, {});
             if (error != Error_Success)
                 return error;
         } break;
 
         case '$': {
             *any_special = true;
-            Error error = advance_through_dollar_sign(text, index, nullptr, false, {});
+            Error error = advance_through_dollar_sign(text, index, nullptr, nullptr, false, {});
             if (error != Error_Success)
                 return error;
         } break;
@@ -292,6 +306,7 @@ static Error advance_through_single_quote_string(cz::Str text, size_t* index) {
 
 static Error advance_through_double_quote_string(cz::Str text,
                                                  size_t* index,
+                                                 Slice_State* slice,
                                                  cz::Vector<Shell_Node>* subexprs,
                                                  bool force_alloc,
                                                  cz::Allocator allocator) {
@@ -311,7 +326,7 @@ static Error advance_through_double_quote_string(cz::Str text,
 
         if (text[*index] == '$') {
             Error error =
-                advance_through_dollar_sign(text, index, subexprs, force_alloc, allocator);
+                advance_through_dollar_sign(text, index, slice, subexprs, force_alloc, allocator);
             if (error != Error_Success)
                 return error;
         }
@@ -328,9 +343,11 @@ static Error advance_through_double_quote_string(cz::Str text,
 
 static Error advance_through_dollar_sign(cz::Str text,
                                          size_t* index,
+                                         Slice_State* slice,
                                          cz::Vector<Shell_Node>* subexprs,
                                          bool force_alloc,
                                          cz::Allocator allocator) {
+    size_t start = *index;
     ++*index;
     if (*index == text.len)
         return Error_Success;
@@ -415,9 +432,9 @@ static Error advance_through_dollar_sign(cz::Str text,
             Shell_Node subnode = {};
 
             cz::Str terminators[] = {")"};
-            size_t index = 0;
+            size_t token_index = 0;
             Error error =
-                parse_sequence(allocator, force_alloc, tokens, &subnode, &index, terminators);
+                parse_sequence(allocator, force_alloc, tokens, &subnode, &token_index, terminators);
             if (error != Error_Success)
                 return error;
 
@@ -438,6 +455,17 @@ static Error advance_through_dollar_sign(cz::Str text,
 
             subexprs->reserve(cz::heap_allocator(), 1);
             subexprs->push(pipeline);
+
+            CZ_DEBUG_ASSERT(slice);
+
+            slice->outs.reserve(cz::heap_allocator(), 3);
+            slice->outs.push(start);
+            slice->outs.push(*index);
+            slice->outs.push(tesh_sub_counter - 1);
+            slice->removed += *index - start;
+            cz::String number = cz::format(temp_allocator, tesh_sub_counter);
+            slice->added += strlen("${__tesh_sub}") + number.len;
+            number.drop(temp_allocator);
         }
     } break;
 
@@ -748,10 +776,8 @@ static Error deal_with_token(cz::Allocator allocator,
                              Parse_Program* program,
                              cz::Vector<Shell_Node>* subexprs,
                              cz::Str token) {
-    cz::Vector<size_t> slice_outs = {};
-    CZ_DEFER(slice_outs.drop(cz::heap_allocator()));
-    size_t removed = 0;
-    size_t added = 0;
+    Slice_State slice = {};
+    CZ_DEFER(slice.outs.drop(cz::heap_allocator()));
 
     bool any_special = false;
     for (size_t index = 0; index < token.len;) {
@@ -764,27 +790,16 @@ static Error deal_with_token(cz::Allocator allocator,
 
         case '"': {
             any_special = true;
-            Error error = advance_through_double_quote_string(token, &index, subexprs, force_alloc,
-                                                              allocator);
+            Error error = advance_through_double_quote_string(token, &index, &slice, subexprs,
+                                                              force_alloc, allocator);
             CZ_ASSERT(error == Error_Success);
         } break;
 
         case '$': {
             any_special = true;
-            size_t start = index;
-            Error error =
-                advance_through_dollar_sign(token, &index, subexprs, force_alloc, allocator);
+            Error error = advance_through_dollar_sign(token, &index, &slice, subexprs, force_alloc,
+                                                      allocator);
             CZ_ASSERT(error == Error_Success);
-            if (start + 1 < token.len && token[start + 1] == '(') {
-                slice_outs.reserve(cz::heap_allocator(), 3);
-                slice_outs.push(start);
-                slice_outs.push(index);
-                slice_outs.push(tesh_sub_counter - 1);
-                removed += index - start;
-                cz::String number = cz::format(temp_allocator, tesh_sub_counter);
-                added += strlen("${__tesh_sub}") + number.len;
-                number.drop(temp_allocator);
-            }
         } break;
 
         case '=': {
@@ -816,18 +831,18 @@ static Error deal_with_token(cz::Allocator allocator,
         return Error_Parse_UnterminatedProgram;
     }
 
-    if (force_alloc || slice_outs.len > 0) {
+    if (force_alloc || slice.outs.len > 0) {
         cz::String token2 = {};
-        token2.reserve_exact(allocator, token.len - removed + added);
+        token2.reserve_exact(allocator, token.len - slice.removed + slice.added);
 
         size_t start = 0;
-        for (size_t i = 0; i < slice_outs.len; i += 3) {
-            size_t end = slice_outs[i];
+        for (size_t i = 0; i < slice.outs.len; i += 3) {
+            size_t end = slice.outs[i];
             token2.append(token.slice(start, end));
             token2.append("${__tesh_sub");
-            cz::append(allocator, &token2, slice_outs[i + 2]);
+            cz::append(allocator, &token2, slice.outs[i + 2]);
             token2.push('}');
-            start = slice_outs[i + 1];
+            start = slice.outs[i + 1];
         }
         if (start < token.len) {
             token2.append(token.slice_start(start));
