@@ -2470,6 +2470,7 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
                     new_font_size = cz::max(new_font_size - 4, 4);
                 }
                 resize_font(new_font_size, rend);
+                rend->grid_is_valid = false;
                 ++num_events;
                 continue;
             }
@@ -2600,6 +2601,7 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
                     new_font_size = cz::max(new_font_size - 2, 2);
                 }
                 resize_font(new_font_size, rend);
+                rend->grid_is_valid = false;
             } else {
                 if (event.wheel.y < 0) {
                     scroll_down(rend, -event.wheel.y);
