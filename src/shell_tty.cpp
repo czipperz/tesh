@@ -85,7 +85,11 @@ bool create_pseudo_terminal(Pseudo_Terminal* tty, int width, int height) {
 #else
     struct winsize size = {};
     size.ws_row = height;
-    size.ws_col = width;
+    if (cfg.windows_wide_terminal) {
+        size.ws_col = 1000;
+    } else {
+        size.ws_col = width;
+    }
     int result =
         openpty(&tty->parent_bi, &tty->child_bi, /*name=*/nullptr, /*termios=*/nullptr, &size);
     if (result < 0)
@@ -134,7 +138,11 @@ bool set_window_size(Pseudo_Terminal* tty, int width, int height) {
 #else
     struct winsize size = {};
     size.ws_row = height;
-    size.ws_col = width;
+    if (cfg.windows_wide_terminal) {
+        size.ws_col = 1000;
+    } else {
+        size.ws_col = width;
+    }
     int result = ioctl(tty->child_bi, TIOCSWINSZ, &size);
     return result == 0;
 #endif
