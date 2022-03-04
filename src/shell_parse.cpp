@@ -723,6 +723,23 @@ static Error parse_program(cz::Allocator allocator,
         if (token == "<" || token == ">" || token == "1>" || token == "2>") {
             if (*index + 1 == tokens.len)
                 return Error_Parse_NothingToIndirect;
+
+            cz::Str value = tokens[*index + 1];
+
+            if (tokens[*index + 1] == "&") {
+                if (*index + 2 == tokens.len)
+                    return Error_Parse_NothingToIndirect;
+
+                if (tokens[*index + 2] == "1")
+                    value = program.out_file;
+                else if (tokens[*index + 2] == "2")
+                    value = program.err_file;
+                else
+                    return Error_Parse_NothingToIndirect;
+
+                ++*index;
+            }
+
             cz::Str* slot;
             if (token == "<") {
                 slot = &program.in_file;
@@ -735,7 +752,7 @@ static Error parse_program(cz::Allocator allocator,
             }
 
             if (slot->starts_with("__tesh_std_"))
-                *slot = tokens[*index + 1];
+                *slot = value;
             *index += 2;
             continue;
         }

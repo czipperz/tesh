@@ -313,6 +313,56 @@ program:\n\
     out_file: out\n");
 }
 
+TEST_CASE("parse_script file indirection 2>&1") {
+    Shell_State shell = {};
+    cz::String string = {};
+    Error error = parse_and_emit(&shell, &string, "echo 2>&1");
+    REQUIRE(error == Error_Success);
+    CHECK(string.as_str() ==
+          "\
+program:\n\
+    arg0: echo\n\
+    err_file: __tesh_std_out\n");
+}
+
+TEST_CASE("parse_script file indirection >&2") {
+    Shell_State shell = {};
+    cz::String string = {};
+    Error error = parse_and_emit(&shell, &string, "echo >&2");
+    REQUIRE(error == Error_Success);
+    CHECK(string.as_str() ==
+          "\
+program:\n\
+    arg0: echo\n\
+    out_file: __tesh_std_err\n");
+}
+
+TEST_CASE("parse_script file indirection 2>&1 propagate") {
+    Shell_State shell = {};
+    cz::String string = {};
+    Error error = parse_and_emit(&shell, &string, "echo >file 2>&1");
+    REQUIRE(error == Error_Success);
+    CHECK(string.as_str() ==
+          "\
+program:\n\
+    arg0: echo\n\
+    out_file: file\n\
+    err_file: file\n");
+}
+
+TEST_CASE("parse_script file indirection >&2 propagate") {
+    Shell_State shell = {};
+    cz::String string = {};
+    Error error = parse_and_emit(&shell, &string, "echo 2>file >&2");
+    REQUIRE(error == Error_Success);
+    CHECK(string.as_str() ==
+          "\
+program:\n\
+    arg0: echo\n\
+    out_file: file\n\
+    err_file: file\n");
+}
+
 TEST_CASE("parse_script variable expand simple") {
     Shell_State shell = {};
     set_var(&shell.local, "var", "$value");

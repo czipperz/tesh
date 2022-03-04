@@ -446,14 +446,20 @@ static Error link_stdio(Stdio_State* stdio,
                         cz::Slice<Shell_Node> program_nodes,
                         size_t p,
                         bool bind_stdin) {
+    Stdio_State old_stdio = *stdio;
+
     // Bind stdin.
     if (parse_program.in_file != "__tesh_std_in") {
         stdio->in_type = File_Type_File;
     } else if (p > 0) {
-        stdio->in_type = File_Type_Pipe;
-        stdio->in = *pipe_in;
-        stdio->in_count = allocator.alloc<size_t>();
-        *stdio->in_count = 1;
+        if (pipe_in->is_open()) {
+            stdio->in_type = File_Type_Pipe;
+            stdio->in = *pipe_in;
+            stdio->in_count = allocator.alloc<size_t>();
+            *stdio->in_count = 1;
+        } else {
+            stdio->in_type = File_Type_None;
+        }
     } else if (!bind_stdin) {
         stdio->in_type = File_Type_None;
     } else {
@@ -465,7 +471,11 @@ static Error link_stdio(Stdio_State* stdio,
     // Bind stdout.
     if (parse_program.out_file != "__tesh_std_out") {
         if (parse_program.out_file == "__tesh_std_err") {
-            CZ_PANIC("TODO");
+            stdio->out_type = old_stdio.err_type;
+            stdio->out = old_stdio.err;
+            stdio->out_count = old_stdio.err_count;
+            if (stdio->out_count)
+                ++*stdio->out_count;
         } else {
             stdio->out_type = File_Type_File;
         }
@@ -479,7 +489,15 @@ static Error link_stdio(Stdio_State* stdio,
     // Bind stderr.
     if (parse_program.err_file != "__tesh_std_err") {
         if (parse_program.err_file == "__tesh_std_out") {
-            CZ_PANIC("TODO");
+            if (p + 1 < program_nodes.len) {
+                stdio->err_type = File_Type_Pipe;
+            } else {
+                stdio->err_type = old_stdio.out_type;
+                stdio->err = old_stdio.out;
+                stdio->err_count = old_stdio.out_count;
+                if (stdio->err_count)
+                    ++*stdio->err_count;
+            }
         } else {
             stdio->err_type = File_Type_File;
         }
@@ -493,7 +511,7 @@ static Error link_stdio(Stdio_State* stdio,
         (p + 1 < program_nodes.len)) {
         Shell_Node* next = &program_nodes[p + 1];
         CZ_ASSERT(next->type == Shell_Node::PROGRAM);  // TODO
-        if (!next->v.program->in_file.buffer) {
+        if (next->v.program->in_file == "__tesh_std_in") {
             cz::Output_File pipe_out;
             if (!cz::create_pipe(pipe_in, &pipe_out))
                 return Error_IO;
@@ -529,6 +547,7 @@ static void open_redirected_files(Stdio_State* stdio,
     cz::String path = {};
     if (stdio->in_type == File_Type_File && !parse_program.in_file.starts_with("__tesh_std_")) {
         if (parse_program.in_file == "/dev/null") {
+            stdio->in_type = File_Type_None;
             stdio->in = {};
             stdio->in_count = nullptr;
         } else if (error_path->len == 0) {
@@ -545,6 +564,7 @@ static void open_redirected_files(Stdio_State* stdio,
 
     if (stdio->out_type == File_Type_File && !parse_program.out_file.starts_with("__tesh_std_")) {
         if (parse_program.out_file == "/dev/null") {
+            stdio->out_type = File_Type_None;
             stdio->out = {};
             stdio->out_count = nullptr;
         } else if (error_path->len == 0) {
@@ -561,6 +581,7 @@ static void open_redirected_files(Stdio_State* stdio,
 
     if (stdio->err_type == File_Type_File && !parse_program.err_file.starts_with("__tesh_std_")) {
         if (parse_program.err_file == "/dev/null") {
+            stdio->err_type = File_Type_None;
             stdio->err = {};
             stdio->err_count = nullptr;
         } else if (error_path->len == 0) {
@@ -773,11 +794,11 @@ static Error run_program(Shell_State* shell,
     }
 #endif
 
-    if (stdio.in_type != File_Type_Terminal && !options.std_in.set_inheritable())
+    if (options.std_in.is_open() && !options.std_in.set_inheritable())
         return Error_IO;
-    if (stdio.out_type != File_Type_Terminal && !options.std_out.set_inheritable())
+    if (options.std_out.is_open() && !options.std_out.set_inheritable())
         return Error_IO;
-    if (stdio.err_type != File_Type_Terminal && !options.std_err.set_inheritable())
+    if (options.std_err.is_open() && !options.std_err.set_inheritable())
         return Error_IO;
 
     options.working_directory = get_wd(local).buffer;
@@ -786,11 +807,11 @@ static Error run_program(Shell_State* shell,
     program->v.process = {};
     bool result = program->v.process.launch_program(args, options);
 
-    if (stdio.in_type != File_Type_Terminal && !options.std_in.set_non_inheritable())
+    if (options.std_in.is_open() && !options.std_in.set_non_inheritable())
         return Error_IO;
-    if (stdio.out_type != File_Type_Terminal && !options.std_out.set_non_inheritable())
+    if (options.std_out.is_open() && !options.std_out.set_non_inheritable())
         return Error_IO;
-    if (stdio.err_type != File_Type_Terminal && !options.std_err.set_non_inheritable())
+    if (options.std_err.is_open() && !options.std_err.set_non_inheritable())
         return Error_IO;
 
     close_rc_file(stdio.in_count, stdio.in);
