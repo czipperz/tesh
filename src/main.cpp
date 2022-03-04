@@ -1017,6 +1017,20 @@ static void goto_previous_history_match(Prompt_State* prompt, cz::Slice<cz::Str>
     }
 }
 
+static void goto_next_history_match(Prompt_State* prompt, cz::Slice<cz::Str> history) {
+    while (1) {
+        ++prompt->history_counter;
+        if (prompt->history_counter >= history.len) {
+            prompt->history_counter = history.len;
+            prompt->history_searching = false;
+            break;
+        }
+        cz::Str hist = history[prompt->history_counter];
+        if (hist.contains_case_insensitive(prompt->text))
+            break;
+    }
+}
+
 static void finish_prompt_manipulation(Shell_State* shell,
                                        Render_State* rend,
                                        Prompt_State* prompt,
@@ -1527,26 +1541,36 @@ static bool handle_prompt_manipulation_commands(Shell_State* shell,
     ///////////////////////////////////////////////////////////////////////
 
     else if ((mod == 0 && key == SDLK_UP) || (mod == KMOD_CTRL && key == SDLK_p)) {
-        if (prompt->history_counter > 0) {
-            --prompt->history_counter;
-            clear_undo_tree(prompt);
-            prompt->text.len = 0;
-            cz::Str hist = (*history)[prompt->history_counter];
-            prompt->text.reserve(cz::heap_allocator(), hist.len);
-            prompt->text.append(hist);
-            prompt->cursor = prompt->text.len;
-        }
-    } else if ((mod == 0 && key == SDLK_DOWN) || (mod == KMOD_CTRL && key == SDLK_n)) {
-        if (prompt->history_counter < history->len) {
-            ++prompt->history_counter;
-            clear_undo_tree(prompt);
-            prompt->text.len = 0;
-            if (prompt->history_counter < history->len) {
+        if (prompt->history_searching) {
+            doing_history = true;
+            goto_next_history_match(prompt, *history);
+        } else {
+            if (prompt->history_counter > 0) {
+                --prompt->history_counter;
+                clear_undo_tree(prompt);
+                prompt->text.len = 0;
                 cz::Str hist = (*history)[prompt->history_counter];
                 prompt->text.reserve(cz::heap_allocator(), hist.len);
                 prompt->text.append(hist);
+                prompt->cursor = prompt->text.len;
             }
-            prompt->cursor = prompt->text.len;
+        }
+    } else if ((mod == 0 && key == SDLK_DOWN) || (mod == KMOD_CTRL && key == SDLK_n)) {
+        if (prompt->history_searching) {
+            doing_history = true;
+            goto_previous_history_match(prompt, *history);
+        } else {
+            if (prompt->history_counter < history->len) {
+                ++prompt->history_counter;
+                clear_undo_tree(prompt);
+                prompt->text.len = 0;
+                if (prompt->history_counter < history->len) {
+                    cz::Str hist = (*history)[prompt->history_counter];
+                    prompt->text.reserve(cz::heap_allocator(), hist.len);
+                    prompt->text.append(hist);
+                }
+                prompt->cursor = prompt->text.len;
+            }
         }
     } else if (mod == KMOD_CTRL && key == SDLK_r) {
         doing_history = true;
@@ -1557,19 +1581,11 @@ static bool handle_prompt_manipulation_commands(Shell_State* shell,
         goto_previous_history_match(prompt, *history);
     } else if (mod == KMOD_ALT && key == SDLK_r) {
         doing_history = true;
-        if (prompt->history_searching) {
-            while (1) {
-                ++prompt->history_counter;
-                if (prompt->history_counter >= history->len) {
-                    prompt->history_counter = history->len;
-                    prompt->history_searching = false;
-                    break;
-                }
-                cz::Str hist = (*history)[prompt->history_counter];
-                if (hist.contains_case_insensitive(prompt->text))
-                    break;
-            }
+        if (!prompt->history_searching) {
+            prompt->history_searching = true;
+            prompt->history_counter = history->len;
         }
+        goto_next_history_match(prompt, *history);
     } else if (mod == KMOD_CTRL && key == SDLK_g) {
         resolve_history_searching(prompt, history);
     }
@@ -2342,7 +2358,8 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
 
             if ((mod == KMOD_CTRL && event.key.keysym.sym == SDLK_c) ||
                 event.key.keysym.sym == SDLK_RETURN || event.key.keysym.sym == SDLK_KP_ENTER) {
-                bool submit = (event.key.keysym.sym == SDLK_RETURN) || (event.key.keysym.sym == SDLK_KP_ENTER);
+                bool submit = (event.key.keysym.sym == SDLK_RETURN) ||
+                              (event.key.keysym.sym == SDLK_KP_ENTER);
                 bool attached = (rend->attached_outer != -1);
 
                 cz::Vector<cz::Str>* history = prompt_history(prompt, attached);
@@ -3203,52 +3220,51 @@ static void set_cursor(Render_State* rend, Visual_Tile tile) {
 
 static bool shell_escape_inside(char c) {
     switch (c) {
-        case '!':
-        case '"':
-        case '$':
-        case '\\':
-        case '`':
-            return true;
+    case '!':
+    case '"':
+    case '$':
+    case '\\':
+    case '`':
+        return true;
 
-        default:
-            return false;
+    default:
+        return false;
     }
 }
 
 static bool shell_escape_outside(char c) {
     switch (c) {
-        case ' ':
-        case '!':
-        case '"':
-        case '#':
-        case '$':
-        case '&':
-        case '\'':
-        case '(':
-        case ')':
-        case '*':
-        case ',':
-        case ';':
-        case '<':
-        case '>':
-        case '?':
-        case '[':
-        case '\\':
-        case ']':
-        case '^':
-        case '`':
-        case '{':
-        case '|':
-        case '}':
-            return true;
+    case ' ':
+    case '!':
+    case '"':
+    case '#':
+    case '$':
+    case '&':
+    case '\'':
+    case '(':
+    case ')':
+    case '*':
+    case ',':
+    case ';':
+    case '<':
+    case '>':
+    case '?':
+    case '[':
+    case '\\':
+    case ']':
+    case '^':
+    case '`':
+    case '{':
+    case '|':
+    case '}':
+        return true;
 
-        default:
-            return false;
+    default:
+        return false;
     }
 }
 
 void escape_arg(cz::Str arg, cz::String* script, cz::Allocator allocator, size_t reserve_extra) {
-
     size_t escaped_outside = 0;
     size_t escaped_inside = 0;
     bool use_string = false;
