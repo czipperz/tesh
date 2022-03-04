@@ -404,12 +404,20 @@ void append_node(cz::Allocator allocator,
             }
         }
 
-        if (program->in_file.buffer)
+        if (program->in_file != "__tesh_std_in")
             cz::append(allocator, string, " < ", program->in_file);
-        if (program->out_file.buffer)
-            cz::append(allocator, string, " > ", program->out_file);
-        if (program->err_file.buffer)
-            cz::append(allocator, string, " 2> ", program->err_file);
+        if (program->out_file != "__tesh_std_out") {
+            if (program->out_file == "__tesh_std_err")
+                cz::append(allocator, string, " >&2");
+            else
+                cz::append(allocator, string, " > ", program->out_file);
+        }
+        if (program->err_file != "__tesh_std_err") {
+            if (program->err_file == "__tesh_std_out")
+                cz::append(allocator, string, " 2>&1");
+            else
+                cz::append(allocator, string, " 2> ", program->err_file);
+        }
 
         if (node->async)
             cz::append(allocator, string, " &");

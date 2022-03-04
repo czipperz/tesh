@@ -734,7 +734,7 @@ static Error parse_program(cz::Allocator allocator,
                 CZ_PANIC("unreachable");
             }
 
-            if (!slot->buffer)
+            if (slot->starts_with("__tesh_std_"))
                 *slot = tokens[*index + 1];
             *index += 2;
             continue;

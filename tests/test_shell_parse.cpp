@@ -34,15 +34,15 @@ static void test_append_node(cz::Allocator allocator,
                        program->v.args[i], '\n');
             }
         }
-        if (program->in_file.buffer) {
+        if (program->in_file != "__tesh_std_in") {
             append(allocator, string, cz::many(' ', (depth + 1) * spd),
                    "in_file: ", program->in_file, '\n');
         }
-        if (program->out_file.buffer) {
+        if (program->out_file != "__tesh_std_out") {
             append(allocator, string, cz::many(' ', (depth + 1) * spd),
                    "out_file: ", program->out_file, '\n');
         }
-        if (program->err_file.buffer) {
+        if (program->err_file != "__tesh_std_err") {
             append(allocator, string, cz::many(' ', (depth + 1) * spd),
                    "err_file: ", program->err_file, '\n');
         }

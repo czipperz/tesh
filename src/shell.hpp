@@ -311,10 +311,9 @@ struct Parse_Program {
         Shell_Node* sub;
     } v;
 
-    /// Note: `Str::buffer == null` means not present.
-    cz::Str in_file;
-    cz::Str out_file;
-    cz::Str err_file;
+    cz::Str in_file = "__tesh_std_in";
+    cz::Str out_file = "__tesh_std_out";
+    cz::Str err_file = "__tesh_std_err";
 };
 
 struct Shell_Node {

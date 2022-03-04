@@ -416,21 +416,21 @@ static void start_execute_pipeline(Shell_State* shell,
 static void expand_file_arguments(Parse_Program* parse_program,
                                   Shell_Local* local,
                                   cz::Allocator allocator) {
-    if (parse_program->in_file.buffer) {
+    if (!parse_program->in_file.starts_with("__tesh_std_")) {
         cz::String file = {};
         expand_arg_single(local, parse_program->in_file, allocator, &file);
         // Reallocate to ensure the file isn't null and also don't waste space.
         file.realloc_null_terminate(allocator);
         parse_program->in_file = file;
     }
-    if (parse_program->out_file.buffer) {
+    if (!parse_program->out_file.starts_with("__tesh_std_")) {
         cz::String file = {};
         expand_arg_single(local, parse_program->out_file, allocator, &file);
         // Reallocate to ensure the file isn't null and also don't waste space.
         file.realloc_null_terminate(allocator);
         parse_program->out_file = file;
     }
-    if (parse_program->err_file.buffer) {
+    if (!parse_program->err_file.starts_with("__tesh_std_")) {
         cz::String file = {};
         expand_arg_single(local, parse_program->err_file, allocator, &file);
         // Reallocate to ensure the file isn't null and also don't waste space.
@@ -447,7 +447,7 @@ static Error link_stdio(Stdio_State* stdio,
                         size_t p,
                         bool bind_stdin) {
     // Bind stdin.
-    if (parse_program.in_file.buffer) {
+    if (parse_program.in_file != "__tesh_std_in") {
         stdio->in_type = File_Type_File;
     } else if (p > 0) {
         stdio->in_type = File_Type_Pipe;
@@ -463,8 +463,12 @@ static Error link_stdio(Stdio_State* stdio,
     *pipe_in = {};
 
     // Bind stdout.
-    if (parse_program.out_file.buffer) {
-        stdio->out_type = File_Type_File;
+    if (parse_program.out_file != "__tesh_std_out") {
+        if (parse_program.out_file == "__tesh_std_err") {
+            CZ_PANIC("TODO");
+        } else {
+            stdio->out_type = File_Type_File;
+        }
     } else if (p + 1 < program_nodes.len) {
         stdio->out_type = File_Type_Pipe;
     } else {
@@ -473,8 +477,12 @@ static Error link_stdio(Stdio_State* stdio,
     }
 
     // Bind stderr.
-    if (parse_program.err_file.buffer) {
-        stdio->err_type = File_Type_File;
+    if (parse_program.err_file != "__tesh_std_err") {
+        if (parse_program.err_file == "__tesh_std_out") {
+            CZ_PANIC("TODO");
+        } else {
+            stdio->err_type = File_Type_File;
+        }
     } else {
         if (stdio->err_count)
             ++*stdio->err_count;
@@ -519,7 +527,7 @@ static void open_redirected_files(Stdio_State* stdio,
                                   cz::Allocator allocator,
                                   Shell_Local* local) {
     cz::String path = {};
-    if (stdio->in_type == File_Type_File && parse_program.in_file.buffer) {
+    if (stdio->in_type == File_Type_File && !parse_program.in_file.starts_with("__tesh_std_")) {
         if (parse_program.in_file == "/dev/null") {
             stdio->in = {};
             stdio->in_count = nullptr;
@@ -535,7 +543,7 @@ static void open_redirected_files(Stdio_State* stdio,
         }
     }
 
-    if (stdio->out_type == File_Type_File && parse_program.out_file.buffer) {
+    if (stdio->out_type == File_Type_File && !parse_program.out_file.starts_with("__tesh_std_")) {
         if (parse_program.out_file == "/dev/null") {
             stdio->out = {};
             stdio->out_count = nullptr;
@@ -551,7 +559,7 @@ static void open_redirected_files(Stdio_State* stdio,
         }
     }
 
-    if (stdio->err_type == File_Type_File && parse_program.err_file.buffer) {
+    if (stdio->err_type == File_Type_File && !parse_program.err_file.starts_with("__tesh_std_")) {
         if (parse_program.err_file == "/dev/null") {
             stdio->err = {};
             stdio->err_count = nullptr;
