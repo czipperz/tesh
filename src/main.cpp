@@ -1544,6 +1544,11 @@ static bool handle_prompt_manipulation_commands(Shell_State* shell,
         if (prompt->history_searching) {
             doing_history = true;
             goto_next_history_match(prompt, *history);
+        } else if (prompt->completion.is) {
+            doing_completion = true;
+            if (prompt->completion.current == 0)
+                prompt->completion.current = prompt->completion.results.len;
+            prompt->completion.current--;
         } else {
             if (prompt->history_counter > 0) {
                 --prompt->history_counter;
@@ -1559,6 +1564,11 @@ static bool handle_prompt_manipulation_commands(Shell_State* shell,
         if (prompt->history_searching) {
             doing_history = true;
             goto_previous_history_match(prompt, *history);
+        } else if (prompt->completion.is) {
+            doing_completion = true;
+            prompt->completion.current++;
+            if (prompt->completion.current == prompt->completion.results.len)
+                prompt->completion.current = 0;
         } else {
             if (prompt->history_counter < history->len) {
                 ++prompt->history_counter;
