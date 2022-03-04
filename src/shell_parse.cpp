@@ -7,6 +7,7 @@
 #include <cz/heap.hpp>
 #include <cz/parse.hpp>
 #include <cz/path.hpp>
+#include <cz/working_directory.hpp>
 
 #include "global.hpp"
 
@@ -1093,15 +1094,8 @@ static bool expand_star(const Shell_Local* local,
     results[0].reserve_exact(cz::heap_allocator(), 1);
 
     cz::Str start_path = word.slice_end(name.buffer);
-    if (start_path.len == 0 || start_path == ".") {
-        results[0].push(get_wd(local));
-    } else if (cz::path::is_absolute(start_path)) {
-        results[0].push(start_path);
-    } else {
-        cz::String first_dir = {};
-        cz::path::make_absolute(start_path, get_wd(local), temp_allocator, &first_dir);
-        results[0].push(first_dir);
-    }
+    results[0].push(start_path);
+    cz::set_working_directory(get_wd(local).clone_null_terminate(temp_allocator).buffer);
 
     Pattern pattern = {};
     CZ_DEFER(pattern.pieces.drop(cz::heap_allocator()));
@@ -1221,6 +1215,7 @@ static void expand_matching_pattern(cz::Str dir, Pattern* pattern, cz::Vector<cz
         return;
     CZ_DEFER(iterator.drop());
 
+    bool empty = (dir.len == 0);
     if (dir.ends_with('/'))
         dir.len--;
 
@@ -1228,7 +1223,10 @@ static void expand_matching_pattern(cz::Str dir, Pattern* pattern, cz::Vector<cz
         cz::Str name = iterator.str_name();
         if (pattern_matches(pattern, name)) {
             results->reserve(cz::heap_allocator(), 1);
-            results->push(cz::format(temp_allocator, dir, '/', name));
+            if (empty)
+                results->push(name.clone_null_terminate(temp_allocator));
+            else
+                results->push(cz::format(temp_allocator, dir, '/', name));
         }
 
         result = iterator.advance();
