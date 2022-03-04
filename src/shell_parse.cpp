@@ -1095,7 +1095,7 @@ static bool expand_star(const Shell_Local* local,
 
     cz::Str start_path = word.slice_end(name.buffer);
     results[0].push(start_path);
-    cz::set_working_directory(get_wd(local).clone_null_terminate(temp_allocator).buffer);
+    cz::set_working_directory(get_wd(local).buffer);
 
     Pattern pattern = {};
     CZ_DEFER(pattern.pieces.drop(cz::heap_allocator()));
