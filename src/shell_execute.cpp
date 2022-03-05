@@ -766,6 +766,32 @@ static Error run_program(Shell_State* shell,
     }
 #endif
 
+#ifdef _WIN32
+#define NULL_FILE "NUL"
+#else
+#define NULL_FILE "/dev/null"
+#endif
+
+    // If spawning an actual program, we need to open the null file instead of passing a null fd.
+    if (stdio.in_type == File_Type_None) {
+        stdio.in_type = File_Type_File;
+        CZ_ASSERT(stdio.in.open(NULL_FILE));
+        stdio.in_count = allocator.alloc<size_t>();
+        *stdio.in_count = 1;
+    }
+    if (stdio.out_type == File_Type_None) {
+        stdio.out_type = File_Type_File;
+        CZ_ASSERT(stdio.out.open(NULL_FILE));
+        stdio.out_count = allocator.alloc<size_t>();
+        *stdio.out_count = 1;
+    }
+    if (stdio.err_type == File_Type_None) {
+        stdio.err_type = File_Type_File;
+        CZ_ASSERT(stdio.err.open(NULL_FILE));
+        stdio.err_count = allocator.alloc<size_t>();
+        *stdio.err_count = 1;
+    }
+
     cz::Process_Options options;
 #ifdef _WIN32
     if (stdio.in_type == File_Type_Terminal && stdio.out_type == File_Type_Terminal &&
