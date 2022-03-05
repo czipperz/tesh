@@ -451,6 +451,8 @@ static Error link_stdio(Stdio_State* stdio,
     // Bind stdin.
     if (parse_program.in_file != "__tesh_std_in") {
         stdio->in_type = File_Type_File;
+        stdio->in = {};
+        stdio->in_count = nullptr;
     } else if (p > 0) {
         if (pipe_in->is_open()) {
             stdio->in_type = File_Type_Pipe;
@@ -459,9 +461,13 @@ static Error link_stdio(Stdio_State* stdio,
             *stdio->in_count = 1;
         } else {
             stdio->in_type = File_Type_None;
+            stdio->in = {};
+            stdio->in_count = nullptr;
         }
     } else if (!bind_stdin) {
         stdio->in_type = File_Type_None;
+        stdio->in = {};
+        stdio->in_count = nullptr;
     } else {
         if (stdio->in_count)
             ++*stdio->in_count;
@@ -478,6 +484,8 @@ static Error link_stdio(Stdio_State* stdio,
                 ++*stdio->out_count;
         } else {
             stdio->out_type = File_Type_File;
+            stdio->out = {};
+            stdio->out_count = nullptr;
         }
     } else if (p + 1 < program_nodes.len) {
         stdio->out_type = File_Type_Pipe;
@@ -500,6 +508,8 @@ static Error link_stdio(Stdio_State* stdio,
             }
         } else {
             stdio->err_type = File_Type_File;
+            stdio->err = {};
+            stdio->err_count = nullptr;
         }
     } else {
         if (stdio->err_count)
