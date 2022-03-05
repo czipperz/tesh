@@ -494,7 +494,8 @@ static bool tick_program(Shell_State* shell,
     case Running_Program::CONFIGURE: {
         auto& builtin = program->v.builtin;
         if (builtin.args.len != 3) {
-            (void)builtin.err.write("configure: Usage: configure [option] [value]\n\
+            (void)builtin.err.write(
+                "configure: Usage: configure [option] [value]\n\
 \n\
 Options:\n\
 history_file   PATH  -- Reload command history.\n\
@@ -799,7 +800,7 @@ wide_terminal  1/0   -- Turn on or off wide terminal mode.  This will lock the t
                 st.value.append({buffer, (size_t)result});
             } else if (result == 0) {
                 if (st.value.ends_with('\n'))
-                    st.value.len--; // Remove trailing newline.
+                    st.value.len--;  // Remove trailing newline.
                 set_var(local, builtin.args[1], st.value);
                 st.value.drop(cz::heap_allocator());
                 goto finish_builtin;
@@ -807,6 +808,42 @@ wide_terminal  1/0   -- Turn on or off wide terminal mode.  This will lock the t
                 break;
             }
         }
+    } break;
+
+    case Running_Program::BUILTIN: {
+        auto& builtin = program->v.builtin;
+
+        if (builtin.args.len == 1 || (builtin.args.len == 2 && builtin.args[1] == "--help")) {
+            for (size_t level = 0; level <= cfg.builtin_level; ++level) {
+                cz::Slice<const Builtin> builtins = builtin_levels[level];
+                for (size_t j = 0; j < builtins.len; ++j) {
+                    const Builtin& the_builtin = builtins[j];
+                    builtin.out.write(cz::format(temp_allocator, the_builtin.name, '\n'));
+                }
+            }
+            goto finish_builtin;
+        }
+
+        for (size_t i = 1; i < builtin.args.len; ++i) {
+            cz::Str arg = builtin.args[i];
+            for (size_t level = 0; level <= cfg.builtin_level; ++level) {
+                cz::Slice<const Builtin> builtins = builtin_levels[level];
+                for (size_t j = 0; j < builtins.len; ++j) {
+                    const Builtin& the_builtin = builtins[j];
+                    if (arg == the_builtin.name) {
+                        (void)builtin.out.write(cz::format(temp_allocator, arg, '\n'));
+                        goto continue_outer;
+                    }
+                }
+            }
+
+            builtin.exit_code = 1;
+            (void)builtin.err.write(
+                cz::format(temp_allocator, "builtin: Couldn't find ", arg, '\n'));
+
+        continue_outer:;
+        }
+        goto finish_builtin;
     } break;
 
     default:

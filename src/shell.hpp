@@ -232,6 +232,7 @@ struct Running_Program {
         SHIFT,
         HISTORY,
         SET_VAR,
+        BUILTIN,
     } type;
     union {
         cz::Process process;

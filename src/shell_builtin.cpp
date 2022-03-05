@@ -20,6 +20,7 @@ static const Builtin level0[] = {
     {"shift", Running_Program::SHIFT},
     {"history", Running_Program::HISTORY},
     {"__tesh_set_var", Running_Program::SET_VAR},
+    {"builtin", Running_Program::BUILTIN},
 };
 
 static const Builtin level1[] = {
