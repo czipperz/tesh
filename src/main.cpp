@@ -65,6 +65,7 @@ static void kill_process(Shell_State* shell,
                          Backlog_State* backlog,
                          Running_Script* script);
 void escape_arg(cz::Str arg, cz::String* script, cz::Allocator allocator, size_t extra);
+void create_null_file();
 
 ///////////////////////////////////////////////////////////////////////////////
 // Renderer methods
@@ -3022,6 +3023,8 @@ int actual_main(int argc, char** argv) {
     if (get_var(&shell.local, "HOME", &home)) {
         prompt.history_path = cz::format(cz::heap_allocator(), home, "/.tesh_history");
     }
+
+    create_null_file();
 
 #ifdef _WIN32
     SetProcessDpiAwareness(PROCESS_PER_MONITOR_DPI_AWARE);

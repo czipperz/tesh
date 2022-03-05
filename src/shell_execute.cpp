@@ -12,7 +12,7 @@
 #include "global.hpp"
 
 ///////////////////////////////////////////////////////////////////////////////
-// Forward declarationss
+// Forward declarations
 ///////////////////////////////////////////////////////////////////////////////
 
 static Error start_execute_line(Shell_State* shell,
@@ -41,7 +41,7 @@ static Error link_stdio(Stdio_State* stdio,
                         bool bind_stdin);
 static void open_redirected_files(Stdio_State* stdio,
                                   cz::Str* error_path,
-                                  Parse_Program parse_program,
+                                  const Parse_Program& parse_program,
                                   cz::Allocator allocator,
                                   Shell_Local* local);
 
@@ -69,6 +69,28 @@ enum Walk_Status {
 static bool descend_to_first_pipeline(cz::Vector<Shell_Node*>* path, Shell_Node* child);
 static void do_descend_to_first_pipeline(cz::Vector<Shell_Node*>* path, Shell_Node* child);
 static bool walk_to_next_pipeline(cz::Vector<Shell_Node*>* path, Walk_Status status);
+
+///////////////////////////////////////////////////////////////////////////////
+// Initialization
+///////////////////////////////////////////////////////////////////////////////
+
+static cz::Input_File null_input;
+static cz::Output_File null_output;
+static uint64_t null_input_count = 1;
+static uint64_t null_output_count = 1;
+
+void create_null_file() {
+#ifdef _WIN32
+    const char* NULL_FILE = "NUL";
+#else
+    const char* NULL_FILE = "/dev/null";
+#endif
+
+    bool succ1 = null_input.open(NULL_FILE);
+    CZ_ASSERT(succ1);
+    bool succ2 = null_output.open(NULL_FILE);
+    CZ_ASSERT(succ2);
+}
 
 ///////////////////////////////////////////////////////////////////////////////
 // Start executing a script
@@ -551,17 +573,16 @@ static Error link_stdio(Stdio_State* stdio,
 
 static void open_redirected_files(Stdio_State* stdio,
                                   cz::Str* error_path,
-                                  Parse_Program parse_program,
+                                  const Parse_Program& parse_program,
                                   cz::Allocator allocator,
                                   Shell_Local* local) {
     cz::String path = {};
     if (stdio->in_type == File_Type_File && !parse_program.in_file.starts_with("__tesh_std_")) {
-#ifdef _WIN32
-        if (parse_program.in_file == "/dev/null")
-            parse_program.in_file = "NUL";
-#endif
-
-        if (error_path->len == 0) {
+        if (parse_program.in_file == "/dev/null") {
+            stdio->in = null_input;
+            stdio->in_count = &null_input_count;
+            ++*stdio->in_count;
+        } else if (error_path->len == 0) {
             path.len = 0;
             cz::path::make_absolute(parse_program.in_file, get_wd(local), temp_allocator, &path);
             if (stdio->in.open(path.buffer)) {
@@ -574,12 +595,11 @@ static void open_redirected_files(Stdio_State* stdio,
     }
 
     if (stdio->out_type == File_Type_File && !parse_program.out_file.starts_with("__tesh_std_")) {
-#ifdef _WIN32
-        if (parse_program.out_file == "/dev/null")
-            parse_program.out_file = "NUL";
-#endif
-
-        if (error_path->len == 0) {
+        if (parse_program.out_file == "/dev/null") {
+            stdio->out = null_output;
+            stdio->out_count = &null_output_count;
+            ++*stdio->out_count;
+        } else if (error_path->len == 0) {
             path.len = 0;
             cz::path::make_absolute(parse_program.out_file, get_wd(local), temp_allocator, &path);
             if (stdio->out.open(path.buffer)) {
@@ -592,12 +612,11 @@ static void open_redirected_files(Stdio_State* stdio,
     }
 
     if (stdio->err_type == File_Type_File && !parse_program.err_file.starts_with("__tesh_std_")) {
-#ifdef _WIN32
-        if (parse_program.err_file == "/dev/null")
-            parse_program.err_file = "NUL";
-#endif
-
-        if (error_path->len == 0) {
+        if (parse_program.out_file == "/dev/null") {
+            stdio->err = null_output;
+            stdio->err_count = &null_output_count;
+            ++*stdio->err_count;
+        } else if (error_path->len == 0) {
             path.len = 0;
             cz::path::make_absolute(parse_program.err_file, get_wd(local), temp_allocator, &path);
             if (stdio->err.open(path.buffer)) {
@@ -766,30 +785,24 @@ static Error run_program(Shell_State* shell,
     }
 #endif
 
-#ifdef _WIN32
-#define NULL_FILE "NUL"
-#else
-#define NULL_FILE "/dev/null"
-#endif
-
     // If spawning an actual program, we need to open the null file instead of passing a null fd.
     if (stdio.in_type == File_Type_None) {
         stdio.in_type = File_Type_File;
-        CZ_ASSERT(stdio.in.open(NULL_FILE));
-        stdio.in_count = allocator.alloc<size_t>();
-        *stdio.in_count = 1;
+        stdio.in = null_input;
+        stdio.in_count = &null_input_count;
+        ++*stdio.in_count;
     }
     if (stdio.out_type == File_Type_None) {
         stdio.out_type = File_Type_File;
-        CZ_ASSERT(stdio.out.open(NULL_FILE));
-        stdio.out_count = allocator.alloc<size_t>();
-        *stdio.out_count = 1;
+        stdio.out = null_output;
+        stdio.out_count = &null_output_count;
+        ++*stdio.out_count;
     }
     if (stdio.err_type == File_Type_None) {
         stdio.err_type = File_Type_File;
-        CZ_ASSERT(stdio.err.open(NULL_FILE));
-        stdio.err_count = allocator.alloc<size_t>();
-        *stdio.err_count = 1;
+        stdio.err = null_output;
+        stdio.err_count = &null_output_count;
+        ++*stdio.err_count;
     }
 
     cz::Process_Options options;
