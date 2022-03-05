@@ -41,7 +41,7 @@ static Error link_stdio(Stdio_State* stdio,
                         bool bind_stdin);
 static void open_redirected_files(Stdio_State* stdio,
                                   cz::Str* error_path,
-                                  const Parse_Program& parse_program,
+                                  Parse_Program parse_program,
                                   cz::Allocator allocator,
                                   Shell_Local* local);
 
@@ -541,16 +541,17 @@ static Error link_stdio(Stdio_State* stdio,
 
 static void open_redirected_files(Stdio_State* stdio,
                                   cz::Str* error_path,
-                                  const Parse_Program& parse_program,
+                                  Parse_Program parse_program,
                                   cz::Allocator allocator,
                                   Shell_Local* local) {
     cz::String path = {};
     if (stdio->in_type == File_Type_File && !parse_program.in_file.starts_with("__tesh_std_")) {
-        if (parse_program.in_file == "/dev/null") {
-            stdio->in_type = File_Type_None;
-            stdio->in = {};
-            stdio->in_count = nullptr;
-        } else if (error_path->len == 0) {
+#ifdef _WIN32
+        if (parse_program.in_file == "/dev/null")
+            parse_program.in_file = "NUL";
+#endif
+
+        if (error_path->len == 0) {
             path.len = 0;
             cz::path::make_absolute(parse_program.in_file, get_wd(local), temp_allocator, &path);
             if (stdio->in.open(path.buffer)) {
@@ -563,11 +564,12 @@ static void open_redirected_files(Stdio_State* stdio,
     }
 
     if (stdio->out_type == File_Type_File && !parse_program.out_file.starts_with("__tesh_std_")) {
-        if (parse_program.out_file == "/dev/null") {
-            stdio->out_type = File_Type_None;
-            stdio->out = {};
-            stdio->out_count = nullptr;
-        } else if (error_path->len == 0) {
+#ifdef _WIN32
+        if (parse_program.out_file == "/dev/null")
+            parse_program.out_file = "NUL";
+#endif
+
+        if (error_path->len == 0) {
             path.len = 0;
             cz::path::make_absolute(parse_program.out_file, get_wd(local), temp_allocator, &path);
             if (stdio->out.open(path.buffer)) {
@@ -580,11 +582,12 @@ static void open_redirected_files(Stdio_State* stdio,
     }
 
     if (stdio->err_type == File_Type_File && !parse_program.err_file.starts_with("__tesh_std_")) {
-        if (parse_program.err_file == "/dev/null") {
-            stdio->err_type = File_Type_None;
-            stdio->err = {};
-            stdio->err_count = nullptr;
-        } else if (error_path->len == 0) {
+#ifdef _WIN32
+        if (parse_program.err_file == "/dev/null")
+            parse_program.err_file = "NUL";
+#endif
+
+        if (error_path->len == 0) {
             path.len = 0;
             cz::path::make_absolute(parse_program.err_file, get_wd(local), temp_allocator, &path);
             if (stdio->err.open(path.buffer)) {
