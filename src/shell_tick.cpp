@@ -494,7 +494,15 @@ static bool tick_program(Shell_State* shell,
     case Running_Program::CONFIGURE: {
         auto& builtin = program->v.builtin;
         if (builtin.args.len != 3) {
-            (void)builtin.err.write("configure: Usage: configure [option] [value]\n");
+            (void)builtin.err.write("configure: Usage: configure [option] [value]\n\
+\n\
+Options:\n\
+history_file   PATH  -- Reload command history.\n\
+font_size      SIZE  -- Set the font size.\n\
+builtin_level  LEVEL -- Set the builtin level (see builtin --help).\n\
+wide_terminal  1/0   -- Turn on or off wide terminal mode.  This will lock the terminal's width\n\
+                        at 1000 characters instead of the actual width.\n\
+");
             goto finish_builtin;
         }
 
