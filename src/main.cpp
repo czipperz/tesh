@@ -1032,8 +1032,7 @@ static void goto_next_history_match(Prompt_State* prompt, cz::Slice<cz::Str> his
     }
 }
 
-static void finish_prompt_manipulation(Shell_State* shell,
-                                       Render_State* rend,
+static void finish_prompt_manipulation(Render_State* rend,
                                        Prompt_State* prompt,
                                        bool doing_merge,
                                        bool doing_completion,
@@ -1364,7 +1363,6 @@ static void delete_forward_1(Prompt_State* prompt) {
 
 static bool handle_prompt_manipulation_commands(Shell_State* shell,
                                                 Prompt_State* prompt,
-                                                cz::Vector<Backlog_State*>* backlogs,
                                                 Render_State* rend,
                                                 uint16_t mod,
                                                 SDL_Keycode key) {
@@ -1635,7 +1633,7 @@ static bool handle_prompt_manipulation_commands(Shell_State* shell,
         return false;
     }
 
-    finish_prompt_manipulation(shell, rend, prompt, doing_merge, doing_completion, doing_history);
+    finish_prompt_manipulation(rend, prompt, doing_merge, doing_completion, doing_history);
     return true;
 }
 
@@ -2357,7 +2355,7 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
                 continue;
             }
 
-            if (handle_prompt_manipulation_commands(shell, prompt, backlogs, rend, mod, key)) {
+            if (handle_prompt_manipulation_commands(shell, prompt, rend, mod, key)) {
                 ++num_events;
                 continue;
             }
@@ -2600,7 +2598,7 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
             insert_before(prompt, prompt->cursor, text);
             Prompt_Edit* edit = &prompt->edit_history[prompt->edit_index - 1];
             edit->type |= PROMPT_EDIT_MERGE;
-            finish_prompt_manipulation(shell, rend, prompt, true, false, false);
+            finish_prompt_manipulation(rend, prompt, true, false, false);
             ++num_events;
         } break;
 
@@ -2729,7 +2727,7 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
                 }
             } else if (event.button.button == SDL_BUTTON_MIDDLE) {
                 run_paste(prompt);
-                finish_prompt_manipulation(shell, rend, prompt, false, false, false);
+                finish_prompt_manipulation(rend, prompt, false, false, false);
                 ++num_events;
             }
         } break;
