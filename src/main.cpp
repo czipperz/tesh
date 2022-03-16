@@ -2812,10 +2812,12 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
             finish_prompt_manipulation(shell, rend, prompt, true, false, false);
             ++num_events;
 
-            // Restart searching from the end.
-            bool is_forward = false;
-            set_initial_search_position(search, rend, is_forward);
-            find_next_search_result(search, rend, is_forward);
+            if (search->is_searching) {
+                // Restart searching from the end.
+                bool is_forward = false;
+                set_initial_search_position(search, rend, is_forward);
+                find_next_search_result(search, rend, is_forward);
+            }
         } break;
 
         case SDL_MOUSEWHEEL: {
