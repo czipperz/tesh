@@ -34,6 +34,7 @@
 #include "global.hpp"
 #include "prompt.hpp"
 #include "render.hpp"
+#include "search.hpp"
 #include "shell.hpp"
 #include "solarized_dark.hpp"
 #include "unicode.hpp"
@@ -56,6 +57,7 @@ static const char* get_hyperlink_at(Render_State* rend, Visual_Tile tile);
 static void render_prompt(SDL_Surface* window_surface,
                           Render_State* rend,
                           Prompt_State* prompt,
+                          Search_State* search,
                           cz::Slice<Backlog_State*> backlogs,
                           Shell_State* shell);
 static void kill_process(Shell_State* shell,
@@ -309,7 +311,7 @@ static bool render_backlog(SDL_Surface* window_surface,
     }
 
     if (rend->attached_outer == visindex) {
-        render_prompt(window_surface, rend, prompt, backlogs, shell);
+        render_prompt(window_surface, rend, prompt, /*search=*/nullptr, backlogs, shell);
     } else if (rend->backlog_end.inner == backlog->length && backlog->length > 0 &&
                backlog->get(backlog->length - 1) != '\n') {
         Visual_Point old_point = *point;
@@ -349,9 +351,14 @@ static bool render_backlog(SDL_Surface* window_surface,
 static void render_prompt(SDL_Surface* window_surface,
                           Render_State* rend,
                           Prompt_State* prompt,
+                          Search_State* search,
                           cz::Slice<Backlog_State*> backlogs,
                           Shell_State* shell) {
     ZoneScoped;
+
+    bool is_searching = (search && search->is_searching);
+    if (is_searching)
+        prompt = &search->prompt;
 
     Visual_Point* point = &rend->backlog_end;
     if (rend->attached_outer == -1) {
@@ -369,7 +376,10 @@ static void render_prompt(SDL_Surface* window_surface,
     }
     uint32_t background = SDL_MapRGB(window_surface->format, bg_color.r, bg_color.g, bg_color.b);
 
-    if (rend->attached_outer == -1) {
+    if (is_searching) {
+        render_string(window_surface, rend, point, background, cfg.directory_fg_color,
+                      prompt->prefix, true);
+    } else if (rend->attached_outer == -1) {
         render_string(window_surface, rend, point, background, cfg.directory_fg_color,
                       get_wd(&shell->local), true);
         render_string(window_surface, rend, point, background, cfg.backlog_fg_color, prompt->prefix,
@@ -523,6 +533,7 @@ static void stop_selecting(Render_State* rend) {
 static void render_frame(SDL_Window* window,
                          Render_State* rend,
                          Prompt_State* prompt,
+                         Search_State* search,
                          cz::Slice<Backlog_State*> backlogs,
                          Shell_State* shell) {
     ZoneScoped;
@@ -578,7 +589,7 @@ static void render_frame(SDL_Window* window,
     }
 
     if (rend->attached_outer == -1)
-        render_prompt(window_surface, rend, prompt, backlogs, shell);
+        render_prompt(window_surface, rend, prompt, search, backlogs, shell);
 
     {
         const SDL_Rect rects[] = {{0, 0, window_surface->w, window_surface->h}};
@@ -1032,15 +1043,18 @@ static void goto_next_history_match(Prompt_State* prompt, cz::Slice<cz::Str> his
     }
 }
 
-static void finish_prompt_manipulation(Render_State* rend,
+static void finish_prompt_manipulation(Shell_State* shell,
+                                       Render_State* rend,
                                        Prompt_State* prompt,
                                        bool doing_merge,
                                        bool doing_completion,
                                        bool doing_history) {
-    rend->selected_outer = rend->attached_outer;
-    ensure_prompt_on_screen(rend);
-    rend->scroll_mode = AUTO_SCROLL;
-    stop_selecting(rend);
+    if (shell) {
+        ensure_prompt_on_screen(rend);
+        rend->selected_outer = rend->attached_outer;
+        rend->scroll_mode = AUTO_SCROLL;
+        stop_selecting(rend);
+    }
     if (!doing_merge) {
         stop_merging_edits(prompt);
     }
@@ -1453,7 +1467,8 @@ static bool handle_prompt_manipulation_commands(Shell_State* shell,
             end_combo(prompt);
         }
     } else if ((mod & ~KMOD_SHIFT) == 0 && key == SDLK_TAB &&
-               rend->selected_outer == rend->attached_outer) {
+               rend->selected_outer == rend->attached_outer &&
+               shell /* no completion for search */) {
         doing_completion = true;
         stop_merging_edits(prompt);
 
@@ -1633,7 +1648,7 @@ static bool handle_prompt_manipulation_commands(Shell_State* shell,
         return false;
     }
 
-    finish_prompt_manipulation(rend, prompt, doing_merge, doing_completion, doing_history);
+    finish_prompt_manipulation(shell, rend, prompt, doing_merge, doing_completion, doing_history);
     return true;
 }
 
@@ -2267,8 +2282,151 @@ static void user_submit_prompt(Render_State* rend,
     ensure_prompt_on_screen(rend);
 }
 
+static void set_initial_search_position(Search_State* search, Render_State* rend, bool is_forward) {
+    if (is_forward) {
+        search->outer = rend->backlog_start.outer;
+        search->inner = rend->backlog_start.inner;
+    } else {
+        Visual_Point backup = rend->backlog_start;
+        scroll_down1(rend, rend->window_rows);
+
+        search->outer = rend->backlog_start.outer;
+        search->inner = rend->backlog_start.inner;
+
+        rend->backlog_start = backup;
+    }
+}
+
+static int visual_point_compare(const Visual_Point& left, const Visual_Point& right) {
+    if (left.outer != right.outer)
+        return left.outer - right.outer;
+    return left.inner - right.inner;
+}
+
+static void find_next_search_result(Search_State* search, Render_State* rend, bool is_forward) {
+    Prompt_State* prompt = &search->prompt;
+    bool found_result = false;
+
+    /////////////////////////////////////////////
+    // Test if current result matches.
+    /////////////////////////////////////////////
+
+    if (search->outer < rend->visbacklogs.len) {
+        Backlog_State* backlog = rend->visbacklogs[search->outer];
+        if (search->inner + prompt->text.len <= backlog->length) {
+            uint64_t j = 0;
+            for (; j < prompt->text.len; ++j) {
+                if (backlog->get(search->inner + j) != prompt->text[j])
+                    break;
+            }
+            if (j == prompt->text.len)
+                found_result = true;
+        }
+    }
+
+    /////////////////////////////////////////////
+    // Look for next result.
+    /////////////////////////////////////////////
+
+    if (prompt->text.len > 0) {
+        // TODO: if we allow reordering backlogs while searching the search->outer/inner
+        // will be invalidated, causing this to access memory out of bounds.
+        if (is_forward) {
+            uint64_t inner = search->inner + 1;
+            for (uint64_t o = search->outer; o < rend->visbacklogs.len; ++o, inner = 0) {
+                Backlog_State* backlog = rend->visbacklogs[o];
+                for (uint64_t i = inner; i + prompt->text.len < backlog->length; ++i) {
+                    uint64_t j = 0;
+                    for (; j < prompt->text.len; ++j) {
+                        if (backlog->get(i + j) != prompt->text[j])
+                            break;
+                    }
+                    if (j != prompt->text.len)
+                        continue;
+
+                    // Found a match.
+                    search->outer = o;
+                    search->inner = i;
+                    found_result = true;
+                    goto finish_search;
+                }
+            }
+        } else {
+            uint64_t o = search->outer;
+            uint64_t inner = search->inner;
+            if (o == rend->visbacklogs.len && o > 0) {
+                o--;
+                inner = rend->visbacklogs[o]->length;
+            }
+
+            for (; o > 0; o--) {
+                Backlog_State* backlog = rend->visbacklogs[o];
+                for (uint64_t i = inner; i-- > 0;) {
+                    if (i + prompt->text.len > backlog->length)
+                        continue;
+                    uint64_t j = 0;
+                    for (; j < prompt->text.len; ++j) {
+                        if (backlog->get(i + j) != prompt->text[j])
+                            break;
+                    }
+                    if (j != prompt->text.len)
+                        continue;
+
+                    // Found a match.
+                    search->outer = o;
+                    search->inner = i;
+                    found_result = true;
+                    goto finish_search;
+                }
+
+                inner = rend->visbacklogs[o]->length;
+            }
+        }
+    } else {
+        set_initial_search_position(search, rend, is_forward);
+    }
+
+    /////////////////////////////////////////////
+    // Update graphics state
+    /////////////////////////////////////////////
+
+finish_search:
+    if (found_result && prompt->text.len > 0) {
+        Visual_Tile start = {search->outer + 1, search->inner};
+        Visual_Tile end = {search->outer + 1, search->inner + prompt->text.len - 1};
+        rend->selection.type = SELECT_FINISHED;
+        rend->selection.down = start;
+        rend->selection.current = end;
+        rend->selection.start = start;
+        rend->selection.end = end;
+        rend->selection.expand_word = 0;
+        rend->selection.expand_line = 0;
+
+        rend->scroll_mode = MANUAL_SCROLL;
+
+        // Ensure the search result is on the screen.
+        Visual_Point backup = rend->backlog_start;
+        rend->backlog_start = {};
+        rend->backlog_start.outer = (search->outer != rend->visbacklogs.len ? search->outer : -1);
+        rend->backlog_start.inner = search->inner;
+        if (is_forward) {
+            int lines = cz::max(rend->window_rows, 6) - 3;
+            scroll_up(rend, lines);
+            if (visual_point_compare(backup, rend->backlog_start) > 0)
+                rend->backlog_start = backup;
+        } else {
+            scroll_up(rend, 3);
+            if (visual_point_compare(backup, rend->backlog_start) < 0)
+                rend->backlog_start = backup;
+        }
+    } else {
+        rend->selection.type = SELECT_DISABLED;
+    }
+}
+
 static int process_events(cz::Vector<Backlog_State*>* backlogs,
-                          Prompt_State* prompt,
+                          Prompt_State* command_prompt,
+                          Search_State* search,
                           Render_State* rend,
                           Shell_State* shell,
                           SDL_Window* window) {
@@ -2276,6 +2434,8 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
 
     int num_events = 0;
     for (SDL_Event event; SDL_PollEvent(&event);) {
+        Prompt_State* prompt = (search->is_searching ? &search->prompt : command_prompt);
+
         ZoneScopedN("process_event");
         switch (event.type) {
         case SDL_QUIT:
@@ -2337,12 +2497,48 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
 
             SDL_Keycode key = event.key.keysym.sym;
 
+            ///////////////////////////////////////////////////////////////////////
+            // Search commands
+            ///////////////////////////////////////////////////////////////////////
+
+            if ((mod == KMOD_CTRL || mod == KMOD_ALT) && key == SDLK_s) {
+                bool is_forward = (mod == KMOD_ALT);
+
+                // Start searching if not.
+                if (!search->is_searching) {
+                    search->is_searching = true;
+                    prompt = &search->prompt;
+                    rend->selection.type = SELECT_DISABLED;
+
+                    if (prompt->text.len > 0)
+                        remove_before(prompt, 0, prompt->text.len);
+
+                    set_initial_search_position(search, rend, is_forward);
+
+                    // TODO: don't scroll down
+                    rend->backlog_start = {};
+                    rend->backlog_start.outer = rend->visbacklogs.len;
+                    rend->complete_redraw = true;
+                    scroll_up(rend, rend->window_rows - 3);
+                }
+
+                find_next_search_result(search, rend, is_forward);
+
+                ++num_events;
+                continue;
+            }
+
             if (key == SDLK_ESCAPE) {
-                if (rend->selection.type != SELECT_DISABLED) {
+                if (!search->is_searching && rend->selection.type != SELECT_DISABLED) {
                     stop_selecting(rend);
                 } else if (prompt->completion.is || prompt->history_searching) {
                     stop_completing(prompt);
                     prompt->history_searching = false;
+                } else if (search->is_searching) {
+                    search->is_searching = false;
+                    rend->selection.type = SELECT_DISABLED;
+                    ++num_events;
+                    continue;
                 } else if (!cfg.escape_closes) {
                     // Detach and select the prompt.
                     rend->attached_outer = -1;
@@ -2352,6 +2548,21 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
                     return -1;
                 }
                 ++num_events;
+                continue;
+            }
+
+            if (search->is_searching) {
+                size_t old_edit_index = prompt->edit_index;
+                if (handle_prompt_manipulation_commands(nullptr, prompt, rend, mod, key)) {
+                    if (old_edit_index != prompt->edit_index) {
+                        // Restart searching from the end.
+                        bool is_forward = false;
+                        set_initial_search_position(search, rend, is_forward);
+                        find_next_search_result(search, rend, is_forward);
+                    }
+                    ++num_events;
+                    continue;
+                }
                 continue;
             }
 
@@ -2598,8 +2809,13 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
             insert_before(prompt, prompt->cursor, text);
             Prompt_Edit* edit = &prompt->edit_history[prompt->edit_index - 1];
             edit->type |= PROMPT_EDIT_MERGE;
-            finish_prompt_manipulation(rend, prompt, true, false, false);
+            finish_prompt_manipulation(shell, rend, prompt, true, false, false);
             ++num_events;
+
+            // Restart searching from the end.
+            bool is_forward = false;
+            set_initial_search_position(search, rend, is_forward);
+            find_next_search_result(search, rend, is_forward);
         } break;
 
         case SDL_MOUSEWHEEL: {
@@ -2727,7 +2943,7 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
                 }
             } else if (event.button.button == SDL_BUTTON_MIDDLE) {
                 run_paste(prompt);
-                finish_prompt_manipulation(rend, prompt, false, false, false);
+                finish_prompt_manipulation(shell, rend, prompt, false, false, false);
                 ++num_events;
             }
         } break;
@@ -2976,14 +3192,18 @@ static void load_environment_variables(Shell_State* shell) {
 int actual_main(int argc, char** argv) {
     Render_State rend = {};
     cz::Vector<Backlog_State*> backlogs = {};
-    Prompt_State prompt = {};
+    Prompt_State command_prompt = {};
+    Search_State search = {};
     Shell_State shell = {};
 
     load_default_configuration();
 
-    prompt.edit_arena.init();
-    prompt.history_arena.init();
-    prompt.completion.results_arena.init();
+    command_prompt.edit_arena.init();
+    command_prompt.history_arena.init();
+    command_prompt.completion.results_arena.init();
+    search.prompt.edit_arena.init();
+    search.prompt.history_arena.init();
+    search.prompt.completion.results_arena.init();
 
     cz::Buffer_Array permanent_arena;
     permanent_arena.init();
@@ -2998,7 +3218,8 @@ int actual_main(int argc, char** argv) {
     set_program_name(/*fallback=*/argv[0]);
     set_program_directory();
 
-    prompt.prefix = " $ ";
+    command_prompt.prefix = " $ ";
+    search.prompt.prefix = "SEARCH> ";
     rend.complete_redraw = true;
 
     rend.font_size = cfg.default_font_size;
@@ -3019,7 +3240,7 @@ int actual_main(int argc, char** argv) {
     load_environment_variables(&shell);
     cz::Str home = {};
     if (get_var(&shell.local, "HOME", &home)) {
-        prompt.history_path = cz::format(cz::heap_allocator(), home, "/.tesh_history");
+        command_prompt.history_path = cz::format(cz::heap_allocator(), home, "/.tesh_history");
     }
 
     create_null_file();
@@ -3089,11 +3310,11 @@ int actual_main(int argc, char** argv) {
     {
         // Start running ~/.teshrc.
         cz::String source_command = cz::format(temp_allocator, "source ~/.teshrc");
-        submit_prompt(&shell, &rend, &backlogs, &prompt, source_command, true, false);
+        submit_prompt(&shell, &rend, &backlogs, &command_prompt, source_command, true, false);
     }
 
-    load_history(&prompt, &shell);
-    CZ_DEFER(save_history(&prompt, &shell));
+    load_history(&command_prompt, &shell);
+    CZ_DEFER(save_history(&command_prompt, &shell));
 
     while (1) {
         uint32_t start_frame = SDL_GetTicks();
@@ -3101,19 +3322,19 @@ int actual_main(int argc, char** argv) {
         temp_arena.clear();
 
         try {
-            int status = process_events(&backlogs, &prompt, &rend, &shell, window);
+            int status = process_events(&backlogs, &command_prompt, &search, &rend, &shell, window);
             if (status < 0)
                 break;
 
             bool force_quit = false;
-            if (read_process_data(&shell, backlogs, &rend, &prompt, &force_quit))
+            if (read_process_data(&shell, backlogs, &rend, &command_prompt, &force_quit))
                 status = 1;
 
             if (force_quit)
                 break;
 
             if (rend.complete_redraw || status > 0 || shell.scripts.len > 0 || !rend.grid_is_valid)
-                render_frame(window, &rend, &prompt, backlogs, &shell);
+                render_frame(window, &rend, &command_prompt, &search, backlogs, &shell);
         } catch (cz::PanicReachedException& ex) {
             fprintf(stderr, "Fatal error: %s\n", ex.what());
             return 1;
