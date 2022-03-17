@@ -2310,8 +2310,8 @@ static void set_initial_search_position(Search_State* search, Render_State* rend
 
 static int visual_point_compare(const Visual_Point& left, const Visual_Point& right) {
     if (left.outer != right.outer)
-        return left.outer - right.outer;
-    return left.inner - right.inner;
+        return (int)(left.outer - right.outer);
+    return (int)(left.inner - right.inner);
 }
 
 static void find_next_search_result(Search_State* search, Render_State* rend, bool is_forward) {
