@@ -2318,6 +2318,8 @@ static void find_next_search_result(Search_State* search, Render_State* rend, bo
     Prompt_State* prompt = &search->prompt;
     bool found_result = false;
 
+    search->default_forwards = is_forward;
+
     /////////////////////////////////////////////
     // Test if current result matches.
     /////////////////////////////////////////////
@@ -2562,7 +2564,7 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
                 if (handle_prompt_manipulation_commands(nullptr, prompt, rend, mod, key)) {
                     if (old_edit_index != prompt->edit_index) {
                         // Restart searching from the end.
-                        bool is_forward = false;
+                        bool is_forward = search->default_forwards;
                         set_initial_search_position(search, rend, is_forward);
                         find_next_search_result(search, rend, is_forward);
                     }
@@ -2827,7 +2829,7 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
 
             if (search->is_searching) {
                 // Restart searching from the end.
-                bool is_forward = false;
+                bool is_forward = search->default_forwards;
                 set_initial_search_position(search, rend, is_forward);
                 find_next_search_result(search, rend, is_forward);
             }
