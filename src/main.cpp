@@ -2315,6 +2315,8 @@ static int visual_point_compare(const Visual_Point& left, const Visual_Point& ri
 }
 
 static void find_next_search_result(Search_State* search, Render_State* rend, bool is_forward) {
+    ZoneScoped;
+
     Prompt_State* prompt = &search->prompt;
     bool found_result = false;
 
@@ -3020,6 +3022,8 @@ void reorder_attached_to_last(Render_State* rend) {
 ///////////////////////////////////////////////////////////////////////////////
 
 void load_history(Prompt_State* prompt, Shell_State* shell) {
+    ZoneScoped;
+
     cz::Input_File file;
     if (!file.open(prompt->history_path.buffer))
         return;
@@ -3060,6 +3064,8 @@ void load_history(Prompt_State* prompt, Shell_State* shell) {
 }
 
 void save_history(Prompt_State* prompt, Shell_State* shell) {
+    ZoneScoped;
+
     cz::Output_File file;
     if (!file.open(prompt->history_path.buffer))
         return;
@@ -3154,6 +3160,8 @@ static void load_default_configuration() {
 }
 
 static void load_environment_variables(Shell_State* shell) {
+    ZoneScoped;
+
 #ifdef _WIN32
     {
         char* penv = GetEnvironmentStringsA();
