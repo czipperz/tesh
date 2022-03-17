@@ -2569,6 +2569,13 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
                     ++num_events;
                     continue;
                 }
+
+                if (mod == 0 && (event.key.keysym.sym == SDLK_RETURN ||
+                                 event.key.keysym.sym == SDLK_KP_ENTER)) {
+                    search->is_searching = false;
+                    ++num_events;
+                    continue;
+                }
                 continue;
             }
 
