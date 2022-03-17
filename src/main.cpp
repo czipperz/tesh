@@ -46,6 +46,7 @@
 static Backlog_State* push_backlog(cz::Vector<Backlog_State*>* backlogs, uint64_t id);
 static float get_dpi_scale(SDL_Window* window);
 static void scroll_down1(Render_State* rend, int lines);
+static void scroll_down(Render_State* rend, int lines);
 static cz::Vector<cz::Str>* prompt_history(Prompt_State* prompt, bool script);
 static void stop_merging_edits(Prompt_State* prompt);
 static void stop_completing(Prompt_State* prompt);
@@ -356,11 +357,18 @@ static void render_prompt(SDL_Surface* window_surface,
                           Shell_State* shell) {
     ZoneScoped;
 
+    Visual_Point* point = &rend->backlog_end;
+    Visual_Point temp_point = {};
+
     bool is_searching = (search && search->is_searching);
-    if (is_searching)
+    if (is_searching) {
         prompt = &search->prompt;
 
-    Visual_Point* point = &rend->backlog_end;
+        // Display prompt at bottom of screen no matter what.
+        point = &temp_point;
+        point->y = rend->window_rows - 1;
+    }
+
     if (rend->attached_outer == -1) {
         point->outer++;
         point->inner = 0;
@@ -589,6 +597,9 @@ static void render_frame(SDL_Window* window,
     }
 
     if (rend->attached_outer == -1)
+        render_prompt(window_surface, rend, prompt, nullptr, backlogs, shell);
+
+    if (search->is_searching)
         render_prompt(window_surface, rend, prompt, search, backlogs, shell);
 
     {
@@ -2435,6 +2446,7 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
     int num_events = 0;
     for (SDL_Event event; SDL_PollEvent(&event);) {
         Prompt_State* prompt = (search->is_searching ? &search->prompt : command_prompt);
+        Shell_State* shell2 = (search->is_searching ? nullptr : shell);
 
         ZoneScopedN("process_event");
         switch (event.type) {
@@ -2514,12 +2526,6 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
                         remove_before(prompt, 0, prompt->text.len);
 
                     set_initial_search_position(search, rend, is_forward);
-
-                    // TODO: don't scroll down
-                    rend->backlog_start = {};
-                    rend->backlog_start.outer = rend->visbacklogs.len;
-                    rend->complete_redraw = true;
-                    scroll_up(rend, rend->window_rows - 3);
                 }
 
                 find_next_search_result(search, rend, is_forward);
@@ -2809,7 +2815,7 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
             insert_before(prompt, prompt->cursor, text);
             Prompt_Edit* edit = &prompt->edit_history[prompt->edit_index - 1];
             edit->type |= PROMPT_EDIT_MERGE;
-            finish_prompt_manipulation(shell, rend, prompt, true, false, false);
+            finish_prompt_manipulation(shell2, rend, prompt, true, false, false);
             ++num_events;
 
             if (search->is_searching) {
@@ -2945,7 +2951,7 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
                 }
             } else if (event.button.button == SDL_BUTTON_MIDDLE) {
                 run_paste(prompt);
-                finish_prompt_manipulation(shell, rend, prompt, false, false, false);
+                finish_prompt_manipulation(shell2, rend, prompt, false, false, false);
                 ++num_events;
             }
         } break;
