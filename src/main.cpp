@@ -2350,6 +2350,7 @@ static void find_next_search_result(Search_State* search, Render_State* rend, bo
             uint64_t inner = search->inner + 1;
             for (uint64_t o = search->outer; o < rend->visbacklogs.len; ++o, inner = 0) {
                 Backlog_State* backlog = rend->visbacklogs[o];
+                // TODO: optimize via memchr.
                 for (uint64_t i = inner; i + prompt->text.len < backlog->length; ++i) {
                     uint64_t j = 0;
                     for (; j < prompt->text.len; ++j) {
@@ -2376,6 +2377,7 @@ static void find_next_search_result(Search_State* search, Render_State* rend, bo
 
             for (; o > 0; o--) {
                 Backlog_State* backlog = rend->visbacklogs[o];
+                // TODO: optimize via memrchr.
                 for (uint64_t i = inner; i-- > 0;) {
                     if (i + prompt->text.len > backlog->length)
                         continue;
