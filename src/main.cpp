@@ -2704,13 +2704,33 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
 
             if ((mod == KMOD_CTRL && key == SDLK_INSERT) ||
                 (mod == (KMOD_CTRL | KMOD_SHIFT) && key == SDLK_c)) {
-                // Copy selected region.
                 if (rend->selection.type == SELECT_REGION ||
-                    rend->selection.type == SELECT_FINISHED) {
+                    rend->selection.type == SELECT_FINISHED) //
+                {
+                    // Copy the selected region.
                     rend->selection.type = SELECT_DISABLED;
                     rend->complete_redraw = true;
                     ++num_events;
                     set_clipboard_contents_to_selection(rend, shell, prompt);
+                } else if (rend->selected_outer == -1) {
+                    // Copy the prompt.
+                    cz::String clip = prompt->text.clone_null_terminate(temp_allocator);
+                    (void)SDL_SetClipboardText(clip.buffer);
+                } else {
+                    // Copy the selected backlog.
+                    Backlog_State* backlog = rend->visbacklogs[rend->selected_outer];
+
+                    cz::String clip = {};
+                    CZ_DEFER(clip.drop(cz::heap_allocator()));
+                    clip.reserve_exact(cz::heap_allocator(), backlog->length + 1);
+
+                    // TODO: optimize via appending chunks.
+                    for (uint64_t i = 0; i < backlog->length; ++i) {
+                        clip.push(backlog->get(i));
+                    }
+                    clip.null_terminate();
+
+                    (void)SDL_SetClipboardText(clip.buffer);
                 }
                 continue;
             }
