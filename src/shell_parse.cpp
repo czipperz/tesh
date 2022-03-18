@@ -1050,6 +1050,7 @@ static void expand_arg(const Shell_Local* local,
 
         case '\\': {
             ++index;
+            // @DeescapeOutsideString this entire block is duplicated.
             if (index < text.len) {
                 char c2 = text[index];
                 if (c2 == '"' || c2 == '\\' || c2 == '`' || c2 == '$' || c2 == ' ' || c2 == '~' ||

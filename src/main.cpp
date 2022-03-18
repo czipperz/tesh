@@ -1106,6 +1106,33 @@ static bool is_path_sep(char ch) {
 #endif
 }
 
+static cz::String deescape(cz::Allocator allocator, cz::Str str) {
+    cz::String string = {};
+    string.reserve_exact(allocator, str.len);
+
+    for (size_t i = 0; i < str.len; ++i) {
+        // @DeescapeOutsideString this entire block is duplicated.
+        if (i + 1 < str.len && str[i] == '\\') {
+            char c2 = str[i + 1];
+            if (c2 == '"' || c2 == '\\' || c2 == '`' || c2 == '$' || c2 == ' ' || c2 == '~' ||
+                c2 == '&' || c2 == '*') {
+                string.push(c2);
+                ++i;
+            } else if (c2 == '\n') {
+                // Skip backslash newline.
+                ++i;
+            } else {
+                string.reserve(allocator, 1);
+                string.push('\\');
+            }
+        } else {
+            string.push(str[i]);
+        }
+    }
+
+    return string;
+}
+
 static void start_completing(Prompt_State* prompt, Shell_State* shell) {
     cz::Allocator path_allocator = prompt->completion.results_arena.allocator();
 
@@ -1117,15 +1144,22 @@ static void start_completing(Prompt_State* prompt, Shell_State* shell) {
     size_t start = end;
     while (start > 0) {
         // TODO handle strings???
+        bool escaped = false;
+        for (size_t i = start - 1; i-- > 0;) {
+            if (prompt->text[i] != '\\')
+                break;
+            escaped = !escaped;
+        }
+
         char ch = prompt->text[start - 1];
-        if (cz::is_space(ch) || ch == ';' || ch == '$')
+        if (!escaped && (cz::is_space(ch) || ch == ';' || ch == '$'))
             break;
         --start;
     }
     if (start == end)
         return;
 
-    cz::Str query = prompt->text.slice(start, end);
+    cz::String query = deescape(temp_allocator, prompt->text.slice(start, end));
 
     prompt->completion.is = true;
 
@@ -2707,7 +2741,7 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
             if ((mod == KMOD_CTRL && key == SDLK_INSERT) ||
                 (mod == (KMOD_CTRL | KMOD_SHIFT) && key == SDLK_c)) {
                 if (rend->selection.type == SELECT_REGION ||
-                    rend->selection.type == SELECT_FINISHED) //
+                    rend->selection.type == SELECT_FINISHED)  //
                 {
                     // Copy the selected region.
                     rend->selection.type = SELECT_DISABLED;
@@ -3545,44 +3579,18 @@ static bool shell_escape_outside(char c) {
 
 void escape_arg(cz::Str arg, cz::String* script, cz::Allocator allocator, size_t reserve_extra) {
     size_t escaped_outside = 0;
-    size_t escaped_inside = 0;
-    bool use_string = false;
     for (size_t i = 0; i < arg.len; ++i) {
-        bool out = shell_escape_outside(arg[i]);
-        bool in = shell_escape_inside(arg[i]);
-        if (out) {
+        if (shell_escape_outside(arg[i]))
             escaped_outside++;
-        }
-        if (in) {
-            escaped_inside++;
-        }
-        if (out && !in) {
-            use_string = true;
-        }
     }
 
-    if (use_string) {
-        script->reserve(allocator, 3 + arg.len + escaped_inside + reserve_extra);
-        script->push('"');
+    script->reserve(allocator, 1 + arg.len + escaped_outside + reserve_extra);
 
-        for (size_t i = 0; i < arg.len; ++i) {
-            if (shell_escape_inside(arg[i])) {
-                script->push('\\');
-            }
-
-            script->push(arg[i]);
+    for (size_t i = 0; i < arg.len; ++i) {
+        if (shell_escape_outside(arg[i])) {
+            script->push('\\');
         }
 
-        script->push('"');
-    } else {
-        script->reserve(allocator, 1 + arg.len + escaped_outside + reserve_extra);
-
-        for (size_t i = 0; i < arg.len; ++i) {
-            if (shell_escape_outside(arg[i])) {
-                script->push('\\');
-            }
-
-            script->push(arg[i]);
-        }
+        script->push(arg[i]);
     }
 }
