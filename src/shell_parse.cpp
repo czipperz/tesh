@@ -48,6 +48,12 @@ static Error advance_through_dollar_sign(cz::Str text,
                                          cz::Vector<Shell_Node>* subexprs,
                                          bool force_alloc,
                                          cz::Allocator allocator);
+static Error advance_through_out_of_line_file(cz::Str text,
+                                              size_t* index,
+                                              Slice_State* slice,
+                                              cz::Vector<Shell_Node>* subexprs,
+                                              bool force_alloc,
+                                              cz::Allocator allocator);
 
 static Error parse_sequence(cz::Allocator allocator,
                             bool force_alloc,
@@ -175,7 +181,18 @@ static Error advance_through_token(cz::Str text,
             }
             return Error_Success;
 
-        case '<':  // TODO <& >&, <<, <<<, etc.
+        case '<': {
+            // TODO <<, <<<, etc.
+            if (*index + 1 < text.len && text[*index + 1] == '(') {  // <()
+                ++*index;
+                Error error =
+                    advance_through_out_of_line_file(text, index, nullptr, nullptr, false, {});
+                if (error != Error_Success)
+                    return error;
+                break;
+            }
+        }  // fallthrough
+
         case '>': {
             cz::Str before = text.slice(*token_start, *index);
             if (*index == *token_start || before == "1" || before == "2") {
@@ -487,6 +504,99 @@ static Error advance_through_dollar_sign(cz::Str text,
     default:
         // Ignore the dollar sign.
         break;
+    }
+
+    return Error_Success;
+}
+
+static Error advance_through_out_of_line_file(cz::Str text,
+                                              size_t* index,
+                                              Slice_State* slice,
+                                              cz::Vector<Shell_Node>* subexprs,
+                                              bool force_alloc,
+                                              cz::Allocator allocator) {
+    CZ_DEBUG_ASSERT(text[*index] == '(');
+
+    size_t start = *index - 1;
+    ++*index;
+
+    cz::Vector<cz::Str> tokens = {};
+    CZ_DEFER(tokens.drop(cz::heap_allocator()));
+
+    Error error = parse_tokens_inside_paren_group(text, index, subexprs ? &tokens : nullptr);
+    if (error != Error_Success)
+        return error;
+
+    if (subexprs) {
+        Shell_Node subnode = {};
+
+        cz::Str terminators[] = {")"};
+        size_t token_index = 0;
+        Error error =
+            parse_sequence(allocator, force_alloc, tokens, &subnode, &token_index, terminators);
+        if (error != Error_Success)
+            return error;
+
+        /////////////////////////////////////
+        /// Transform `arg0 a<(b)c arg2` to
+        /// `mktemp | __tesh_set_var __tesh_sub0; b > $__tesh_sub0; arg0 a${__tesh_sub0}c arg2`.
+        /// TODO: make `b` run asynchronously.
+        /// NOTE: cannot do `mktemp` statically because we want to
+        /// support running the compiled code async with itself.
+        /////////////////////////////////////
+
+        // Set __tesh_sub0 with the result of mktemp.
+        Parse_Program mktemp_program = {};
+        mktemp_program.v.args.reserve_exact(allocator, 1);
+        mktemp_program.v.args.push("mktemp");
+
+        Shell_Node mktemp = {};
+        mktemp.type = Shell_Node::PROGRAM;
+        mktemp.v.program = allocator.clone(mktemp_program);
+
+        Parse_Program set_var_program = {};
+        set_var_program.v.args.reserve_exact(allocator, 2);
+        set_var_program.v.args.push("__tesh_set_var");
+        set_var_program.v.args.push(cz::format(allocator, "__tesh_sub", tesh_sub_counter++));
+
+        Shell_Node set_var = {};
+        set_var.type = Shell_Node::PROGRAM;
+        set_var.v.program = allocator.clone(set_var_program);
+
+        Shell_Node mktemp_pipeline = {};
+        mktemp_pipeline.type = Shell_Node::PIPELINE;
+        mktemp_pipeline.v.pipeline.reserve_exact(allocator, 2);
+        mktemp_pipeline.v.pipeline.push(mktemp);
+        mktemp_pipeline.v.pipeline.push(set_var);
+
+        // Run subnode and redirect to temp file.
+        Parse_Program run_subnode_program = {};
+        run_subnode_program.is_sub = true;
+        run_subnode_program.v.sub = allocator.clone(subnode);
+        run_subnode_program.in_file = "/dev/null";
+        run_subnode_program.out_file =
+            cz::format(allocator, "${__tesh_sub", tesh_sub_counter - 1, "}");
+
+        Shell_Node run_subnode = {};
+        run_subnode.type = Shell_Node::PROGRAM;
+        run_subnode.v.program = allocator.clone(run_subnode_program);
+        run_subnode.async = false;  // TODO
+
+        subexprs->reserve(cz::heap_allocator(), 2);
+        subexprs->push(mktemp_pipeline);
+        subexprs->push(run_subnode);
+
+        CZ_DEBUG_ASSERT(slice);
+
+        // Slice out the <() and replace it with ${__tesh_sub0}
+        slice->outs.reserve(cz::heap_allocator(), 3);
+        slice->outs.push(start);
+        slice->outs.push(*index);
+        slice->outs.push(tesh_sub_counter - 1);
+        slice->removed += *index - start;
+        cz::String number = cz::format(temp_allocator, tesh_sub_counter - 1);
+        slice->added += strlen("${__tesh_sub}") + number.len;
+        number.drop(temp_allocator);
     }
 
     return Error_Success;
@@ -831,6 +941,15 @@ static Error deal_with_token(cz::Allocator allocator,
             any_special = true;
             Error error = advance_through_dollar_sign(token, &index, &slice, subexprs, force_alloc,
                                                       allocator);
+            CZ_ASSERT(error == Error_Success);
+        } break;
+
+        case '<': {
+            any_special = true;
+            ++index;
+            CZ_DEBUG_ASSERT(token[index] == '(');
+            Error error = advance_through_out_of_line_file(token, &index, &slice, subexprs,
+                                                           force_alloc, allocator);
             CZ_ASSERT(error == Error_Success);
         } break;
 
