@@ -342,6 +342,37 @@ static Error advance_through_double_quote_string(cz::Str text,
     return Error_Success;
 }
 
+static Error parse_tokens_inside_paren_group(cz::Str text,
+                                             size_t* index,
+                                             cz::Vector<cz::Str>* tokens) {
+    size_t depth = 1;
+    while (1) {
+        size_t token_start = *index;
+        bool any_special = false;
+        Error error = advance_through_token(text, &token_start, index, &any_special);
+        if (error != Error_Success)
+            return error;
+        if (token_start == *index)
+            return Error_Parse_UnterminatedSubExpr;
+
+        cz::Str token = text.slice(token_start, *index);
+        if (token == "(")
+            ++depth;
+        if (token == ")") {
+            --depth;
+            if (depth == 0) {
+                break;
+            }
+        }
+
+        if (tokens) {
+            tokens->reserve(cz::heap_allocator(), 1);
+            tokens->push(token);
+        }
+    }
+    return Error_Success;
+}
+
 static Error advance_through_dollar_sign(cz::Str text,
                                          size_t* index,
                                          Slice_State* slice,
@@ -403,31 +434,9 @@ static Error advance_through_dollar_sign(cz::Str text,
         cz::Vector<cz::Str> tokens = {};
         CZ_DEFER(tokens.drop(cz::heap_allocator()));
 
-        size_t depth = 1;
-        while (1) {
-            size_t token_start = *index;
-            bool any_special = false;
-            Error error = advance_through_token(text, &token_start, index, &any_special);
-            if (error != Error_Success)
-                return error;
-            if (token_start == *index)
-                return Error_Parse_UnterminatedSubExpr;
-
-            cz::Str token = text.slice(token_start, *index);
-            if (token == "(")
-                ++depth;
-            if (token == ")") {
-                --depth;
-                if (depth == 0) {
-                    break;
-                }
-            }
-
-            if (subexprs) {
-                tokens.reserve(cz::heap_allocator(), 1);
-                tokens.push(token);
-            }
-        }
+        Error error = parse_tokens_inside_paren_group(text, index, subexprs ? &tokens : nullptr);
+        if (error != Error_Success)
+            return error;
 
         if (subexprs) {
             Shell_Node subnode = {};
@@ -438,6 +447,11 @@ static Error advance_through_dollar_sign(cz::Str text,
                 parse_sequence(allocator, force_alloc, tokens, &subnode, &token_index, terminators);
             if (error != Error_Success)
                 return error;
+
+            /////////////////////////////////////
+            /// Transform `arg0 a$(b)c arg2` to
+            /// `b | __tesh_set_var __tesh_sub0; arg0 a${__tesh_sub0}c arg2`.
+            /////////////////////////////////////
 
             Parse_Program set_var_program = {};
             set_var_program.v.args.reserve_exact(allocator, 2);
