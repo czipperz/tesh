@@ -233,6 +233,7 @@ struct Running_Program {
         HISTORY,
         SET_VAR,
         BUILTIN,
+        MKTEMP,
     } type;
     union {
         cz::Process process;

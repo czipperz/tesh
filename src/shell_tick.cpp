@@ -1,5 +1,6 @@
 #include "shell.hpp"
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <Tracy.hpp>
 #include <cz/char_type.hpp>
@@ -843,6 +844,19 @@ wide_terminal  1/0   -- Turn on or off wide terminal mode.  This will lock the t
 
         continue_outer:;
         }
+        goto finish_builtin;
+    } break;
+
+    case Running_Program::MKTEMP: {
+        auto& builtin = program->v.builtin;
+
+        char temp_file_buffer[L_tmpnam];
+        if (tmpnam(temp_file_buffer)) {
+            (void)builtin.out.write(temp_file_buffer);
+        } else {
+            (void)builtin.err.write("mktemp: Failed to create temp file\n");
+        }
+
         goto finish_builtin;
     } break;
 

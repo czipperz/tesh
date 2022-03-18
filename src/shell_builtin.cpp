@@ -21,6 +21,7 @@ static const Builtin level0[] = {
     {"history", Running_Program::HISTORY},
     {"__tesh_set_var", Running_Program::SET_VAR},
     {"builtin", Running_Program::BUILTIN},
+    {"mktemp", Running_Program::MKTEMP},
 };
 
 static const Builtin level1[] = {
