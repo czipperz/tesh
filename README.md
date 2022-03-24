@@ -1,7 +1,7 @@
 # TESH
 
 A combined shell and terminal emulator.  Bash compatible.
-Focused on increasing scanability, readability, and navigatability of output.
+Focused on increasing scanability, readability, and navigability of output.
 
 This repository is licensed under GPL3.  If you wish to
 purchase a different license, email czipperz AT gmail DOT com.
