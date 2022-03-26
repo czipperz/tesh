@@ -39,6 +39,8 @@
 #include "solarized_dark.hpp"
 #include "unicode.hpp"
 
+#include "UbuntuMono.h"
+
 ///////////////////////////////////////////////////////////////////////////////
 // Forward declarations
 ///////////////////////////////////////////////////////////////////////////////
@@ -3175,11 +3177,6 @@ static void load_default_configuration() {
 
     cfg.backlog_info_render_date = false;
 
-#ifdef _WIN32
-    cfg.font_path = "C:/Windows/Fonts/MesloLGM-Regular.ttf";
-#else
-    cfg.font_path = "/usr/share/fonts/TTF/MesloLGMDZ-Regular.ttf";
-#endif
     cfg.default_font_size = 12;
     cfg.tab_width = 8;
 
@@ -3365,12 +3362,7 @@ int actual_main(int argc, char** argv) {
 
     load_cursors(&rend);
 
-    rend.font = open_font(cfg.font_path, (int)(rend.font_size * rend.dpi_scale));
-    if (!rend.font) {
-        fprintf(stderr, "TTF_OpenFont failed: %s\n", SDL_GetError());
-        return 1;
-    }
-    CZ_DEFER(TTF_CloseFont(rend.font));
+    resize_font(rend.font_size, &rend);
 
     // Old versions of SDL_ttf don't parse FontLineSkip correctly so we manually set it.
     rend.font_height =
@@ -3441,7 +3433,17 @@ int actual_main(int argc, char** argv) {
 }
 
 void resize_font(int font_size, Render_State* rend) {
-    TTF_Font* new_font = open_font(cfg.font_path, (int)(font_size * rend->dpi_scale));
+    TTF_Font  *new_font = NULL;
+    SDL_RWops *font_mem;
+    int ptsize  = (font_size * rend->dpi_scale);
+    if (cfg.font_path.len > 0) {
+        new_font = TTF_OpenFont(cfg.font_path.buffer, ptsize);
+    }
+    if (new_font == NULL) {
+        // Load the default font instead.
+        font_mem = SDL_RWFromConstMem(&UbuntuMonoData[0], sizeof(UbuntuMonoData));
+        new_font = TTF_OpenFontRW(font_mem, 0, ptsize);    
+    }
     if (new_font) {
         close_font(rend);
 

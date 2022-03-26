@@ -59,11 +59,6 @@ void close_font(Render_State* rend) {
     TTF_CloseFont(rend->font);
 }
 
-TTF_Font* open_font(const char* path, int font_size) {
-    ZoneScoped;
-    return TTF_OpenFont(path, font_size);
-}
-
 static SDL_Surface* rasterize_code_point(const char* text,
                                          TTF_Font* font,
                                          int style,

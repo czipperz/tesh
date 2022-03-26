@@ -2,6 +2,7 @@
 
 #include <SDL.h>
 #include <cz/slice.hpp>
+#include <cz/string.hpp>
 #include "render.hpp"
 
 struct Config_State {
@@ -9,7 +10,7 @@ struct Config_State {
     bool on_spawn_attach;
     Scroll_Mode on_spawn_scroll_mode;
     bool on_select_auto_copy;
-    const char* font_path;
+    cz::String font_path;
     int default_font_size;
     int tab_width;
     uint64_t max_length;

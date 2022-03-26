@@ -500,6 +500,7 @@ static bool tick_program(Shell_State* shell,
 \n\
 Options:\n\
 history_file   PATH  -- Reload command history.\n\
+font_path      PATH  -- Set the font\n\
 font_size      SIZE  -- Set the font size.\n\
 builtin_level  LEVEL -- Set the builtin level (see builtin --help).\n\
 wide_terminal  1/0   -- Turn on or off wide terminal mode.  This will lock the terminal's width\n\
@@ -514,6 +515,11 @@ wide_terminal  1/0   -- Turn on or off wide terminal mode.  This will lock the t
             prompt->history_path.drop(cz::heap_allocator());
             prompt->history_path = builtin.args[2].clone_null_terminate(cz::heap_allocator());
             load_history(prompt, shell);
+            goto finish_builtin;
+        } else if (option == "font_path") {
+            cfg.font_path.drop(cz::heap_allocator());
+            cfg.font_path = builtin.args[2].clone_null_terminate(cz::heap_allocator());
+            resize_font(rend->font_size, rend);
             goto finish_builtin;
         }
 

@@ -87,7 +87,6 @@ struct Render_State {
 void set_icon(SDL_Window* sdl_window);
 
 void close_font(Render_State* rend);
-TTF_Font* open_font(const char* path, int font_size);
 
 int coord_trans(Visual_Point* point, int num_cols, char ch);
 
