@@ -347,6 +347,7 @@ static Error advance_through_double_quote_string(cz::Str text,
                 advance_through_dollar_sign(text, index, slice, subexprs, force_alloc, allocator);
             if (error != Error_Success)
                 return error;
+            continue;
         }
 
         // Go until we hit another '"'.

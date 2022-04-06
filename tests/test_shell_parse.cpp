@@ -255,6 +255,17 @@ program:\n\
     arg0: \"\\\\ \\n \\a \\$ \\` \\\" \\&\"\n");
 }
 
+TEST_CASE("parse_script variable ended in quote") {
+    Shell_State shell = {};
+    cz::String string = {};
+    Error error = parse_and_emit(&shell, &string, "\"$VARS\\\"\"");
+    REQUIRE(error == Error_Success);
+    CHECK(string.as_str() ==
+          "\
+program:\n\
+    arg0: \"$VARS\\\"\"\n");
+}
+
 TEST_CASE("parse_script variable") {
     Shell_State shell = {};
     cz::String string = {};
