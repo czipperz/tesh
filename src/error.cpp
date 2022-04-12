@@ -20,6 +20,10 @@ const char* error_string(Error error) {
         return "Unterminated if statement while parsing";
     case Error_Parse_UnterminatedFunctionDeclaration:
         return "Unterminated function declaration while parsing";
+    case Error_Parse_UnterminatedSubExpr:
+        return "Unterminated sub expr";
+    case Error_Parse_StrayCloseParen:
+        return "Stray close paren";
     case Error_Parse_ExpectedEndOfStatement:
         return "Expected end of statement, found a token instead";
     case Error_Parse_EmptyProgram:

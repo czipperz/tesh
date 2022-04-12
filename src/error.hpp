@@ -1,5 +1,6 @@
 #pragma once
 
+/// When adding an error type make sure to update `error_string`!
 enum Error {
     Error_Success,
     Error_IO,
