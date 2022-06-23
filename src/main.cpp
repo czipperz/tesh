@@ -157,7 +157,7 @@ static size_t make_string_code_point(char sequence[5], cz::Str info, size_t star
 }
 
 static size_t make_backlog_code_point(char sequence[5], Backlog_State* backlog, size_t start) {
-    size_t width = cz::min(unicode::utf8_width(sequence[0]), backlog->length - start);
+    size_t width = cz::min(unicode::utf8_width(sequence[0]), (size_t)backlog->length - start);
     for (size_t off = 1; off < width; ++off) {
         char ch = backlog->get(start + off);
         if (!unicode::utf8_is_continuation(ch)) {

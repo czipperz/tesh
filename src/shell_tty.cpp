@@ -8,7 +8,12 @@
 #define WIN32LEANANDMEAN
 #include <windows.h>
 #else
+#ifdef __APPLE__
+#include <util.h>
+#include <sys/ioctl.h>
+#else
 #include <pty.h>
+#endif
 #include <termios.h>
 #include <unistd.h>
 #endif

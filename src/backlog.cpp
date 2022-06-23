@@ -593,7 +593,7 @@ uint64_t append_text(Backlog_State* backlog, cz::Str text) {
 
     // If we are inside an escape sequence then pump the text into that first.
     if (backlog->escape_backlog.len != 0) {
-        uint64_t skip = 0;
+        size_t skip = 0;
         if (!process_escape_sequence(backlog, text, &skip)) {
             // All of the text was consumed.
             return text.len;
@@ -642,7 +642,7 @@ uint64_t append_text(Backlog_State* backlog, cz::Str text) {
         case escape: {
             // Start processing an escape sequence.
             cz::Str remaining = text.slice_start(chunk_len);
-            uint64_t skip = 0;
+            size_t skip = 0;
             if (!process_escape_sequence(backlog, remaining, &skip)) {
                 return done + remaining.len;
             }

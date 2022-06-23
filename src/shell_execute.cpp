@@ -76,8 +76,8 @@ static bool walk_to_next_pipeline(cz::Vector<Shell_Node*>* path, Walk_Status sta
 
 static cz::Input_File null_input;
 static cz::Output_File null_output;
-static uint64_t null_input_count = 1;
-static uint64_t null_output_count = 1;
+static size_t null_input_count = 1;
+static size_t null_output_count = 1;
 
 void create_null_file() {
 #ifdef _WIN32
