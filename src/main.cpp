@@ -1515,7 +1515,8 @@ static bool handle_prompt_manipulation_commands(Shell_State* shell,
         }
     } else if ((mod & ~KMOD_SHIFT) == 0 && key == SDLK_TAB &&
                rend->selected_outer == rend->attached_outer &&
-               shell /* no completion for search */) {
+               shell /* no completion for search */ &&
+               !prompt->history_searching /* see below SDLK_TAB case */) {
         doing_completion = true;
         stop_merging_edits(prompt);
 
@@ -1657,7 +1658,7 @@ static bool handle_prompt_manipulation_commands(Shell_State* shell,
             prompt->history_counter = history->len;
         }
         goto_next_history_match(prompt, *history);
-    } else if (mod == KMOD_CTRL && key == SDLK_g) {
+    } else if ((mod == KMOD_CTRL && key == SDLK_g) || (mod == 0 && key == SDLK_TAB)) {
         resolve_history_searching(prompt, history);
     }
 
