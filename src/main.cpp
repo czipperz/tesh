@@ -2907,6 +2907,9 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
 #ifndef _WIN32
             event.wheel.x *= -1;
 #endif
+#ifdef __APPLE__
+            event.wheel.y *= -1;
+#endif
 
             event.wheel.y *= 4;
             event.wheel.x *= 10;
