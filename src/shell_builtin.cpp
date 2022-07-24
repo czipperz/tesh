@@ -17,6 +17,8 @@ static const Builtin level0[] = {
     {"follow", Running_Program::FOLLOW},
     {"argdump", Running_Program::ARGDUMP},
     {"vardump", Running_Program::VARDUMP},
+    {"funcdump", Running_Program::FUNCDUMP},
+    {"aliasdump", Running_Program::ALIASDUMP},
     {"shift", Running_Program::SHIFT},
     {"history", Running_Program::HISTORY},
     {"__tesh_set_var", Running_Program::SET_VAR},

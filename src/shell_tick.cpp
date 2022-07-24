@@ -734,6 +734,46 @@ wide_terminal  1/0   -- Turn on or off wide terminal mode.  This will lock the t
         goto finish_builtin;
     } break;
 
+    case Running_Program::ALIASDUMP: {
+        auto& builtin = program->v.builtin;
+        for (Shell_Local* iter = local; iter; iter = iter->parent) {
+            if (iter != local)
+                (void)builtin.out.write("\n");
+            for (size_t i = 0; i < iter->alias_names.len; ++i) {
+                (void)builtin.out.write("alias: ");
+                (void)builtin.out.write(iter->alias_names[i]);
+                (void)builtin.out.write(" is aliased to: ");
+                cz::String string = {};
+                append_node(temp_allocator, &string, iter->alias_values[i],
+                            /*append_semicolon=*/false);
+                (void)builtin.out.write(string);
+                string.drop(temp_allocator);
+                (void)builtin.out.write("\n");
+            }
+        }
+        goto finish_builtin;
+    } break;
+
+    case Running_Program::FUNCDUMP: {
+        auto& builtin = program->v.builtin;
+        for (Shell_Local* iter = local; iter; iter = iter->parent) {
+            if (iter != local)
+                (void)builtin.out.write("\n");
+            for (size_t i = 0; i < iter->function_names.len; ++i) {
+                (void)builtin.out.write("function: ");
+                (void)builtin.out.write(iter->function_names[i]);
+                (void)builtin.out.write(" is defined as: ");
+                cz::String string = {};
+                append_node(temp_allocator, &string, iter->function_values[i],
+                            /*append_semicolon=*/false);
+                (void)builtin.out.write(string);
+                string.drop(temp_allocator);
+                (void)builtin.out.write("\n");
+            }
+        }
+        goto finish_builtin;
+    } break;
+
     case Running_Program::VARDUMP: {
         auto& builtin = program->v.builtin;
         for (Shell_Local* iter = local; iter; iter = iter->parent) {

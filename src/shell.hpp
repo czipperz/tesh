@@ -229,6 +229,8 @@ struct Running_Program {
         FOLLOW,
         ARGDUMP,
         VARDUMP,
+        ALIASDUMP,
+        FUNCDUMP,
         SHIFT,
         HISTORY,
         SET_VAR,
