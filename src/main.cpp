@@ -3437,16 +3437,16 @@ int actual_main(int argc, char** argv) {
 }
 
 void resize_font(int font_size, Render_State* rend) {
-    TTF_Font  *new_font = NULL;
-    SDL_RWops *font_mem;
-    int ptsize  = (font_size * rend->dpi_scale);
+    TTF_Font* new_font = NULL;
+    SDL_RWops* font_mem;
+    int ptsize = (font_size * rend->dpi_scale);
     if (cfg.font_path.len > 0) {
         new_font = TTF_OpenFont(cfg.font_path.buffer, ptsize);
     }
     if (new_font == NULL) {
         // Load the default font instead.
         font_mem = SDL_RWFromConstMem(&UbuntuMonoData[0], sizeof(UbuntuMonoData));
-        new_font = TTF_OpenFontRW(font_mem, 0, ptsize);    
+        new_font = TTF_OpenFontRW(font_mem, 0, ptsize);
     }
     if (new_font) {
         close_font(rend);
