@@ -247,12 +247,12 @@ program:\n\
 TEST_CASE("parse_script double quote escape") {
     Shell_State shell = {};
     cz::String string = {};
-    Error error = parse_and_emit(&shell, &string, "\"\\\\ \\n \\a \\$ \\` \\\" \\&\"");
+    Error error = parse_and_emit(&shell, &string, "\"\\\\ \\n \\a \\$ \\` \\\" \\& \\:\"");
     REQUIRE(error == Error_Success);
     CHECK(string.as_str() ==
           "\
 program:\n\
-    arg0: \"\\\\ \\n \\a \\$ \\` \\\" \\&\"\n");
+    arg0: \"\\\\ \\n \\a \\$ \\` \\\" \\& \\:\"\n");
 }
 
 TEST_CASE("parse_script variable ended in quote") {
@@ -399,7 +399,7 @@ TEST_CASE("parse_script multi word variable expanded") {
 
 TEST_CASE("parse_script backslash escapes dollar sign") {
     Shell_State shell = {};
-    REQUIRE(expand(&shell, "\\$var\\&") == "arg0: $var&\n");
+    REQUIRE(expand(&shell, "\\$var\\&\\:") == "arg0: $var&:\n");
 }
 
 TEST_CASE("parse_script dollar sign space in quotes") {
@@ -546,6 +546,20 @@ TEST_CASE("parse_script tilde expanded simple") {
     CHECK(expand(&shell, "~") == "arg0: /path/to/my/home\n");
     CHECK(expand(&shell, "~/") == "arg0: /path/to/my/home/\n");
     CHECK(expand(&shell, "~/abc/123") == "arg0: /path/to/my/home/abc/123\n");
+}
+
+TEST_CASE("parse_script tilde expanded variable assignment") {
+    Shell_State shell = {};
+    set_var(&shell.local, "HOME", "/path/to/my/home");
+    CHECK(expand(&shell, "x=~") == "arg0: x=/path/to/my/home\n");
+    CHECK(expand(&shell, "x=~/") == "arg0: x=/path/to/my/home/\n");
+    CHECK(expand(&shell, "x=:~") == "arg0: x=:/path/to/my/home\n");
+    CHECK(expand(&shell, "x=\\\\:~") == "arg0: x=\\:/path/to/my/home\n");
+    CHECK(expand(&shell, "x=a~") == "arg0: x=a~\n");
+    CHECK(expand(&shell, "x=\\:~") == "arg0: x=:~\n");
+    CHECK(expand(&shell, "x==~") == "arg0: x==~\n");
+    CHECK(expand(&shell, "=~") == "arg0: =~\n");
+    CHECK(expand(&shell, ":~") == "arg0: :~\n");
 }
 
 TEST_CASE("parse_script argument expansion 1") {

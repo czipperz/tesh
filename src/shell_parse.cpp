@@ -1020,10 +1020,15 @@ static void expand_arg(const Shell_Local* local,
                        cz::Vector<cz::Str>* words,
                        cz::String* word) {
     bool has_word = false;
+    bool any_special = false;
+    bool allow_tilde = true;
+    bool hit_equals = false;
     for (size_t index = 0; index < text.len;) {
+        bool new_allow_tilde = false;
         switch (text[index]) {
         case '\'': {
             has_word = true;
+            any_special = true;
             ++index;
             while (1) {
                 if (index == text.len)
@@ -1043,6 +1048,7 @@ static void expand_arg(const Shell_Local* local,
 
         case '"': {
             has_word = true;
+            any_special = true;
             ++index;
             while (1) {
                 if (index == text.len)
@@ -1112,6 +1118,7 @@ static void expand_arg(const Shell_Local* local,
         } break;
 
         case '$': {
+            any_special = true;
             cz::Vector<cz::Str> values = {};
             CZ_DEFER(values.drop(cz::heap_allocator()));
             bool force_merge = false;
@@ -1163,7 +1170,7 @@ static void expand_arg(const Shell_Local* local,
         } break;
 
         case '~': {
-            if (index == 0) {
+            if (!any_special && allow_tilde) {
                 cz::Str value;
                 if (get_var(local, "HOME", &value)) {
                     word->reserve(allocator, value.len);
@@ -1177,6 +1184,7 @@ static void expand_arg(const Shell_Local* local,
         } break;
 
         case '*': {
+            any_special = true;
             word->reserve(allocator, 1);
             word->push(SPECIAL_STAR);
             ++index;
@@ -1188,7 +1196,7 @@ static void expand_arg(const Shell_Local* local,
             if (index < text.len) {
                 char c2 = text[index];
                 if (c2 == '"' || c2 == '\\' || c2 == '`' || c2 == '$' || c2 == ' ' || c2 == '~' ||
-                    c2 == '&' || c2 == '*') {
+                    c2 == '&' || c2 == '*' || c2 == ':') {
                     word->reserve(allocator, 1);
                     word->push(c2);
                     ++index;
@@ -1205,12 +1213,24 @@ static void expand_arg(const Shell_Local* local,
             }
         } break;
 
+        case ':':
+            if (index > 0)
+                new_allow_tilde = true;
+            goto normal;
+        case '=':
+            if (!hit_equals && index > 0)
+                new_allow_tilde = true;
+            hit_equals = true;
+            goto normal;
+
+        normal:
         default:
             word->reserve(allocator, 1);
             word->push(text[index]);
             ++index;
             break;
         }
+        allow_tilde = new_allow_tilde;
     }
 
     if (words && (has_word || word->len > 0)) {
