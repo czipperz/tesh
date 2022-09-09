@@ -1572,7 +1572,11 @@ static bool handle_prompt_manipulation_commands(Shell_State* shell,
         if (prompt->completion.results.len <= 2)
             stop_completing(prompt);
     } else if ((mod == KMOD_SHIFT && key == SDLK_INSERT) ||
-               (mod == (KMOD_CTRL | KMOD_SHIFT) && key == SDLK_v)) {
+               (mod == (KMOD_CTRL | KMOD_SHIFT) && key == SDLK_v)
+#ifdef __APPLE__
+                || (mod == KMOD_GUI && key == SDLK_v)
+#endif
+               ) {
         run_paste(prompt);
     } else if (mod == (KMOD_CTRL | KMOD_SHIFT) && key == SDLK_d) {
         // _d_uplicate the selected line's prompt and paste it at the cursor.
@@ -2741,7 +2745,11 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
             }
 
             if ((mod == KMOD_CTRL && key == SDLK_INSERT) ||
-                (mod == (KMOD_CTRL | KMOD_SHIFT) && key == SDLK_c)) {
+                (mod == (KMOD_CTRL | KMOD_SHIFT) && key == SDLK_c)
+#ifdef __APPLE__
+                || (mod == KMOD_GUI && key == SDLK_c)
+#endif
+            ) {
                 if (rend->selection.type == SELECT_REGION ||
                     rend->selection.type == SELECT_FINISHED)  //
                 {
