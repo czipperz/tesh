@@ -963,8 +963,10 @@ static void recognize_builtin(Running_Program* program, const Parse_Program& par
     program->type = Running_Program::PROCESS;
 
     // Line that only assigns to variables runs as special builtin.
+    //
+    // Note: this can also be hit when evaluating `$()` or `$(;)` in which
+    // case we still can use VARIABLES because it'll just do nothing.
     if (parse.v.args.len == 0) {
-        CZ_ASSERT(parse.variable_names.len > 0);
         program->type = Running_Program::VARIABLES;
         program->v.builtin.st.variables = {};
         program->v.builtin.st.variables.names = parse.variable_names;
