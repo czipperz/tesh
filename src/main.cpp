@@ -2976,7 +2976,8 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
                                 prompt->history_counter = prompt->stdin_history.len;
                             }
                         }
-                        reorder_attached_to_last(rend);
+                        if (rend->attached_outer != -1)
+                            reorder_attached_to_last(rend);
                     }
                     break;
                 }
