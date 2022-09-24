@@ -849,17 +849,19 @@ TEST_CASE("parse_script subexpr $()") {
     CHECK(string.as_str() ==
           "\
 pipeline:\n\
-    sync:\n\
-        pipeline:\n\
-            program:\n\
-                arg0: y\n\
-            program:\n\
-                arg0: __tesh_set_var\n\
-                arg1: __tesh_sub0\n\
-        program:\n\
-            arg0: c\n\
-            arg1: x${__tesh_sub0}z\n\
-            arg2: d\n\
+    program:\n\
+        sub:\n\
+            sync:\n\
+                pipeline:\n\
+                    program:\n\
+                        arg0: y\n\
+                    program:\n\
+                        arg0: __tesh_set_var\n\
+                        arg1: __tesh_sub0\n\
+                program:\n\
+                    arg0: c\n\
+                    arg1: x${__tesh_sub0}z\n\
+                    arg2: d\n\
     program:\n\
         arg0: __tesh_set_var\n\
         arg1: __tesh_sub1\n\
@@ -879,17 +881,19 @@ TEST_CASE("parse_script subexpr $() inside quotes") {
     CHECK(string.as_str() ==
           "\
 pipeline:\n\
-    sync:\n\
-        pipeline:\n\
-            program:\n\
-                arg0: y\n\
-            program:\n\
-                arg0: __tesh_set_var\n\
-                arg1: __tesh_sub0\n\
-        program:\n\
-            arg0: c\n\
-            arg1: x${__tesh_sub0}z\n\
-            arg2: d\n\
+    program:\n\
+        sub:\n\
+            sync:\n\
+                pipeline:\n\
+                    program:\n\
+                        arg0: y\n\
+                    program:\n\
+                        arg0: __tesh_set_var\n\
+                        arg1: __tesh_sub0\n\
+                program:\n\
+                    arg0: c\n\
+                    arg1: x${__tesh_sub0}z\n\
+                    arg2: d\n\
     program:\n\
         arg0: __tesh_set_var\n\
         arg1: __tesh_sub1\n\

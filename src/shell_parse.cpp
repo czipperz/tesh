@@ -466,6 +466,18 @@ static Error advance_through_dollar_sign(cz::Str text,
             if (error != Error_Success)
                 return error;
 
+            // If `expr` in `$(expr)` is a complex expression then wrap it in fake
+            // parenthesis.  This allows the shell_execute module to function as expected.
+            if (subnode.type != Shell_Node::PROGRAM) {
+                Parse_Program wrapper = {};
+                wrapper.is_sub = true;
+                wrapper.v.sub = allocator.clone(subnode);
+
+                subnode = {};
+                subnode.type = Shell_Node::PROGRAM;
+                subnode.v.program = allocator.clone(wrapper);
+            }
+
             /////////////////////////////////////
             /// Transform `arg0 a$(b)c arg2` to
             /// `b | __tesh_set_var __tesh_sub0; arg0 a${__tesh_sub0}c arg2`.
