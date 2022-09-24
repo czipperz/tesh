@@ -934,6 +934,7 @@ static Error deal_with_token(cz::Allocator allocator,
     Slice_State slice = {};
     CZ_DEFER(slice.outs.drop(cz::heap_allocator()));
 
+    bool processing_a_variable_value = false;
     bool any_special = false;
     for (size_t index = 0; index < token.len;) {
         switch (token[index]) {
@@ -970,17 +971,20 @@ static Error deal_with_token(cz::Allocator allocator,
             if (any_special || program->is_sub || program->v.args.len > 0)
                 goto def;
 
+            any_special = true;
+
             cz::Str key = token.slice_end(index);
-            cz::Str value = token.slice_start(index + 1);
             if (force_alloc) {
                 key = key.clone_null_terminate(allocator);
-                value = value.clone_null_terminate(allocator);
             }
             program->variable_names.reserve(cz::heap_allocator(), 1);
-            program->variable_values.reserve(cz::heap_allocator(), 1);
             program->variable_names.push(key);
-            program->variable_values.push(value);
-            return Error_Success;
+
+            // Now process the value as if it is an expression.
+            token = token.slice_start(index + 1);
+            index = 0;
+            processing_a_variable_value = true;
+            break;
         }
 
         def:
@@ -1015,8 +1019,14 @@ static Error deal_with_token(cz::Allocator allocator,
         token = token2;
     }
 
-    program->v.args.reserve(cz::heap_allocator(), 1);
-    program->v.args.push(token);
+    if (processing_a_variable_value) {
+        program->variable_values.reserve(cz::heap_allocator(), 1);
+        program->variable_values.push(token);
+    } else {
+        program->v.args.reserve(cz::heap_allocator(), 1);
+        program->v.args.push(token);
+    }
+
     return Error_Success;
 }
 

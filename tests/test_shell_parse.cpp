@@ -869,6 +869,29 @@ program:\n\
     arg0: a${__tesh_sub1}b\n");
 }
 
+TEST_CASE("parse_script assign var $()") {
+    // Temporary hack.
+    permanent_allocator = cz::heap_allocator();
+    tesh_sub_counter = 0;
+
+    Shell_State shell = {};
+    cz::String string = {};
+    Error error = parse_and_emit(&shell, &string, "x=$(hi)");
+    REQUIRE(error == Error_Success);
+    CHECK(string.as_str() ==
+          "\
+pipeline:\n\
+    program:\n\
+        arg0: hi\n\
+    program:\n\
+        arg0: __tesh_set_var\n\
+        arg1: __tesh_sub0\n\
+program:\n\
+    var0: x\n\
+    val0: ${__tesh_sub0}\n\
+");
+}
+
 TEST_CASE("parse_script subexpr $() inside quotes") {
     // Temporary hack.
     permanent_allocator = cz::heap_allocator();
