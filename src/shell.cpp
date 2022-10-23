@@ -12,16 +12,17 @@ static cz::Str canonical_var(cz::Str key) {
 }
 
 bool get_var(const Shell_Local* local, cz::Str key, cz::Str* value) {
-    while (local && local->relationship == Shell_Local::ARGS_ONLY) {
-        local = local->parent;
-    }
+    for (; local; local = local->parent) {
+        if (local->relationship == Shell_Local::ARGS_ONLY)
+            continue;
 
-    key = canonical_var(key);
+        key = canonical_var(key);
 
-    for (size_t i = 0; i < local->variable_names.len; ++i) {
-        if (key == local->variable_names[i].str) {
-            *value = local->variable_values[i].str;
-            return true;
+        for (size_t i = 0; i < local->variable_names.len; ++i) {
+            if (key == local->variable_names[i].str) {
+                *value = local->variable_values[i].str;
+                return true;
+            }
         }
     }
 
