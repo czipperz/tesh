@@ -923,29 +923,31 @@ static void generate_environment(void* out_arg,
     skip1:;
     }
 
-    while (local && local->relationship == Shell_Local::ARGS_ONLY) {
-        local = local->parent;
-    }
+    for (; local; local = local->parent) {
+        if (local->relationship == Shell_Local::ARGS_ONLY)
+            continue;
 
-    for (size_t i = 0; i < local->exported_vars.len; ++i) {
-        cz::Str key = local->exported_vars[i].str;
-        for (size_t j = 0; j < variable_names.len; ++j) {
-            if (key == variable_names[j])
-                goto skip2;
+        for (size_t i = 0; i < local->exported_vars.len; ++i) {
+            cz::Str key = local->exported_vars[i].str;
+            for (size_t j = 0; j < variable_names.len; ++j) {
+                if (key == variable_names[j])
+                    goto skip2;
+            }
+            for (size_t j = 0; j < i; ++j) {
+                if (key == local->exported_vars[j].str)
+                    goto skip2;
+            }
+            cz::Str value;
+            if (!get_var(local, key, &value))
+                value = {};
+            push_environment(&table, key, value);
+        skip2:;
         }
-        for (size_t j = 0; j < i; ++j) {
-            if (key == local->exported_vars[j].str)
-                goto skip2;
-        }
-        cz::Str value;
-        if (!get_var(local, key, &value))
-            value = {};
-        push_environment(&table, key, value);
-    skip2:;
     }
 
 #ifdef _WIN32
     char** out = (char**)out_arg;
+    table.reserve_exact(temp_allocator, 1);
     table.null_terminate();
     *out = table.buffer;
 #else
