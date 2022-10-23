@@ -658,6 +658,7 @@ static Error run_program(Shell_State* shell,
         parse.variable_values = variable_values;
     }
 
+    // Parenthesized expression.  Fork (copy on write) vars.
     if (parse.is_sub) {
         program->type = Running_Program::SUB;
         program->v.sub = {};
