@@ -255,6 +255,17 @@ program:\n\
     arg0: \"\\\\ \\n \\a \\$ \\` \\\" \\& \\:\"\n");
 }
 
+TEST_CASE("parse_script double quote escape outside") {
+    Shell_State shell = {};
+    cz::String string = {};
+    Error error = parse_and_emit(&shell, &string, "\\\"ok");
+    REQUIRE(error == Error_Success);
+    CHECK(string.as_str() ==
+          "\
+program:\n\
+    arg0: \\\"ok\n");
+}
+
 TEST_CASE("parse_script variable ended in quote") {
     Shell_State shell = {};
     cz::String string = {};
@@ -400,6 +411,11 @@ TEST_CASE("parse_script multi word variable expanded") {
 TEST_CASE("parse_script backslash escapes dollar sign") {
     Shell_State shell = {};
     REQUIRE(expand(&shell, "\\$var\\&\\:") == "arg0: $var&:\n");
+}
+
+TEST_CASE("parse_script backslash escapes double quote") {
+    Shell_State shell = {};
+    REQUIRE(expand(&shell, "\\\"") == "arg0: \"\n");
 }
 
 TEST_CASE("parse_script dollar sign space in quotes") {

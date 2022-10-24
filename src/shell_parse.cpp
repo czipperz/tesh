@@ -987,6 +987,12 @@ static Error deal_with_token(cz::Allocator allocator,
             break;
         }
 
+        case '\\': {
+            // Skip the next character too.
+            index += 2;
+            break;
+        }
+
         def:
         default:
             ++index;
