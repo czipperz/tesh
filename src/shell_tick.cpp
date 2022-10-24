@@ -595,7 +595,7 @@ wide_terminal  1/0   -- Turn on or off wide terminal mode.  This will lock the t
             if (arg.split_excluding('=', &key, &value)) {
                 if (key.len == 0) {
                     builtin.exit_code = 1;
-                    (void)builtin.err.write("export: Empty variable name");
+                    (void)builtin.err.write("export: Empty variable name: ");
                     (void)builtin.err.write(arg);
                     (void)builtin.err.write("\n");
                     continue;
