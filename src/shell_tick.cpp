@@ -606,13 +606,13 @@ wide_terminal  1/0   -- Turn on or off wide terminal mode.  This will lock the t
                         (void)builtin.err.write("export: Invalid variable name: ");
                         (void)builtin.err.write(arg);
                         (void)builtin.err.write("\n");
-                        ++i;
                         goto next;
                     }
                 }
                 set_var(local, key, value);
             }
             make_env_var(local, key);
+        next:;
         }
         goto finish_builtin;
     } break;
