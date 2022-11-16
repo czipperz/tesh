@@ -653,6 +653,7 @@ fail:;
     append_text(backlog, "tesh: Error: ");
     append_text(backlog, error_string(error));
     append_text(backlog, "\n");
+    backlog->exit_code = -1;
     backlog->done = true;
     backlog->end = std::chrono::steady_clock::now();
     // Decrement refcount in caller.
