@@ -576,6 +576,7 @@ TEST_CASE("parse_script tilde expanded variable assignment") {
     CHECK(expand(&shell, "x==~") == "arg0: x==~\n");
     CHECK(expand(&shell, "=~") == "arg0: =~\n");
     CHECK(expand(&shell, ":~") == "arg0: :~\n");
+    CHECK(expand(&shell, "a:~") == "arg0: a:~\n");
 }
 
 TEST_CASE("parse_script argument expansion 1") {

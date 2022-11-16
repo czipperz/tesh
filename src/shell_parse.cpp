@@ -1242,7 +1242,7 @@ static void expand_arg(const Shell_Local* local,
         } break;
 
         case ':':
-            if (index > 0)
+            if (index > 0 && hit_equals)
                 new_allow_tilde = true;
             goto normal;
         case '=':
