@@ -1308,7 +1308,6 @@ static void start_completing(Prompt_State* prompt, Shell_State* shell) {
                             : builtin.name.starts_with_case_insensitive(prefix)) {
                         prompt->completion.results.reserve(cz::heap_allocator(), 1);
                         prompt->completion.results.push(builtin.name);
-                        return;
                     }
                 }
             }
