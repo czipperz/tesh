@@ -2490,9 +2490,9 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
     static uint32_t ignore_key_events_until = 0;
     static bool previous_alt_u = false;
 
-    bool is_alt_u = false;
     int num_events = 0;
     for (SDL_Event event; SDL_PollEvent(&event);) {
+        bool is_alt_u = false;
         Prompt_State* prompt = (search->is_searching ? &search->prompt : command_prompt);
         Shell_State* shell2 = (search->is_searching ? nullptr : shell);
 
@@ -2851,9 +2851,13 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
         case SDL_KEYUP: {
             SDL_Keycode key = event.key.keysym.sym;
 
-            bool only_alt =
-                (event.key.keysym.mod & KMOD_ALT) && !(event.key.keysym.mod & !KMOD_ALT);
-            is_alt_u = (only_alt && key == SDLK_u);
+            if (key == SDLK_LALT || key == SDLK_RALT) {
+                is_alt_u = previous_alt_u;
+            } else {
+                bool only_alt =
+                    (event.key.keysym.mod & KMOD_ALT) && !(event.key.keysym.mod & !KMOD_ALT);
+                is_alt_u = (only_alt && key == SDLK_u);
+            }
 
             if (key == SDLK_LCTRL || key == SDLK_RCTRL) {
                 // Redraw because it changes how links are drawn.
