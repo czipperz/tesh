@@ -17,6 +17,7 @@
 #include <cz/process.hpp>
 #include <cz/sort.hpp>
 #include <cz/string.hpp>
+#include <cz/utf.hpp>
 #include <cz/util.hpp>
 #include <cz/vector.hpp>
 #include <cz/working_directory.hpp>
@@ -2488,11 +2489,18 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
                           Shell_State* shell,
                           SDL_Window* window) {
     static uint32_t ignore_key_events_until = 0;
-    static bool previous_alt_u = false;
+
+    // If previous KEYDOWN was A-* then track it.
+    static SDL_Keycode previous_alt_key = SDLK_UNKNOWN;
+
+    // Tracks if the current key was depressed with an ALT modifier.  This allows for detecting
+    // ALT down -> N down -> ALT up -> N up.  SDL will say 'N up' doesn't have an ALT modifier.
+    static bool alt_was_down = false;
 
     int num_events = 0;
     for (SDL_Event event; SDL_PollEvent(&event);) {
-        bool is_alt_u = false;
+        SDL_Keycode is_alt_key = SDLK_UNKNOWN;
+        bool alt_is_down = false;
         Prompt_State* prompt = (search->is_searching ? &search->prompt : command_prompt);
         Shell_State* shell2 = (search->is_searching ? nullptr : shell);
 
@@ -2540,7 +2548,9 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
             if (event.key.timestamp < ignore_key_events_until)
                 break;
 
-            is_alt_u = previous_alt_u;
+            is_alt_key = previous_alt_key;
+            alt_is_down =
+                ((event.key.keysym.mod & KMOD_ALT) && !(event.key.keysym.mod & !KMOD_ALT));
 
             transform_shift_numbers(&event.key.keysym);
 
@@ -2852,11 +2862,11 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
             SDL_Keycode key = event.key.keysym.sym;
 
             if (key == SDLK_LALT || key == SDLK_RALT) {
-                is_alt_u = previous_alt_u;
+                is_alt_key = previous_alt_key;
+                alt_is_down = alt_was_down;
             } else {
-                bool only_alt =
-                    (event.key.keysym.mod & KMOD_ALT) && !(event.key.keysym.mod & !KMOD_ALT);
-                is_alt_u = (only_alt && key == SDLK_u);
+                if (alt_was_down)
+                    is_alt_key = key;
             }
 
             if (key == SDLK_LCTRL || key == SDLK_RCTRL) {
@@ -2888,77 +2898,147 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
 #ifdef __APPLE__
             // On mac, A-u will try to push an umlaut on the next character.  We don't
             // care to support this, and prefer to support A-u instead.
-            if (previous_alt_u) {
-                // Character after A-u doesn't work with an umlaut so
-                // the mac will emit an umlaut (U+00A8) by itself.  Ignore it.
-                if (event.text.text[0] == -62 && event.text.text[1] == -88)
+            if (previous_alt_key == SDLK_u) {
+                uint32_t u32 = cz::utf8::to_utf32((const uint8_t*)event.text.text);
+
+                // Accent by itself means next character is
+                // emitted normally so just ignore this one.
+                if (u32 == 0x00A8)
                     break;
 
-                // Try to remove the umlaut.
-                if (event.text.text[0] == -61) {
-                    switch (event.text.text[1]) {
-                    case -124:
-                        // A with umlaut (U+00C4)
-                        event.text.text[0] = 'A';
-                        event.text.text[1] = '\0';
-                        break;
-                    case -117:
-                        // E with umlaut (U+00CB)
-                        event.text.text[0] = 'E';
-                        event.text.text[1] = '\0';
-                        break;
-                    case -113:
-                        // I with umlaut (U+00CF)
-                        event.text.text[0] = 'I';
-                        event.text.text[1] = '\0';
-                        break;
-                    case -106:
-                        // O with umlaut (U+00D6)
-                        event.text.text[0] = 'O';
-                        event.text.text[1] = '\0';
-                        break;
-                    case -100:
-                        // U with umlaut (U+00DC)
-                        event.text.text[0] = 'U';
-                        event.text.text[1] = '\0';
-                        break;
-                    case -92:
-                        // a with umlaut (U+00E4)
-                        event.text.text[0] = 'a';
-                        event.text.text[1] = '\0';
-                        break;
-                    case -85:
-                        // e with umlaut (U+00EB)
-                        event.text.text[0] = 'e';
-                        event.text.text[1] = '\0';
-                        break;
-                    case -81:
-                        // i with umlaut (U+00EF)
-                        event.text.text[0] = 'i';
-                        event.text.text[1] = '\0';
-                        break;
-                    case -74:
-                        // o with umlaut (U+00F6)
-                        event.text.text[0] = 'o';
-                        event.text.text[1] = '\0';
-                        break;
-                    case -68:
-                        // u with umlaut (U+00FC)
-                        event.text.text[0] = 'u';
-                        event.text.text[1] = '\0';
-                        break;
-                    case -65:
-                        // y with umlaut (U+00FF)
-                        event.text.text[0] = 'y';
-                        event.text.text[1] = '\0';
-                        break;
-                    }
-                } else if (event.text.text[0] == -59) {
-                    if (event.text.text[1] == -72) {
-                        // Y with umlaut (U+0178)
-                        event.text.text[0] = 'Y';
-                        event.text.text[1] = '\0';
-                    }
+                switch (u32) {
+                    // clang-format off
+                case 0x00C4: strcpy(event.text.text, "A"); break;
+                case 0x00CB: strcpy(event.text.text, "E"); break;
+                case 0x00CF: strcpy(event.text.text, "I"); break;
+                case 0x00D6: strcpy(event.text.text, "O"); break;
+                case 0x00DC: strcpy(event.text.text, "U"); break;
+                case 0x00E4: strcpy(event.text.text, "a"); break;
+                case 0x00EB: strcpy(event.text.text, "e"); break;
+                case 0x00EF: strcpy(event.text.text, "i"); break;
+                case 0x00F6: strcpy(event.text.text, "o"); break;
+                case 0x00FC: strcpy(event.text.text, "u"); break;
+                case 0x00FF: strcpy(event.text.text, "y"); break;
+                case 0x0178: strcpy(event.text.text, "Y"); break;
+                    // clang-format on
+                }
+            }
+
+            // On mac, A-n will try to push an tilde on the next character.  We don't
+            // care to support this, and prefer to support A-n instead.
+            if (previous_alt_key == SDLK_n) {
+                uint32_t u32 = cz::utf8::to_utf32((const uint8_t*)event.text.text);
+
+                // Accent by itself means next character is
+                // emitted normally so just ignore this one.
+                if (u32 == 0x02DC)
+                    break;
+
+                switch (u32) {
+                    // clang-format off
+                case 0x00C3: strcpy(event.text.text, "A"); break;
+                case 0x00D1: strcpy(event.text.text, "N"); break;
+                case 0x00D5: strcpy(event.text.text, "O"); break;
+                case 0x00E3: strcpy(event.text.text, "a"); break;
+                case 0x00F1: strcpy(event.text.text, "n"); break;
+                case 0x00F5: strcpy(event.text.text, "a"); break;
+                case 0x0128: strcpy(event.text.text, "I"); break;
+                case 0x0129: strcpy(event.text.text, "i"); break;
+                case 0x0168: strcpy(event.text.text, "U"); break;
+                case 0x0169: strcpy(event.text.text, "u"); break;
+                    // clang-format on
+                }
+            }
+
+            // On mac, A-e will try to push an acute accent on the next character.
+            // We don't care to support this, and prefer to support A-e instead.
+            if (previous_alt_key == SDLK_e) {
+                uint32_t u32 = cz::utf8::to_utf32((const uint8_t*)event.text.text);
+
+                // Accent by itself means next character is
+                // emitted normally so just ignore this one.
+                if (u32 == 0x00B4)
+                    break;
+
+                switch (u32) {
+                    // clang-format off
+                case 0x00C1: strcpy(event.text.text, "A"); break;
+                case 0x00C9: strcpy(event.text.text, "E"); break;
+                case 0x00CD: strcpy(event.text.text, "I"); break;
+                case 0x00D3: strcpy(event.text.text, "O"); break;
+                case 0x00DA: strcpy(event.text.text, "U"); break;
+                case 0x00DD: strcpy(event.text.text, "Y"); break;
+                case 0x00E1: strcpy(event.text.text, "a"); break;
+                case 0x00E9: strcpy(event.text.text, "e"); break;
+                case 0x00ED: strcpy(event.text.text, "i"); break;
+                case 0x00F3: strcpy(event.text.text, "o"); break;
+                case 0x00FA: strcpy(event.text.text, "u"); break;
+                case 0x00FD: strcpy(event.text.text, "y"); break;
+                case 0x0106: strcpy(event.text.text, "C"); break;
+                case 0x0107: strcpy(event.text.text, "c"); break;
+                case 0x0139: strcpy(event.text.text, "L"); break;
+                case 0x013A: strcpy(event.text.text, "l"); break;
+                case 0x0143: strcpy(event.text.text, "N"); break;
+                case 0x0144: strcpy(event.text.text, "n"); break;
+                case 0x0154: strcpy(event.text.text, "R"); break;
+                case 0x0155: strcpy(event.text.text, "r"); break;
+                case 0x015A: strcpy(event.text.text, "S"); break;
+                case 0x015B: strcpy(event.text.text, "s"); break;
+                case 0x0179: strcpy(event.text.text, "Z"); break;
+                case 0x017A: strcpy(event.text.text, "z"); break;
+                case 0x01F4: strcpy(event.text.text, "G"); break;
+                case 0x01F5: strcpy(event.text.text, "g"); break;
+                case 0x1E30: strcpy(event.text.text, "K"); break;
+                case 0x1E31: strcpy(event.text.text, "k"); break;
+                case 0x1E3E: strcpy(event.text.text, "M"); break;
+                case 0x1E3F: strcpy(event.text.text, "m"); break;
+                case 0x1E54: strcpy(event.text.text, "P"); break;
+                case 0x1E55: strcpy(event.text.text, "p"); break;
+                case 0x1E82: strcpy(event.text.text, "W"); break;
+                case 0x1E83: strcpy(event.text.text, "w"); break;
+                    // clang-format on
+                }
+            }
+
+            // On mac, A-i will try to push a circumflex on the next character.
+            // We don't care to support this, and prefer to support A-i instead.
+            if (previous_alt_key == SDLK_i) {
+                uint32_t u32 = cz::utf8::to_utf32((const uint8_t*)event.text.text);
+
+                // Accent by itself means next character is
+                // emitted normally so just ignore this one.
+                if (u32 == 0x02C6)
+                    break;
+
+                switch (u32) {
+                    // clang-format off
+                case 0x00C2: strcpy(event.text.text, "A"); break;
+                case 0x00CA: strcpy(event.text.text, "E"); break;
+                case 0x00CE: strcpy(event.text.text, "I"); break;
+                case 0x00D4: strcpy(event.text.text, "O"); break;
+                case 0x00DB: strcpy(event.text.text, "U"); break;
+                case 0x00E2: strcpy(event.text.text, "a"); break;
+                case 0x00EA: strcpy(event.text.text, "e"); break;
+                case 0x00EE: strcpy(event.text.text, "i"); break;
+                case 0x00F4: strcpy(event.text.text, "o"); break;
+                case 0x00FB: strcpy(event.text.text, "u"); break;
+                case 0x0108: strcpy(event.text.text, "C"); break;
+                case 0x0109: strcpy(event.text.text, "c"); break;
+                case 0x011C: strcpy(event.text.text, "G"); break;
+                case 0x011D: strcpy(event.text.text, "g"); break;
+                case 0x0124: strcpy(event.text.text, "H"); break;
+                case 0x0125: strcpy(event.text.text, "h"); break;
+                case 0x0134: strcpy(event.text.text, "J"); break;
+                case 0x0135: strcpy(event.text.text, "j"); break;
+                case 0x015C: strcpy(event.text.text, "S"); break;
+                case 0x015D: strcpy(event.text.text, "s"); break;
+                case 0x0174: strcpy(event.text.text, "W"); break;
+                case 0x0175: strcpy(event.text.text, "w"); break;
+                case 0x0176: strcpy(event.text.text, "Y"); break;
+                case 0x0177: strcpy(event.text.text, "y"); break;
+                case 0x1E90: strcpy(event.text.text, "Z"); break;
+                case 0x1E91: strcpy(event.text.text, "z"); break;
+                    // clang-format on
                 }
             }
 #endif
@@ -2996,7 +3076,8 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
 
         case SDL_TEXTEDITING: {
             if (event.edit.length == 0) {
-                is_alt_u = previous_alt_u;
+                is_alt_key = previous_alt_key;
+                alt_is_down = alt_was_down;
                 break;
             }
 
@@ -3174,7 +3255,8 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
         } break;
         }
 
-        previous_alt_u = is_alt_u;
+        previous_alt_key = is_alt_key;
+        alt_was_down = alt_is_down;
     }
     return num_events;
 }
