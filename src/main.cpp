@@ -2715,7 +2715,7 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
             if (mod == KMOD_CTRL && key == SDLK_l) {
                 clear_screen(rend, shell, prompt, false);
                 ++num_events;
-                continue;
+                break;
             }
 
             // Ctrl + Shift + E - save the selected backlog to a file and open it in $EDITOR.
@@ -2728,7 +2728,7 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
                         // TODO reorder attached to last
                     }
                 }
-                continue;
+                break;
             }
 
             if (mod == KMOD_ALT && key == SDLK_GREATER) {
@@ -2741,7 +2741,7 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
                 rend->scroll_mode = AUTO_SCROLL;
                 int lines = cz::max(rend->window_rows, 3) - 3;
                 scroll_up(rend, lines);
-                continue;
+                break;
             }
 
             if ((mod == KMOD_CTRL && key == SDLK_INSERT) ||
@@ -2778,7 +2778,7 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
 
                     (void)SDL_SetClipboardText(clip.buffer);
                 }
-                continue;
+                break;
             }
 
             // Note: C-= used to zoom in so you don't have to hold shift.
@@ -2792,7 +2792,7 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
                 resize_font(new_font_size, rend);
                 rend->grid_is_valid = false;
                 ++num_events;
-                continue;
+                break;
             }
 
             if (key == SDLK_LCTRL || key == SDLK_RCTRL) {
@@ -2807,7 +2807,7 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
                 }
                 rend->complete_redraw = true;
                 ++num_events;
-                continue;
+                break;
             }
 
             // Unbound key.  Try to run a user command.
@@ -2839,7 +2839,7 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
                         prompt->history_counter = history->len;
 
                     ++num_events;
-                    continue;
+                    break;
                 }
             }
         } break;
@@ -2858,7 +2858,7 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
                 }
                 rend->complete_redraw = true;
                 ++num_events;
-                continue;
+                break;
             }
         } break;
 
