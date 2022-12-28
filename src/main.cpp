@@ -1574,9 +1574,9 @@ static bool handle_prompt_manipulation_commands(Shell_State* shell,
     } else if ((mod == KMOD_SHIFT && key == SDLK_INSERT) ||
                (mod == (KMOD_CTRL | KMOD_SHIFT) && key == SDLK_v)
 #ifdef __APPLE__
-                || (mod == KMOD_GUI && key == SDLK_v)
+               || (mod == KMOD_GUI && key == SDLK_v)
 #endif
-               ) {
+    ) {
         run_paste(prompt);
     } else if (mod == (KMOD_CTRL | KMOD_SHIFT) && key == SDLK_d) {
         // _d_uplicate the selected line's prompt and paste it at the cursor.
@@ -2488,7 +2488,9 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
                           Shell_State* shell,
                           SDL_Window* window) {
     static uint32_t ignore_key_events_until = 0;
+    static bool previous_alt_u = false;
 
+    bool is_alt_u = false;
     int num_events = 0;
     for (SDL_Event event; SDL_PollEvent(&event);) {
         Prompt_State* prompt = (search->is_searching ? &search->prompt : command_prompt);
@@ -2537,6 +2539,8 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
         case SDL_KEYDOWN: {
             if (event.key.timestamp < ignore_key_events_until)
                 break;
+
+            is_alt_u = previous_alt_u;
 
             transform_shift_numbers(&event.key.keysym);
 
@@ -2846,6 +2850,11 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
 
         case SDL_KEYUP: {
             SDL_Keycode key = event.key.keysym.sym;
+
+            bool only_alt =
+                (event.key.keysym.mod & KMOD_ALT) && !(event.key.keysym.mod & !KMOD_ALT);
+            is_alt_u = (only_alt && key == SDLK_u);
+
             if (key == SDLK_LCTRL || key == SDLK_RCTRL) {
                 // Redraw because it changes how links are drawn.
                 if (rend->grid_is_valid) {
@@ -2871,6 +2880,84 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
             SDL_Keymod mods = SDL_GetModState();
             if (mods & (KMOD_CTRL | KMOD_ALT))
                 break;
+
+#ifdef __APPLE__
+            // On mac, A-u will try to push an umlaut on the next character.  We don't
+            // care to support this, and prefer to support A-u instead.
+            if (previous_alt_u) {
+                // Character after A-u doesn't work with an umlaut so
+                // the mac will emit an umlaut (U+00A8) by itself.  Ignore it.
+                if (event.text.text[0] == -62 && event.text.text[1] == -88)
+                    break;
+
+                // Try to remove the umlaut.
+                if (event.text.text[0] == -61) {
+                    switch (event.text.text[1]) {
+                    case -124:
+                        // A with umlaut (U+00C4)
+                        event.text.text[0] = 'A';
+                        event.text.text[1] = '\0';
+                        break;
+                    case -117:
+                        // E with umlaut (U+00CB)
+                        event.text.text[0] = 'E';
+                        event.text.text[1] = '\0';
+                        break;
+                    case -113:
+                        // I with umlaut (U+00CF)
+                        event.text.text[0] = 'I';
+                        event.text.text[1] = '\0';
+                        break;
+                    case -106:
+                        // O with umlaut (U+00D6)
+                        event.text.text[0] = 'O';
+                        event.text.text[1] = '\0';
+                        break;
+                    case -100:
+                        // U with umlaut (U+00DC)
+                        event.text.text[0] = 'U';
+                        event.text.text[1] = '\0';
+                        break;
+                    case -92:
+                        // a with umlaut (U+00E4)
+                        event.text.text[0] = 'a';
+                        event.text.text[1] = '\0';
+                        break;
+                    case -85:
+                        // e with umlaut (U+00EB)
+                        event.text.text[0] = 'e';
+                        event.text.text[1] = '\0';
+                        break;
+                    case -81:
+                        // i with umlaut (U+00EF)
+                        event.text.text[0] = 'i';
+                        event.text.text[1] = '\0';
+                        break;
+                    case -74:
+                        // o with umlaut (U+00F6)
+                        event.text.text[0] = 'o';
+                        event.text.text[1] = '\0';
+                        break;
+                    case -68:
+                        // u with umlaut (U+00FC)
+                        event.text.text[0] = 'u';
+                        event.text.text[1] = '\0';
+                        break;
+                    case -65:
+                        // y with umlaut (U+00FF)
+                        event.text.text[0] = 'y';
+                        event.text.text[1] = '\0';
+                        break;
+                    }
+                } else if (event.text.text[0] == -59) {
+                    if (event.text.text[1] == -72) {
+                        // Y with umlaut (U+0178)
+                        event.text.text[0] = 'Y';
+                        event.text.text[1] = '\0';
+                    }
+                }
+            }
+#endif
 
             cz::Str text = event.text.text;
             if (prompt->edit_index > 0 && text.len == 1) {
@@ -2901,6 +2988,17 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
                 set_initial_search_position(search, rend, is_forward);
                 find_next_search_result(search, rend, is_forward);
             }
+        } break;
+
+        case SDL_TEXTEDITING: {
+            if (event.edit.length == 0) {
+                is_alt_u = previous_alt_u;
+                break;
+            }
+
+            printf("TODO: handle SDL_TEXTEDITING\n");
+            printf("Edit: text: %s, start: %" PRIi32 ", length: %" PRIi32 "\n", event.edit.text,
+                   event.edit.start, event.edit.length);
         } break;
 
         case SDL_MOUSEWHEEL: {
@@ -3071,6 +3169,8 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
             expand_selection_to(rend, shell, prompt, tile);
         } break;
         }
+
+        previous_alt_u = is_alt_u;
     }
     return num_events;
 }
