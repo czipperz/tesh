@@ -1128,6 +1128,8 @@ static cz::String deescape(cz::Allocator allocator, cz::Str str) {
             } else {
                 string.push('\\');
             }
+        } else if (i == 0 && str[i] == '\'' || str[i] == '"') {
+            // do nothing
         } else {
             string.push(str[i]);
         }
