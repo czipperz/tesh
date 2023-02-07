@@ -180,3 +180,7 @@ void remove_after(Prompt_State* prompt, size_t start, size_t end) {
     prompt->text.remove_range(start, end);
     prompt->cursor = start;
 }
+
+cz::Vector<cz::Str>* prompt_history(Prompt_State* prompt, bool script) {
+    return script ? &prompt->stdin_history : &prompt->history;
+}

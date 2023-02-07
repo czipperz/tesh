@@ -4,6 +4,11 @@
 #include <SDL_ttf.h>
 #include <stdint.h>
 #include <cz/vector.hpp>
+#include <chrono>
+
+struct Shell_State;
+struct Prompt_State;
+struct Search_State;
 
 struct Visual_Point {
     int y;            // visual y
@@ -87,6 +92,7 @@ struct Render_State {
 void set_icon(SDL_Window* sdl_window);
 
 void close_font(Render_State* rend);
+void resize_font(int font_size, Render_State* rend);
 
 int coord_trans(Visual_Point* point, int num_cols, char ch);
 
@@ -102,4 +108,25 @@ void resize_font(int font_size, Render_State* rend);
 
 size_t find_visbacklog(Render_State* rend, uint64_t the_id);
 
-void reorder_attached_to_last(Render_State * rend);
+void reorder_attached_to_last(Render_State* rend);
+
+float get_dpi_scale(SDL_Window* window);
+void load_cursors(Render_State* rend);
+
+bool render_backlog(SDL_Surface* window_surface,
+                    Render_State* rend,
+                    Shell_State* shell,
+                    Prompt_State* prompt,
+                    cz::Slice<Backlog_State*> backlogs,
+                    std::chrono::steady_clock::time_point now,
+                    Backlog_State* backlog,
+                    size_t visindex);
+void render_prompt(SDL_Surface* window_surface,
+                   Render_State* rend,
+                   Prompt_State* prompt,
+                   Search_State* search,
+                   cz::Slice<Backlog_State*> backlogs,
+                   Shell_State* shell);
+
+size_t make_backlog_code_point(char sequence[5], Backlog_State* backlog, size_t start);
+uint64_t render_length(Backlog_State* backlog);

@@ -63,3 +63,5 @@ void insert_before(Prompt_State* prompt, size_t index, cz::Str text);
 void insert_after(Prompt_State* prompt, size_t index, cz::Str text);
 void remove_before(Prompt_State* prompt, size_t start, size_t end);
 void remove_after(Prompt_State* prompt, size_t start, size_t end);
+
+cz::Vector<cz::Str>* prompt_history(Prompt_State* prompt, bool script);
