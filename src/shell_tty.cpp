@@ -1,5 +1,6 @@
 #include "shell.hpp"
 
+#include <cz/format.hpp>
 #include "config.hpp"
 
 #ifdef _WIN32
@@ -9,8 +10,8 @@
 #include <windows.h>
 #else
 #ifdef __APPLE__
-#include <util.h>
 #include <sys/ioctl.h>
+#include <util.h>
 #else
 #include <pty.h>
 #endif
@@ -86,7 +87,12 @@ bool create_pseudo_terminal(Pseudo_Terminal* tty, int width, int height) {
 
     HRESULT hr = CreatePseudoConsole(size, tty->child_in.handle, tty->child_out.handle, 0,
                                      &tty->pseudo_console);
-    return hr == S_OK;
+#ifndef NDEBUG
+    if (FAILED(hr)) {
+        cz::print(stderr, "CreatePseudoConsole failed: hr=", hr, "\n");
+    }
+#endif
+    return SUCCEEDED(hr);
 #else
     struct winsize size = {};
     size.ws_row = height;
@@ -138,8 +144,13 @@ bool set_window_size(Pseudo_Terminal* tty, int width, int height) {
     else
         size.X = width;
     size.Y = height;
-    HRESULT result = ResizePseudoConsole(tty->pseudo_console, size);
-    return result == S_OK;
+    HRESULT hr = ResizePseudoConsole(tty->pseudo_console, size);
+#ifndef NDEBUG
+    if (FAILED(hr)) {
+        cz::print(stderr, "ResizePseudoConsole failed: hr=", hr, "\n");
+    }
+#endif
+    return SUCCEEDED(hr);
 #else
     struct winsize size = {};
     size.ws_row = height;
