@@ -1793,8 +1793,7 @@ static bool submit_prompt(Shell_State* shell,
             cz::Str message = cz::format(temp_allocator, command, '\n');
             (void)tty_write(&script->tty, message);
         } else {
-            cz::String command2 = command.clone_null_terminate(arena.allocator());
-            if (!run_script(shell, backlog, command2)) {
+            if (!run_script(shell, backlog, command)) {
                 backlog_dec_refcount(*backlogs, backlog);
                 return false;
             }

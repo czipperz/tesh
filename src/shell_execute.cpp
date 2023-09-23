@@ -96,10 +96,10 @@ void create_null_file() {
 // Start executing a script
 ///////////////////////////////////////////////////////////////////////////////
 
-bool run_script(Shell_State* shell, Backlog_State* backlog, cz::Str text) {
+bool run_script(Shell_State* shell, Backlog_State* backlog, cz::Str command) {
 #ifdef TRACY_ENABLE
     {
-        cz::String message = cz::format(temp_allocator, "Start: ", text);
+        cz::String message = cz::format(temp_allocator, "Start: ", command);
         TracyMessage(message.buffer, message.len);
     }
 #endif
@@ -110,6 +110,7 @@ bool run_script(Shell_State* shell, Backlog_State* backlog, cz::Str text) {
     Shell_Node* root = arena.allocator().alloc<Shell_Node>();
     *root = {};
 
+    cz::String text = command.clone_null_terminate(arena.allocator());
     Error error = parse_script(arena.allocator(), root, text);
     if (error != Error_Success)
         goto fail;
@@ -123,7 +124,7 @@ bool run_script(Shell_State* shell, Backlog_State* backlog, cz::Str text) {
 fail:;
 #ifdef TRACY_ENABLE
     {
-        cz::String message = cz::format(temp_allocator, "Failed to start: ", text);
+        cz::String message = cz::format(temp_allocator, "Failed to start: ", command);
         TracyMessage(message.buffer, message.len);
     }
 #endif
