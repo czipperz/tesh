@@ -21,6 +21,22 @@ static void truncate_to(Backlog_State* backlog, uint64_t new_length);
 // Module Code
 ///////////////////////////////////////////////////////////////////////////////
 
+void init_backlog(Backlog_State* backlog, uint64_t id, uint64_t max_length) {
+    backlog->id = id;
+    backlog->refcount = 1;
+    backlog->arena.init();
+    backlog->max_length = max_length;
+
+    char* buffer = (char*)cz::heap_allocator().alloc({4096, 1});
+    CZ_ASSERT(buffer);
+    backlog->buffers.reserve(cz::heap_allocator(), 1);
+    backlog->buffers.push(buffer);
+
+    backlog->start2 = std::chrono::system_clock::now();
+    backlog->start = std::chrono::steady_clock::now();
+    backlog->graphics_rendition = (7 << GR_FOREGROUND_SHIFT);
+}
+
 void cleanup_backlog(cz::Slice<Backlog_State*> backlogs, Backlog_State* backlog) {
     CZ_DEBUG_ASSERT(backlog->refcount == 0);
     backlogs[backlog->id] = nullptr;

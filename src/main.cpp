@@ -3146,22 +3146,11 @@ int actual_main(int argc, char** argv) {
 }
 
 static Backlog_State* push_backlog(cz::Vector<Backlog_State*>* backlogs, uint64_t id) {
-    char* buffer = (char*)cz::heap_allocator().alloc({4096, 1});
-    CZ_ASSERT(buffer);
-
     Backlog_State* backlog = permanent_allocator.alloc<Backlog_State>();
     CZ_ASSERT(backlog);
     *backlog = {};
 
-    backlog->id = id;
-    backlog->refcount = 1;
-    backlog->arena.init();
-    backlog->max_length = cfg.max_length;
-    backlog->buffers.reserve(cz::heap_allocator(), 1);
-    backlog->buffers.push(buffer);
-    backlog->start2 = std::chrono::system_clock::now();
-    backlog->start = std::chrono::steady_clock::now();
-    backlog->graphics_rendition = (7 << GR_FOREGROUND_SHIFT);
+    init_backlog(backlog, id, cfg.max_length);
 
     backlogs->reserve(cz::heap_allocator(), 1);
     backlogs->push(backlog);

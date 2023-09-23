@@ -39,6 +39,7 @@ struct Backlog_State {
     char get(size_t index);
 };
 
+void init_backlog(Backlog_State* backlog, uint64_t id, uint64_t max_length);
 uint64_t append_text(Backlog_State* backlog, cz::Str text);
 void backlog_flush(Backlog_State* backlog);
 void cleanup_backlog(cz::Slice<Backlog_State*> backlogs, Backlog_State* backlog);
