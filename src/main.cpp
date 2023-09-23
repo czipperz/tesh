@@ -181,11 +181,11 @@ static void render_frame(SDL_Window* window,
 // Process control
 ///////////////////////////////////////////////////////////////////////////////
 
-static bool read_process_data(Shell_State* shell,
-                              cz::Slice<Backlog_State*> backlogs,
-                              Render_State* rend,
-                              Prompt_State* prompt,
-                              bool* force_quit) {
+bool read_process_data(Shell_State* shell,
+                       cz::Slice<Backlog_State*> backlogs,
+                       Render_State* rend,
+                       Prompt_State* prompt,
+                       bool* force_quit) {
     bool changes = false;
     for (size_t i = 0; i < shell->scripts.len; ++i) {
         Running_Script* script = &shell->scripts[i];

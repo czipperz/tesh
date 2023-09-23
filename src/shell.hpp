@@ -372,6 +372,14 @@ void expand_arg_split(const Shell_Local* local,
 
 bool run_script(Shell_State* shell, Backlog_State* backlog, cz::Str command);
 
+bool read_process_data(Shell_State* shell,
+                       cz::Slice<Backlog_State*> backlogs,
+                       Render_State* rend,
+                       Prompt_State* prompt,
+                       bool* force_quit);
+
+////////////////////////////////////////////////////////////////////////////////
+
 Error start_execute_script(Shell_State* shell,
                            Backlog_State* backlog,
                            cz::Buffer_Array arena,
