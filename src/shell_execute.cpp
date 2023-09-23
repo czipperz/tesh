@@ -96,6 +96,50 @@ void create_null_file() {
 // Start executing a script
 ///////////////////////////////////////////////////////////////////////////////
 
+bool run_script(Shell_State* shell, Backlog_State* backlog, cz::Str text) {
+#ifdef TRACY_ENABLE
+    {
+        cz::String message = cz::format(temp_allocator, "Start: ", text);
+        TracyMessage(message.buffer, message.len);
+    }
+#endif
+
+    cz::Buffer_Array arena = alloc_arena(shell);
+
+    // Root has to be kept alive for path traversal to work.
+    Shell_Node* root = arena.allocator().alloc<Shell_Node>();
+    *root = {};
+
+    Error error = parse_script(arena.allocator(), root, text);
+    if (error != Error_Success)
+        goto fail;
+
+    error = start_execute_script(shell, backlog, arena, root);
+    if (error != Error_Success)
+        goto fail;
+
+    return true;
+
+fail:;
+#ifdef TRACY_ENABLE
+    {
+        cz::String message = cz::format(temp_allocator, "Failed to start: ", text);
+        TracyMessage(message.buffer, message.len);
+    }
+#endif
+
+    append_text(backlog, "tesh: Error: ");
+    append_text(backlog, error_string(error));
+    append_text(backlog, "\n");
+    backlog->exit_code = -1;
+    backlog->done = true;
+    backlog->end = std::chrono::steady_clock::now();
+    // Decrement refcount in caller.
+
+    recycle_arena(shell, arena);
+    return false;
+}
+
 Error start_execute_script(Shell_State* shell,
                            Backlog_State* backlog,
                            cz::Buffer_Array arena,

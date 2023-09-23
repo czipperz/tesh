@@ -370,6 +370,8 @@ void expand_arg_split(const Shell_Local* local,
 
 ///////////////////////////////////////////////////////////////////////////////
 
+bool run_script(Shell_State* shell, Backlog_State* backlog, cz::Str text);
+
 Error start_execute_script(Shell_State* shell,
                            Backlog_State* backlog,
                            cz::Buffer_Array arena,
