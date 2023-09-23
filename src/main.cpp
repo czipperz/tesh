@@ -183,7 +183,6 @@ static void render_frame(SDL_Window* window,
 
 static bool run_script(Shell_State* shell,
                        Backlog_State* backlog,
-                       cz::Buffer_Array arena,
                        cz::Str text) {
 #ifdef TRACY_ENABLE
     {
@@ -191,6 +190,8 @@ static bool run_script(Shell_State* shell,
         TracyMessage(message.buffer, message.len);
     }
 #endif
+
+    cz::Buffer_Array arena = alloc_arena(shell);
 
     // Root has to be kept alive for path traversal to work.
     Shell_Node* root = arena.allocator().alloc<Shell_Node>();
@@ -1838,9 +1839,8 @@ static bool submit_prompt(Shell_State* shell,
             cz::Str message = cz::format(temp_allocator, command, '\n');
             (void)tty_write(&script->tty, message);
         } else {
-            cz::Buffer_Array arena = alloc_arena(shell);
             cz::String command2 = command.clone_null_terminate(arena.allocator());
-            if (!run_script(shell, backlog, arena, command2)) {
+            if (!run_script(shell, backlog, command2)) {
                 backlog_dec_refcount(*backlogs, backlog);
                 return false;
             }
