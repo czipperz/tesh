@@ -63,6 +63,18 @@ char Backlog_State::get(size_t i) {
     return buffers[OUTER_INDEX(i)][INNER_INDEX(i)];
 }
 
+cz::String dbg_stringify_backlog(Backlog_State* backlog) {
+    cz::String string = {};
+    string.reserve_exact(cz::heap_allocator(), backlog->length);
+    for (size_t i = 0; i < backlog->length / BACKLOG_BUFFER_SIZE; ++i) {
+        string.append(cz::Str{backlog->buffers[i], BACKLOG_BUFFER_SIZE});
+    }
+    if (backlog->length % BACKLOG_BUFFER_SIZE != 0) {
+        string.append(cz::Str{backlog->buffers[backlog->length / BACKLOG_BUFFER_SIZE], backlog->length % BACKLOG_BUFFER_SIZE});
+    }
+    return string;
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 // Module Code - append chunk
 ///////////////////////////////////////////////////////////////////////////////
