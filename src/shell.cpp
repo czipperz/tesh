@@ -489,3 +489,11 @@ void append_node(cz::Allocator allocator,
         CZ_PANIC("Invalid Shell_Node type");
     }
 }
+
+const char* dbg_stringify_shell_node(Shell_Node* node) {
+    cz::String string = {};
+    append_node(cz::heap_allocator(), &string, node, /*add_semicolon=*/false);
+    string.reserve(cz::heap_allocator(), 1);
+    string.realloc_null_terminate(cz::heap_allocator());
+    return string.buffer;
+}

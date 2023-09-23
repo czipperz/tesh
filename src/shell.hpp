@@ -86,6 +86,10 @@ void recycle_arena(Shell_State* shell, cz::Buffer_Array arena);
 
 void append_node(cz::Allocator allocator, cz::String* string, Shell_Node* node, bool add_semicolon);
 
+/// For debugging purposes; make it easy to stringify.
+/// In production code use `append_node`.
+const char* dbg_stringify_shell_node(Shell_Node* node);
+
 /// Get the attached process, or `nullptr` if there is none.
 Running_Script* attached_process(Shell_State* shell, Render_State* rend);
 /// Get the selected process, or `nullptr` if there is none.
