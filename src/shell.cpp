@@ -364,7 +364,8 @@ void append_node(cz::Allocator allocator,
         for (size_t i = 0; i < node->v.sequence.len; ++i) {
             if (i > 0)
                 cz::append(allocator, string, ' ');
-            append_node(allocator, string, &node->v.sequence[i], true);
+            bool sub_append_semicolon = (i + 1 != node->v.sequence.len);
+            append_node(allocator, string, &node->v.sequence[i], sub_append_semicolon);
         }
 
         if (node->async)
@@ -433,7 +434,14 @@ void append_node(cz::Allocator allocator,
         for (size_t i = 0; i < node->v.pipeline.len; ++i) {
             if (i > 0)
                 cz::append(allocator, string, " | ");
-            append_node(allocator, string, &node->v.pipeline[i], false);
+
+            if (node->v.pipeline[i].type == Shell_Node::SEQUENCE && !node->v.pipeline[i].async) {
+                cz::append(allocator, string, "(");
+                append_node(allocator, string, &node->v.pipeline[i], false);
+                cz::append(allocator, string, ")");
+            } else {
+                append_node(allocator, string, &node->v.pipeline[i], false);
+            }
         }
 
         if (node->async)
