@@ -1,0 +1,26 @@
+name: Build with CMake and GCC
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v2
+
+    - name: Install CMake and GCC
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y cmake g++
+        cmake --version
+        g++ --version
+
+    - name: Run build-debug.sh
+      run: |
+        ./build-debug.sh
