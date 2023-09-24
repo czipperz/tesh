@@ -29,9 +29,7 @@ static void start_execute_pipeline(Shell_State* shell,
                                    Running_Pipeline* pipeline,
                                    bool bind_stdin);
 
-static void expand_file_arguments(Parse_Program* parse_program,
-                                  Shell_Local* local,
-                                  cz::Allocator allocator);
+static void expand_file_argument(cz::Str* path, Shell_Local* local, cz::Allocator allocator);
 static Error link_stdio(Stdio_State* stdio,
                         cz::Input_File* pipe_in,
                         const Parse_Program& parse_program,
@@ -444,7 +442,9 @@ static void start_execute_pipeline(Shell_State* shell,
         CZ_ASSERT(program_node->type == Shell_Node::PROGRAM);  // TODO
         Parse_Program parse_program = *program_node->v.program;
 
-        expand_file_arguments(&parse_program, node->local, allocator);
+        expand_file_argument(&parse_program.in_file, node->local, allocator);
+        expand_file_argument(&parse_program.out_file, node->local, allocator);
+        expand_file_argument(&parse_program.err_file, node->local, allocator);
 
         Stdio_State stdio = node->stdio;
         Error error =
@@ -480,29 +480,13 @@ static void start_execute_pipeline(Shell_State* shell,
     pipeline->programs = programs.clone(allocator);
 }
 
-static void expand_file_arguments(Parse_Program* parse_program,
-                                  Shell_Local* local,
-                                  cz::Allocator allocator) {
-    if (!parse_program->in_file.starts_with("__tesh_std_")) {
+static void expand_file_argument(cz::Str* path, Shell_Local* local, cz::Allocator allocator) {
+    if (!path->starts_with("__tesh_std_")) {
         cz::String file = {};
-        expand_arg_single(local, parse_program->in_file, allocator, &file);
+        expand_arg_single(local, *path, allocator, &file);
         // Reallocate to ensure the file isn't null and also don't waste space.
         file.realloc_null_terminate(allocator);
-        parse_program->in_file = file;
-    }
-    if (!parse_program->out_file.starts_with("__tesh_std_")) {
-        cz::String file = {};
-        expand_arg_single(local, parse_program->out_file, allocator, &file);
-        // Reallocate to ensure the file isn't null and also don't waste space.
-        file.realloc_null_terminate(allocator);
-        parse_program->out_file = file;
-    }
-    if (!parse_program->err_file.starts_with("__tesh_std_")) {
-        cz::String file = {};
-        expand_arg_single(local, parse_program->err_file, allocator, &file);
-        // Reallocate to ensure the file isn't null and also don't waste space.
-        file.realloc_null_terminate(allocator);
-        parse_program->err_file = file;
+        *path = file;
     }
 }
 
