@@ -172,8 +172,8 @@ static bool tick_program(Shell_State* shell,
     } break;
 
     case Running_Program::ANY_BUILTIN:
-        return tick_builtin(shell, local, rend, prompt, backlog, allocator, program,
-                            tty, exit_code, force_quit);
+        return tick_builtin(shell, local, rend, prompt, backlog, allocator, program, tty, exit_code,
+                            force_quit);
 
     default:
         CZ_PANIC("unreachable");

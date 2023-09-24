@@ -18,7 +18,7 @@ struct Pseudo_Terminal;
 struct Running_Pipeline;
 struct Running_Program;
 struct Running_Script;
-struct Shell_Node;
+struct Parse_Node;
 
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -33,10 +33,10 @@ struct Shell_Local {
     cz::Vector<RcStr> unset_vars;
 
     cz::Vector<cz::String> alias_names;
-    cz::Vector<Shell_Node*> alias_values;
+    cz::Vector<Parse_Node*> alias_values;
 
     cz::Vector<cz::String> function_names;
-    cz::Vector<Shell_Node*> function_values;
+    cz::Vector<Parse_Node*> function_values;
 
     cz::Vector<cz::Str> args;
 
@@ -67,16 +67,16 @@ void make_env_var(Shell_Local* local, cz::Str key);
 cz::Str get_wd(const Shell_Local* local);
 bool get_old_wd(const Shell_Local* local, size_t num, cz::Str* result);
 void set_wd(Shell_Local* local, cz::Str value);
-void set_alias(Shell_Local* local, cz::Str key, Shell_Node* node);
-void set_function(Shell_Local* local, cz::Str key, Shell_Node* node);
+void set_alias(Shell_Local* local, cz::Str key, Parse_Node* node);
+void set_function(Shell_Local* local, cz::Str key, Parse_Node* node);
 
 /// Returns 0 on failure, 1 for alias, 2 for function.
 int get_alias_or_function(const Shell_Local* local,
                           cz::Str alias_key,
                           cz::Str function_key,
-                          Shell_Node** value);
-Shell_Node* get_alias_no_recursion_check(const Shell_Local* local, cz::Str name);
-Shell_Node* get_function(const Shell_Local* local, cz::Str name);
+                          Parse_Node** value);
+Parse_Node* get_alias_no_recursion_check(const Shell_Local* local, cz::Str name);
+Parse_Node* get_function(const Shell_Local* local, cz::Str name);
 
 void cleanup_processes(Shell_State* shell);
 void recycle_process(Shell_State* shell, Running_Script* script);
@@ -88,11 +88,14 @@ void cleanup_local(Shell_Local* local);
 cz::Buffer_Array alloc_arena(Shell_State* shell);
 void recycle_arena(Shell_State* shell, cz::Buffer_Array arena);
 
-void append_node(cz::Allocator allocator, cz::String* string, Shell_Node* node, bool add_semicolon);
+void append_parse_node(cz::Allocator allocator,
+                       cz::String* string,
+                       Parse_Node* node,
+                       bool add_semicolon);
 
 /// For debugging purposes; make it easy to stringify.
-/// In production code use `append_node`.
-const char* dbg_stringify_shell_node(Shell_Node* node);
+/// In production code use `append_parse_node`.
+const char* dbg_stringify_parse_node(Parse_Node* node);
 
 /// Get the attached process, or `nullptr` if there is none.
 Running_Script* attached_process(Shell_State* shell, Render_State* rend);
@@ -200,7 +203,7 @@ struct Running_Program;
 
 struct Running_Pipeline {
     cz::Buffer_Array arena;
-    cz::Vector<Shell_Node*> path;
+    cz::Vector<Parse_Node*> path;
     cz::Vector<Running_Program> programs;
     bool has_exit_code;
     int last_exit_code;
@@ -345,7 +348,7 @@ struct Parse_Program {
     bool is_sub;
     union {
         cz::Vector<cz::Str> args;
-        Shell_Node* sub;
+        Parse_Node* sub;
     } v;
 
     cz::Str in_file = "__tesh_std_in";
@@ -353,7 +356,7 @@ struct Parse_Program {
     cz::Str err_file = "__tesh_std_err";
 };
 
-struct Shell_Node {
+struct Parse_Node {
     enum Type {
         SEQUENCE,  // Put sequence first so memset(0) gets valid & empty node.
         PROGRAM,
@@ -366,27 +369,27 @@ struct Shell_Node {
     Type type : 7;
     uint8_t async : 1;
     union {
-        cz::Vector<Shell_Node> sequence;
+        cz::Vector<Parse_Node> sequence;
         Parse_Program* program;
-        cz::Vector<Shell_Node> pipeline;
+        cz::Vector<Parse_Node> pipeline;
         struct {
-            Shell_Node* left;
-            Shell_Node* right;
+            Parse_Node* left;
+            Parse_Node* right;
         } binary;
         struct {
-            Shell_Node* cond;
-            Shell_Node* then;
-            Shell_Node* other;  // NULL if no else statement.
+            Parse_Node* cond;
+            Parse_Node* then;
+            Parse_Node* other;  // NULL if no else statement.
         } if_;
         struct {
             cz::Str name;
-            Shell_Node* body;
+            Parse_Node* body;
         } function;
     } v;
 };
 
-/// Parse a string into a `Shell_Node` tree.  Does not do variable expansion.
-Error parse_script(cz::Allocator allocator, Shell_Node* root, cz::Str text);
+/// Parse a string into a `Parse_Node` tree.  Does not do variable expansion.
+Error parse_script(cz::Allocator allocator, Parse_Node* root, cz::Str text);
 
 void expand_arg_single(const Shell_Local* local,
                        cz::Str arg,
@@ -412,13 +415,13 @@ bool read_process_data(Shell_State* shell,
 Error start_execute_script(Shell_State* shell,
                            Backlog_State* backlog,
                            cz::Buffer_Array arena,
-                           Shell_Node* root);
+                           Parse_Node* root);
 
 Error start_execute_node(Shell_State* shell,
                          const Pseudo_Terminal& tty,
                          Backlog_State* backlog,
                          Running_Node* node,
-                         Shell_Node* root);
+                         Parse_Node* root);
 
 bool finish_line(Shell_State* shell,
                  const Pseudo_Terminal& tty,

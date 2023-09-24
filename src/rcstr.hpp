@@ -16,9 +16,7 @@ struct RcStr {
         return rcstr;
     }
 
-    inline void increment() {
-        ++*rc;
-    }
+    inline void increment() { ++*rc; }
 
     inline RcStr dup() {
         ++*rc;

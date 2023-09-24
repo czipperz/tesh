@@ -70,7 +70,8 @@ cz::String dbg_stringify_backlog(Backlog_State* backlog) {
         string.append(cz::Str{backlog->buffers[i], BACKLOG_BUFFER_SIZE});
     }
     if (backlog->length % BACKLOG_BUFFER_SIZE != 0) {
-        string.append(cz::Str{backlog->buffers[backlog->length / BACKLOG_BUFFER_SIZE], backlog->length % BACKLOG_BUFFER_SIZE});
+        string.append(cz::Str{backlog->buffers[backlog->length / BACKLOG_BUFFER_SIZE],
+                              backlog->length % BACKLOG_BUFFER_SIZE});
     }
     return string;
 }

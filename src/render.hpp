@@ -3,8 +3,8 @@
 #include <SDL.h>
 #include <SDL_ttf.h>
 #include <stdint.h>
-#include <cz/vector.hpp>
 #include <chrono>
+#include <cz/vector.hpp>
 
 struct Shell_State;
 struct Prompt_State;

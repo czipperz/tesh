@@ -369,7 +369,7 @@ bool tick_builtin(Shell_State* shell,
                 // TODO: not permanent but close...
                 cz::Str script = cz::format(permanent_allocator, value, " \"$@\"");
 
-                Shell_Node* node = permanent_allocator.alloc<Shell_Node>();
+                Parse_Node* node = permanent_allocator.alloc<Parse_Node>();
                 *node = {};
                 Error error = parse_script(permanent_allocator, node, script);
 
@@ -389,13 +389,13 @@ bool tick_builtin(Shell_State* shell,
 
                 set_alias(local, key, node);
             } else {
-                Shell_Node* alias = get_alias_no_recursion_check(local, arg);
+                Parse_Node* alias = get_alias_no_recursion_check(local, arg);
                 if (alias) {
                     (void)builtin->out.write("alias: ");
                     (void)builtin->out.write(arg);
                     (void)builtin->out.write(" is aliased to: ");
                     cz::String string = {};
-                    append_node(temp_allocator, &string, alias, false);
+                    append_parse_node(temp_allocator, &string, alias, false);
                     (void)builtin->out.write(string);
                     string.drop(temp_allocator);
                     (void)builtin->out.write("\n");
@@ -413,13 +413,13 @@ bool tick_builtin(Shell_State* shell,
     case Builtin_Command::FUNCTION: {
         for (size_t i = 1; i < builtin->args.len; ++i) {
             cz::Str arg = builtin->args[i];
-            Shell_Node* func = get_function(local, arg);
+            Parse_Node* func = get_function(local, arg);
             if (func) {
                 (void)builtin->out.write("function: ");
                 (void)builtin->out.write(arg);
                 (void)builtin->out.write(" is defined as: ");
                 cz::String string = {};
-                append_node(temp_allocator, &string, func, false);
+                append_parse_node(temp_allocator, &string, func, false);
                 (void)builtin->out.write(string);
                 string.drop(temp_allocator);
                 (void)builtin->out.write("\n");
@@ -592,7 +592,7 @@ wide_terminal  1/0   -- Turn on or off wide terminal mode.  This will lock the t
         read_to_string(file, allocator, &contents);
 
         // Root has to be kept alive for path traversal to work.
-        Shell_Node* root = allocator.alloc<Shell_Node>();
+        Parse_Node* root = allocator.alloc<Parse_Node>();
         *root = {};
 
         Error error = parse_script(allocator, root, contents);
@@ -683,8 +683,8 @@ wide_terminal  1/0   -- Turn on or off wide terminal mode.  This will lock the t
                 (void)builtin->out.write(iter->alias_names[i]);
                 (void)builtin->out.write(" is aliased to: ");
                 cz::String string = {};
-                append_node(temp_allocator, &string, iter->alias_values[i],
-                            /*append_semicolon=*/false);
+                append_parse_node(temp_allocator, &string, iter->alias_values[i],
+                                  /*append_semicolon=*/false);
                 (void)builtin->out.write(string);
                 string.drop(temp_allocator);
                 (void)builtin->out.write("\n");
@@ -702,8 +702,8 @@ wide_terminal  1/0   -- Turn on or off wide terminal mode.  This will lock the t
                 (void)builtin->out.write(iter->function_names[i]);
                 (void)builtin->out.write(" is defined as: ");
                 cz::String string = {};
-                append_node(temp_allocator, &string, iter->function_values[i],
-                            /*append_semicolon=*/false);
+                append_parse_node(temp_allocator, &string, iter->function_values[i],
+                                  /*append_semicolon=*/false);
                 (void)builtin->out.write(string);
                 string.drop(temp_allocator);
                 (void)builtin->out.write("\n");

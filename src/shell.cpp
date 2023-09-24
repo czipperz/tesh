@@ -135,12 +135,12 @@ Running_Script* lookup_process(Shell_State* shell, uint64_t id) {
     return nullptr;
 }
 
-void append_node(cz::Allocator allocator,
-                 cz::String* string,
-                 Shell_Node* node,
-                 bool append_semicolon) {
+void append_parse_node(cz::Allocator allocator,
+                       cz::String* string,
+                       Parse_Node* node,
+                       bool append_semicolon) {
     switch (node->type) {
-    case Shell_Node::SEQUENCE: {
+    case Parse_Node::SEQUENCE: {
         if (node->async)
             cz::append(allocator, string, "(");
 
@@ -148,7 +148,7 @@ void append_node(cz::Allocator allocator,
             if (i > 0)
                 cz::append(allocator, string, ' ');
             bool sub_append_semicolon = (i + 1 != node->v.sequence.len);
-            append_node(allocator, string, &node->v.sequence[i], sub_append_semicolon);
+            append_parse_node(allocator, string, &node->v.sequence[i], sub_append_semicolon);
         }
 
         if (node->async)
@@ -157,7 +157,7 @@ void append_node(cz::Allocator allocator,
             cz::append(allocator, string, ";");
     } break;
 
-    case Shell_Node::PROGRAM: {
+    case Parse_Node::PROGRAM: {
         Parse_Program* program = node->v.program;
 
         for (size_t i = 0; i < program->variable_names.len; ++i) {
@@ -171,7 +171,7 @@ void append_node(cz::Allocator allocator,
             if (program->variable_names.len > 0)
                 cz::append(allocator, string, ' ');
             cz::append(allocator, string, "(");
-            append_node(allocator, string, program->v.sub, false);
+            append_parse_node(allocator, string, program->v.sub, false);
             cz::append(allocator, string, ")");
         } else {
             for (size_t i = 0; i < program->v.args.len; ++i) {
@@ -202,7 +202,7 @@ void append_node(cz::Allocator allocator,
             cz::append(allocator, string, ";");
     } break;
 
-    case Shell_Node::PIPELINE: {
+    case Parse_Node::PIPELINE: {
         if (node->async)
             cz::append(allocator, string, "(");
 
@@ -210,12 +210,12 @@ void append_node(cz::Allocator allocator,
             if (i > 0)
                 cz::append(allocator, string, " | ");
 
-            if (node->v.pipeline[i].type == Shell_Node::SEQUENCE && !node->v.pipeline[i].async) {
+            if (node->v.pipeline[i].type == Parse_Node::SEQUENCE && !node->v.pipeline[i].async) {
                 cz::append(allocator, string, "(");
-                append_node(allocator, string, &node->v.pipeline[i], false);
+                append_parse_node(allocator, string, &node->v.pipeline[i], false);
                 cz::append(allocator, string, ")");
             } else {
-                append_node(allocator, string, &node->v.pipeline[i], false);
+                append_parse_node(allocator, string, &node->v.pipeline[i], false);
             }
         }
 
@@ -225,14 +225,14 @@ void append_node(cz::Allocator allocator,
             cz::append(allocator, string, ";");
     } break;
 
-    case Shell_Node::AND:
-    case Shell_Node::OR: {
+    case Parse_Node::AND:
+    case Parse_Node::OR: {
         if (node->async)
             cz::append(allocator, string, "(");
 
-        append_node(allocator, string, node->v.binary.left, false);
-        cz::append(allocator, string, (node->type == Shell_Node::AND ? " && " : " || "));
-        append_node(allocator, string, node->v.binary.right, false);
+        append_parse_node(allocator, string, node->v.binary.left, false);
+        cz::append(allocator, string, (node->type == Parse_Node::AND ? " && " : " || "));
+        append_parse_node(allocator, string, node->v.binary.right, false);
 
         if (node->async)
             cz::append(allocator, string, ") &");
@@ -240,14 +240,14 @@ void append_node(cz::Allocator allocator,
             cz::append(allocator, string, ";");
     } break;
 
-    case Shell_Node::IF: {
+    case Parse_Node::IF: {
         cz::append(allocator, string, "if ");
-        append_node(allocator, string, node->v.if_.cond, true);
+        append_parse_node(allocator, string, node->v.if_.cond, true);
         cz::append(allocator, string, " then ");
-        append_node(allocator, string, node->v.if_.then, true);
+        append_parse_node(allocator, string, node->v.if_.then, true);
         if (node->v.if_.other) {
             cz::append(allocator, string, " else ");
-            append_node(allocator, string, node->v.if_.other, true);
+            append_parse_node(allocator, string, node->v.if_.other, true);
         }
         cz::append(allocator, string, " fi");
 
@@ -257,9 +257,9 @@ void append_node(cz::Allocator allocator,
             cz::append(allocator, string, ";");
     } break;
 
-    case Shell_Node::FUNCTION: {
+    case Parse_Node::FUNCTION: {
         cz::append(allocator, string, node->v.function.name, "() { ");
-        append_node(allocator, string, node->v.function.body, true);
+        append_parse_node(allocator, string, node->v.function.body, true);
         cz::append(allocator, string, " }");
 
         if (node->async)
@@ -269,13 +269,13 @@ void append_node(cz::Allocator allocator,
     } break;
 
     default:
-        CZ_PANIC("Invalid Shell_Node type");
+        CZ_PANIC("Invalid Parse_Node type");
     }
 }
 
-const char* dbg_stringify_shell_node(Shell_Node* node) {
+const char* dbg_stringify_parse_node(Parse_Node* node) {
     cz::String string = {};
-    append_node(cz::heap_allocator(), &string, node, /*add_semicolon=*/false);
+    append_parse_node(cz::heap_allocator(), &string, node, /*add_semicolon=*/false);
     string.reserve(cz::heap_allocator(), 1);
     string.realloc_null_terminate(cz::heap_allocator());
     return string.buffer;

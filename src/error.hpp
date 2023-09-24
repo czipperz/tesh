@@ -19,4 +19,4 @@ enum Error {
     Error_InvalidProgram,
 };
 
-const char * error_string(Error error);
+const char* error_string(Error error);

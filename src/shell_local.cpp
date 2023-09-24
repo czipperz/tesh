@@ -154,7 +154,7 @@ void unset_var(Shell_Local* local, cz::Str key) {
 int get_alias_or_function(const Shell_Local* local,
                           cz::Str alias_key,
                           cz::Str function_key,
-                          Shell_Node** value) {
+                          Parse_Node** value) {
     bool allow_alias = true;
     for (const Shell_Local* elem = local; elem; elem = elem->parent) {
         if (alias_key == elem->blocked_alias) {
@@ -182,7 +182,7 @@ int get_alias_or_function(const Shell_Local* local,
     return false;
 }
 
-Shell_Node* get_alias_no_recursion_check(const Shell_Local* local, cz::Str name) {
+Parse_Node* get_alias_no_recursion_check(const Shell_Local* local, cz::Str name) {
     for (const Shell_Local* elem = local; elem; elem = elem->parent) {
         for (size_t i = 0; i < elem->alias_names.len; ++i) {
             if (name == elem->alias_names[i]) {
@@ -193,7 +193,7 @@ Shell_Node* get_alias_no_recursion_check(const Shell_Local* local, cz::Str name)
     return nullptr;
 }
 
-Shell_Node* get_function(const Shell_Local* local, cz::Str name) {
+Parse_Node* get_function(const Shell_Local* local, cz::Str name) {
     for (const Shell_Local* elem = local; elem; elem = elem->parent) {
         for (size_t i = 0; i < elem->function_names.len; ++i) {
             if (name == elem->function_names[i]) {
@@ -204,7 +204,7 @@ Shell_Node* get_function(const Shell_Local* local, cz::Str name) {
     return nullptr;
 }
 
-void set_alias(Shell_Local* local, cz::Str key, Shell_Node* node) {
+void set_alias(Shell_Local* local, cz::Str key, Parse_Node* node) {
     while (local && local->relationship == Shell_Local::ARGS_ONLY) {
         local = local->parent;
     }
@@ -224,7 +224,7 @@ void set_alias(Shell_Local* local, cz::Str key, Shell_Node* node) {
     local->alias_values.push(node);
 }
 
-void set_function(Shell_Local* local, cz::Str key, Shell_Node* node) {
+void set_function(Shell_Local* local, cz::Str key, Parse_Node* node) {
     while (local && local->relationship == Shell_Local::ARGS_ONLY) {
         local = local->parent;
     }

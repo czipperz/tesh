@@ -34,7 +34,7 @@ static Error link_stdio(Stdio_State* stdio,
                         cz::Input_File* pipe_in,
                         const Parse_Program* parse_program,
                         cz::Allocator allocator,
-                        cz::Slice<Shell_Node> program_nodes,
+                        cz::Slice<Parse_Node> program_nodes,
                         size_t p,
                         bool bind_stdin);
 static void open_redirected_files(Stdio_State* stdio,
@@ -63,9 +63,9 @@ enum Walk_Status {
     WALK_ASYNC = 2,
 };
 
-static bool descend_to_first_pipeline(cz::Vector<Shell_Node*>* path, Shell_Node* child);
-static void do_descend_to_first_pipeline(cz::Vector<Shell_Node*>* path, Shell_Node* child);
-static bool walk_to_next_pipeline(cz::Vector<Shell_Node*>* path, Walk_Status status);
+static bool descend_to_first_pipeline(cz::Vector<Parse_Node*>* path, Parse_Node* child);
+static void do_descend_to_first_pipeline(cz::Vector<Parse_Node*>* path, Parse_Node* child);
+static bool walk_to_next_pipeline(cz::Vector<Parse_Node*>* path, Walk_Status status);
 
 ///////////////////////////////////////////////////////////////////////////////
 // Initialization
@@ -104,7 +104,7 @@ bool run_script(Shell_State* shell, Backlog_State* backlog, cz::Str command) {
     cz::Buffer_Array arena = alloc_arena(shell);
 
     // Root has to be kept alive for path traversal to work.
-    Shell_Node* root = arena.allocator().alloc<Shell_Node>();
+    Parse_Node* root = arena.allocator().alloc<Parse_Node>();
     *root = {};
 
     cz::String text = command.clone_null_terminate(arena.allocator());
@@ -141,7 +141,7 @@ fail:;
 Error start_execute_script(Shell_State* shell,
                            Backlog_State* backlog,
                            cz::Buffer_Array arena,
-                           Shell_Node* root) {
+                           Parse_Node* root) {
     Running_Script running = {};
     running.id = backlog->id;
     running.arena = arena;
@@ -175,7 +175,7 @@ Error start_execute_node(Shell_State* shell,
                          const Pseudo_Terminal& tty,
                          Backlog_State* backlog,
                          Running_Node* node,
-                         Shell_Node* root) {
+                         Parse_Node* root) {
     node->fg.arena = alloc_arena(shell);
 
     if (!descend_to_first_pipeline(&node->fg.path, root))
@@ -233,7 +233,7 @@ bool finish_line(Shell_State* shell,
 // Path walking
 ///////////////////////////////////////////////////////////////////////////////
 
-static bool descend_to_first_pipeline(cz::Vector<Shell_Node*>* path, Shell_Node* child) {
+static bool descend_to_first_pipeline(cz::Vector<Parse_Node*>* path, Parse_Node* child) {
     do_descend_to_first_pipeline(path, child);
     if (path->last() != nullptr)
         return true;
@@ -242,17 +242,17 @@ static bool descend_to_first_pipeline(cz::Vector<Shell_Node*>* path, Shell_Node*
     return walk_to_next_pipeline(path, WALK_SUCCESS);
 }
 
-static void do_descend_to_first_pipeline(cz::Vector<Shell_Node*>* path, Shell_Node* child) {
+static void do_descend_to_first_pipeline(cz::Vector<Parse_Node*>* path, Parse_Node* child) {
     while (1) {
         path->reserve(cz::heap_allocator(), 1);
         path->push(child);
 
         switch (child->type) {
-        case Shell_Node::PROGRAM:
-        case Shell_Node::PIPELINE:
-        case Shell_Node::FUNCTION:
+        case Parse_Node::PROGRAM:
+        case Parse_Node::PIPELINE:
+        case Parse_Node::FUNCTION:
             return;
-        case Shell_Node::SEQUENCE:
+        case Parse_Node::SEQUENCE:
             if (child->v.sequence.len == 0) {
                 path->reserve(cz::heap_allocator(), 1);
                 path->push(nullptr);
@@ -261,20 +261,20 @@ static void do_descend_to_first_pipeline(cz::Vector<Shell_Node*>* path, Shell_No
                 child = &child->v.sequence[0];
             }
             break;
-        case Shell_Node::AND:
-        case Shell_Node::OR:
+        case Parse_Node::AND:
+        case Parse_Node::OR:
             child = child->v.binary.left;
             break;
-        case Shell_Node::IF:
+        case Parse_Node::IF:
             child = child->v.if_.cond;
             break;
         default:
-            CZ_PANIC("Invalid Shell_Node type");
+            CZ_PANIC("Invalid Parse_Node type");
         }
     }
 }
 
-static bool walk_to_next_pipeline(cz::Vector<Shell_Node*>* path, Walk_Status status) {
+static bool walk_to_next_pipeline(cz::Vector<Parse_Node*>* path, Walk_Status status) {
     if (status == WALK_ASYNC)
         CZ_DEBUG_ASSERT(path->len > 0 && path->last()->async);
     bool success = (status != WALK_FAILURE);
@@ -285,7 +285,7 @@ static bool walk_to_next_pipeline(cz::Vector<Shell_Node*>* path, Walk_Status sta
             return false;
         }
 
-        Shell_Node* child = path->pop();
+        Parse_Node* child = path->pop();
         if (child->async) {
             if (status == WALK_ASYNC) {
                 status = WALK_SUCCESS;
@@ -294,9 +294,9 @@ static bool walk_to_next_pipeline(cz::Vector<Shell_Node*>* path, Walk_Status sta
             }
         }
 
-        Shell_Node* parent = path->last();
+        Parse_Node* parent = path->last();
         switch (parent->type) {
-        case Shell_Node::SEQUENCE: {
+        case Parse_Node::SEQUENCE: {
             size_t i = 0;
             for (; i < parent->v.sequence.len; ++i) {
                 if (child == &parent->v.sequence[i]) {
@@ -308,17 +308,17 @@ static bool walk_to_next_pipeline(cz::Vector<Shell_Node*>* path, Walk_Status sta
                 return descend_to_first_pipeline(path, &parent->v.sequence[i]);
         } break;
 
-        case Shell_Node::AND: {
+        case Parse_Node::AND: {
             if (child == parent->v.binary.left && success)
                 return descend_to_first_pipeline(path, parent->v.binary.right);
         } break;
 
-        case Shell_Node::OR: {
+        case Parse_Node::OR: {
             if (child == parent->v.binary.left && !success)
                 return descend_to_first_pipeline(path, parent->v.binary.right);
         } break;
 
-        case Shell_Node::IF: {
+        case Parse_Node::IF: {
             if (child == parent->v.if_.cond) {
                 if (success)
                     return descend_to_first_pipeline(path, parent->v.if_.then);
@@ -327,13 +327,13 @@ static bool walk_to_next_pipeline(cz::Vector<Shell_Node*>* path, Walk_Status sta
             }
         } break;
 
-        case Shell_Node::PROGRAM:
-        case Shell_Node::PIPELINE:
-        case Shell_Node::FUNCTION:
+        case Parse_Node::PROGRAM:
+        case Parse_Node::PIPELINE:
+        case Parse_Node::FUNCTION:
             CZ_PANIC("invalid");
 
         default:
-            CZ_PANIC("Invalid Shell_Node type");
+            CZ_PANIC("Invalid Parse_Node type");
         }
     }
 }
@@ -405,9 +405,9 @@ static void start_execute_pipeline(Shell_State* shell,
     pipeline->arena.clear();
 
     // Get the nodes in the pipeline.
-    Shell_Node* pipeline_node = pipeline->path.last();
-    cz::Slice<Shell_Node> program_nodes;
-    if (pipeline_node->type == Shell_Node::PIPELINE) {
+    Parse_Node* pipeline_node = pipeline->path.last();
+    cz::Slice<Parse_Node> program_nodes;
+    if (pipeline_node->type == Parse_Node::PIPELINE) {
         program_nodes = pipeline_node->v.pipeline;
     } else {
         // Only one element in the pipeline so it's left raw.
@@ -421,15 +421,15 @@ static void start_execute_pipeline(Shell_State* shell,
     cz::Input_File pipe_in;
 
     for (size_t p = 0; p < program_nodes.len; ++p) {
-        Shell_Node* program_node = &program_nodes[p];
+        Parse_Node* program_node = &program_nodes[p];
 
         Running_Program running_program = {};
 
-        if (program_node->type == Shell_Node::FUNCTION) {
+        if (program_node->type == Parse_Node::FUNCTION) {
             // Declare the function and ignore all pipe and file indirection.
             set_function(node->local, program_node->v.function.name, program_node->v.function.body);
             continue;
-        } else if (program_node->type == Shell_Node::PROGRAM) {
+        } else if (program_node->type == Parse_Node::PROGRAM) {
             // Normal case for example `echo` and `cat` in `echo | cat`.
             Parse_Program parse_program = *program_node->v.program;
 
@@ -482,7 +482,7 @@ static void start_execute_pipeline(Shell_State* shell,
     pipeline->programs = programs.clone(allocator);
 }
 
-/// Build a subnode.  We need a `Running_Node` in order to execute a `Shell_Node`.
+/// Build a subnode.  We need a `Running_Node` in order to execute a `Parse_Node`.
 /// By default, this just copies the parent's environment.  Most callers will edit
 /// the created `Shell_Local` to change the spawned environment.
 Running_Node build_sub_running_node(Shell_Local* parent_local,
@@ -511,7 +511,7 @@ static Error link_stdio(Stdio_State* stdio,
                         cz::Input_File* pipe_in,
                         const Parse_Program* parse_program,
                         cz::Allocator allocator,
-                        cz::Slice<Shell_Node> program_nodes,
+                        cz::Slice<Parse_Node> program_nodes,
                         size_t p,
                         bool bind_stdin) {
     Stdio_State old_stdio = *stdio;
@@ -587,8 +587,8 @@ static Error link_stdio(Stdio_State* stdio,
 
         // If next item in the pipeline doesn't read from stdin then this
         // program's stdout is dead so just leave it null and don't create a pipe.
-        Shell_Node* next = &program_nodes[p + 1];
-        if (next->type == Shell_Node::PROGRAM && next->v.program->in_file != "__tesh_std_in")
+        Parse_Node* next = &program_nodes[p + 1];
+        if (next->type == Parse_Node::PROGRAM && next->v.program->in_file != "__tesh_std_in")
             create_pipe = false;
 
         if (create_pipe) {
@@ -737,7 +737,7 @@ static Error run_program(Shell_State* shell,
         // Lookup aliases based on the raw arguments, functions based on the expanded arguments.
         cz::Str alias_key = (parse.v.args.len > 0 ? parse.v.args[0] : "");
         cz::Str function_key = (args.len > 0 ? args[0] : "");
-        Shell_Node* body;
+        Parse_Node* body;
         int result = get_alias_or_function(local, alias_key, function_key, &body);
 
         if (result != 0) {

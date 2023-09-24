@@ -2351,11 +2351,11 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
                     cz::append(temp_allocator, &name, "shift_");
                 cz::append(temp_allocator, &name, key_name);
 
-                Shell_Node* value;
+                Parse_Node* value;
                 if (get_alias_or_function(&shell->local, name, name, &value)) {
                     cz::String command = {};
-                    append_node(temp_allocator, &command, value,
-                                /*add_semicolon=*/false);
+                    append_parse_node(temp_allocator, &command, value,
+                                      /*add_semicolon=*/false);
 
                     bool attached = (rend->attached_outer != -1);
                     cz::Vector<cz::Str>* history = prompt_history(prompt, attached);

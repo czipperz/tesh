@@ -7,12 +7,12 @@ extern uint64_t tesh_sub_counter;
 
 static void test_append_node(cz::Allocator allocator,
                              cz::String* string,
-                             Shell_Node* node,
+                             Parse_Node* node,
                              size_t depth) {
     static const size_t spd = 4;
     cz::Str async_str = (node->async ? " (async)" : "");
     switch (node->type) {
-    case Shell_Node::PROGRAM: {
+    case Parse_Node::PROGRAM: {
         Parse_Program* program = node->v.program;
         append(allocator, string, cz::many(' ', depth * spd), "program", async_str, ":\n");
         for (size_t i = 0; i < program->variable_names.len; ++i) {
@@ -44,22 +44,22 @@ static void test_append_node(cz::Allocator allocator,
         }
     } break;
 
-    case Shell_Node::PIPELINE: {
+    case Parse_Node::PIPELINE: {
         append(allocator, string, cz::many(' ', depth * spd), "pipeline", async_str, ":\n");
         for (size_t i = 0; i < node->v.pipeline.len; ++i) {
             test_append_node(allocator, string, &node->v.pipeline[i], depth + 1);
         }
     } break;
 
-    case Shell_Node::AND:
-    case Shell_Node::OR: {
-        cz::Str op = (node->type == Shell_Node::AND ? "and" : "or");
+    case Parse_Node::AND:
+    case Parse_Node::OR: {
+        cz::Str op = (node->type == Parse_Node::AND ? "and" : "or");
         append(allocator, string, cz::many(' ', depth * spd), op, async_str, ":\n");
         test_append_node(allocator, string, node->v.binary.left, depth + 1);
         test_append_node(allocator, string, node->v.binary.right, depth + 1);
     } break;
 
-    case Shell_Node::SEQUENCE: {
+    case Parse_Node::SEQUENCE: {
         if (node->async || depth > 0) {
             append(allocator, string, cz::many(' ', depth * spd),
                    (node->async ? "async:\n" : "sync:\n"));
@@ -70,7 +70,7 @@ static void test_append_node(cz::Allocator allocator,
         }
     } break;
 
-    case Shell_Node::IF: {
+    case Parse_Node::IF: {
         append(allocator, string, cz::many(' ', depth * spd), "if", async_str, ":\n");
         append(allocator, string, cz::many(' ', (depth + 1) * spd), "cond:\n");
         test_append_node(allocator, string, node->v.if_.cond, depth + 2);
@@ -82,7 +82,7 @@ static void test_append_node(cz::Allocator allocator,
         }
     } break;
 
-    case Shell_Node::FUNCTION: {
+    case Parse_Node::FUNCTION: {
         append(allocator, string, cz::many(' ', depth * spd), "function", async_str, ":\n");
         append(allocator, string, cz::many(' ', (depth + 1) * spd), "name: ", node->v.function.name,
                "\n");
@@ -91,12 +91,12 @@ static void test_append_node(cz::Allocator allocator,
     } break;
 
     default:
-        CZ_PANIC("Invalid Shell_Node type");
+        CZ_PANIC("Invalid Parse_Node type");
     }
 }
 
 static Error parse_and_emit(const Shell_State* shell, cz::String* string, cz::Str text) {
-    Shell_Node root = {};
+    Parse_Node root = {};
     Error error = parse_script(cz::heap_allocator(), &root, text);
     if (error == Error_Success)
         test_append_node(cz::heap_allocator(), string, &root, 0);
