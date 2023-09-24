@@ -79,6 +79,14 @@ top:
         ++i;
     }
 
+    if (first) {
+        execute("a=1; c=1; (a=2; b=2; unset c; echo \"$a $b $c\"); echo \"$a $b $c\"\n");
+    } else {
+        CHECK(backlogs[i]->exit_code == 0);
+        CHECK(dbg_stringify_backlog(backlogs[i]) == "2 2 \n1  1\n");
+        ++i;
+    }
+
     if (!first)
         return;
 

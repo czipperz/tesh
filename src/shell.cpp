@@ -24,6 +24,12 @@ bool get_var(const Shell_Local* local, cz::Str key, cz::Str* value) {
                 return true;
             }
         }
+
+        // Unset variables should fail to lookup.
+        for (size_t i = 0; i < local->unset_vars.len; ++i) {
+            if (key == local->unset_vars[i].str)
+                return false;
+        }
     }
 
     return false;
@@ -40,6 +46,15 @@ void set_var(Shell_Local* local, cz::Str key, cz::Str value) {
         if (key == local->variable_names[i].str) {
             local->variable_values[i].drop();
             local->variable_values[i] = RcStr::create_clone(value);
+            return;
+        }
+    }
+
+    // Setting a variable clears the unset property.
+    for (size_t i = 0; i < local->unset_vars.len; ++i) {
+        if (key == local->unset_vars[i].str) {
+            local->unset_vars[i].drop();
+            local->unset_vars.remove(i);
             return;
         }
     }
@@ -112,6 +127,7 @@ void unset_var(Shell_Local* local, cz::Str key) {
         if (local->variable_names[i].str == key) {
             local->variable_names[i].drop();
             local->variable_names.remove(i);
+            local->variable_values.remove(i);
             break;
         }
     }
@@ -121,6 +137,20 @@ void unset_var(Shell_Local* local, cz::Str key) {
             local->exported_vars.remove(i);
             break;
         }
+    }
+
+    // If this is a forked subshell then we need to explicitly ignore
+    // this variable to prevent lookups from continuing up the chain.
+    if (local->parent) {
+        // Double check the variable isn't already unset.
+        for (size_t i = 0; i < local->unset_vars.len; ++i) {
+            if (key == local->unset_vars[i].str) {
+                return;
+            }
+        }
+
+        local->unset_vars.reserve(cz::heap_allocator(), 1);
+        local->unset_vars.push(RcStr::create_clone(key));
     }
 }
 
@@ -273,6 +303,9 @@ void cleanup_local(Shell_Local* local) {
         local->variable_names[i].drop();
         local->variable_values[i].drop();
     }
+    for (size_t i = 0; i < local->unset_vars.len; ++i) {
+        local->unset_vars[i].drop();
+    }
     for (size_t i = 0; i < local->alias_names.len; ++i) {
         local->alias_names[i].drop(cz::heap_allocator());
     }
@@ -283,10 +316,15 @@ void cleanup_local(Shell_Local* local) {
         local->working_directories[i].drop(cz::heap_allocator());
     }
 
+    local->exported_vars.drop(cz::heap_allocator());
     local->variable_names.drop(cz::heap_allocator());
     local->variable_values.drop(cz::heap_allocator());
+    local->unset_vars.drop(cz::heap_allocator());
     local->alias_names.drop(cz::heap_allocator());
     local->alias_values.drop(cz::heap_allocator());
+    local->function_names.drop(cz::heap_allocator());
+    local->function_values.drop(cz::heap_allocator());
+    // local->args.drop <-- in buffer array, nothing to do
     local->working_directories.drop(cz::heap_allocator());
 }
 

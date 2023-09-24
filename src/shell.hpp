@@ -29,6 +29,7 @@ struct Shell_Local {
     cz::Vector<RcStr> exported_vars;
     cz::Vector<RcStr> variable_names;
     cz::Vector<RcStr> variable_values;
+    cz::Vector<RcStr> unset_vars;
 
     cz::Vector<cz::String> alias_names;
     cz::Vector<Shell_Node*> alias_values;
