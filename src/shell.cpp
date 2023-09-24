@@ -185,6 +185,28 @@ int get_alias_or_function(const Shell_Local* local,
     return false;
 }
 
+Shell_Node* get_alias_no_recursion_check(const Shell_Local* local, cz::Str name) {
+    for (const Shell_Local* elem = local; elem; elem = elem->parent) {
+        for (size_t i = 0; i < elem->alias_names.len; ++i) {
+            if (name == elem->alias_names[i]) {
+                return elem->alias_values[i];
+            }
+        }
+    }
+    return nullptr;
+}
+
+Shell_Node* get_function(const Shell_Local* local, cz::Str name) {
+    for (const Shell_Local* elem = local; elem; elem = elem->parent) {
+        for (size_t i = 0; i < elem->function_names.len; ++i) {
+            if (name == elem->function_names[i]) {
+                return elem->function_values[i];
+            }
+        }
+    }
+    return nullptr;
+}
+
 void set_alias(Shell_Local* local, cz::Str key, Shell_Node* node) {
     while (local && local->relationship == Shell_Local::ARGS_ONLY) {
         local = local->parent;

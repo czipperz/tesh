@@ -11,13 +11,14 @@
 #include "rcstr.hpp"
 #include "render.hpp"
 
-struct Running_Program;
-struct Running_Pipeline;
-struct Running_Script;
 struct Parse_Line;
-struct Pseudo_Terminal;
-struct Shell_Node;
+struct Parse_Program;
 struct Prompt_State;
+struct Pseudo_Terminal;
+struct Running_Pipeline;
+struct Running_Program;
+struct Running_Script;
+struct Shell_Node;
 
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -74,6 +75,8 @@ int get_alias_or_function(const Shell_Local* local,
                           cz::Str alias_key,
                           cz::Str function_key,
                           Shell_Node** value);
+Shell_Node* get_alias_no_recursion_check(const Shell_Local* local, cz::Str name);
+Shell_Node* get_function(const Shell_Local* local, cz::Str name);
 
 void cleanup_processes(Shell_State* shell);
 void recycle_process(Shell_State* shell, Running_Script* script);
@@ -211,87 +214,94 @@ struct Running_Node {
     Shell_Local* local;
 };
 
+enum Builtin_Command {
+    INVALID,
+    ECHO,
+    CAT,
+    EXIT,
+    RETURN,
+    PWD,
+    CD,
+    LS,
+    ALIAS,
+    FUNCTION,
+    VARIABLES,
+    WHICH,
+    TRUE_,
+    FALSE_,
+    EXPORT,
+    UNSET,
+    CLEAR,
+    SOURCE,
+    SLEEP,
+    CONFIGURE,
+    ATTACH,
+    FOLLOW,
+    ARGDUMP,
+    VARDUMP,
+    ALIASDUMP,
+    FUNCDUMP,
+    SHIFT,
+    HISTORY,
+    SET_VAR,
+    BUILTIN,
+    MKTEMP,
+};
+
+struct Running_Builtin {
+    Builtin_Command command;
+    cz::Slice<const cz::Str> args;
+    Process_Input in;
+    Process_Output out;
+    Process_Output err;
+    size_t* in_count;
+    size_t* out_count;
+    size_t* err_count;
+    cz::Str working_directory;  // null terminated
+    int exit_code;
+    union {
+        struct {
+            cz::Str m1, m2;
+        } invalid;
+        struct {
+            size_t outer, inner;
+        } echo;
+        struct {
+            size_t outer;
+            Process_Input file;
+            cz::Carriage_Return_Carry carry;
+            char* buffer;
+            size_t len, offset;
+        } cat;
+        struct {
+            cz::Slice<const cz::Str> names;
+            cz::Slice<const cz::Str> values;
+        } variables;
+        struct {
+            std::chrono::steady_clock::time_point start;
+        } sleep;
+        struct {
+            size_t outer, inner;
+        } history;
+        struct {
+            Stdio_State stdio;
+        } source;
+        struct {
+            cz::String value;
+        } set_var;
+    } st;
+};
+
 struct Running_Program {
     enum Type {
         PROCESS,
         SUB,
-        INVALID,
-        ECHO,
-        CAT,
-        EXIT,
-        RETURN,
-        PWD,
-        CD,
-        LS,
-        ALIAS,
-        FUNCTION,
-        VARIABLES,
-        WHICH,
-        TRUE_,
-        FALSE_,
-        EXPORT,
-        UNSET,
-        CLEAR,
-        SOURCE,
-        SLEEP,
-        CONFIGURE,
-        ATTACH,
-        FOLLOW,
-        ARGDUMP,
-        VARDUMP,
-        ALIASDUMP,
-        FUNCDUMP,
-        SHIFT,
-        HISTORY,
-        SET_VAR,
-        BUILTIN,
-        MKTEMP,
+        ANY_BUILTIN,
     } type;
     union {
         cz::Process process;
         Running_Node sub;
-        struct {
-            cz::Slice<const cz::Str> args;
-            Process_Input in;
-            Process_Output out;
-            Process_Output err;
-            size_t* in_count;
-            size_t* out_count;
-            size_t* err_count;
-            cz::Str working_directory;  // null terminated
-            int exit_code;
-            union {
-                struct {
-                    cz::Str m1, m2;
-                } invalid;
-                struct {
-                    size_t outer, inner;
-                } echo;
-                struct {
-                    size_t outer;
-                    Process_Input file;
-                    cz::Carriage_Return_Carry carry;
-                    char* buffer;
-                    size_t len, offset;
-                } cat;
-                struct {
-                    cz::Slice<const cz::Str> names;
-                    cz::Slice<const cz::Str> values;
-                } variables;
-                struct {
-                    std::chrono::steady_clock::time_point start;
-                } sleep;
-                struct {
-                    size_t outer, inner;
-                } history;
-                struct {
-                    Stdio_State stdio;
-                } source;
-                struct {
-                    cz::String value;
-                } set_var;
-            } st;
-        } builtin;
+        Running_Builtin builtin;
     } v;
 };
 
@@ -306,10 +316,23 @@ struct Running_Script {
 
 struct Builtin {
     cz::Str name;
-    Running_Program::Type type;
+    Builtin_Command command;
 };
 
 extern const cz::Slice<const cz::Slice<const Builtin> > builtin_levels;
+
+void recognize_builtin(Running_Program* program, const Parse_Program& parse);
+void setup_builtin(Running_Builtin* builtin, cz::Allocator allocator, Stdio_State stdio);
+bool tick_builtin(Shell_State* shell,
+                  Shell_Local* local,
+                  Render_State* rend,
+                  Prompt_State* prompt,
+                  Backlog_State* backlog,
+                  cz::Allocator allocator,
+                  Running_Program* program,
+                  Pseudo_Terminal* tty,
+                  int* exit_code,
+                  bool* force_quit);
 
 ///////////////////////////////////////////////////////////////////////////////
 

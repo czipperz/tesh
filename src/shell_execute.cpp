@@ -53,9 +53,6 @@ static Error run_program(Shell_State* shell,
                          Backlog_State* backlog,
                          cz::Str error_path);
 
-static void recognize_builtin(Running_Program* program, const Parse_Program& parse);
-static void setup_builtin(Running_Program* program, cz::Allocator allocator, Stdio_State stdio);
-
 static void print_error(Output_Object& out, Backlog_State* backlog, Error error);
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -759,18 +756,21 @@ static Error run_program(Shell_State* shell,
 
     parse.v.args = args;
     if (error_path.len > 0) {
-        program->type = Running_Program::INVALID;
+        program->type = Running_Program::ANY_BUILTIN;
+        program->v.builtin.command = Builtin_Command::INVALID;
         program->v.builtin.st.invalid = {};
         program->v.builtin.st.invalid.m1 = "cannot open file";
         program->v.builtin.st.invalid.m2 = error_path;
     } else {
+        // Setup default as PROCESS then try to recognize ANY_BUILTIN.
+        program->type = Running_Program::PROCESS;
         recognize_builtin(program, parse);
     }
 
     // If command is a builtin.
-    if (program->type != Running_Program::PROCESS) {
+    if (program->type == Running_Program::ANY_BUILTIN) {
     make_builtin:
-        setup_builtin(program, allocator, stdio);
+        setup_builtin(&program->v.builtin, allocator, stdio);
 
         if (stdio.in.type == File_Type_Pipe && !stdio.in.file.set_non_blocking())
             return Error_IO;
@@ -815,7 +815,8 @@ static Error run_program(Shell_State* shell,
 
     cz::String full_path = {};
     if (!find_in_path(local, args[0], allocator, &full_path)) {
-        program->type = Running_Program::INVALID;
+        program->type = Running_Program::ANY_BUILTIN;
+        program->v.builtin.command = Builtin_Command::INVALID;
         program->v.builtin.st.invalid = {};
         program->v.builtin.st.invalid.m1 = "cannot find in path";
         program->v.builtin.st.invalid.m2 = args[0];
@@ -1000,56 +1001,6 @@ static void generate_environment(void* out_arg,
     table.push(nullptr);
     *out = table.clone(temp_allocator).elems;
 #endif
-}
-
-///////////////////////////////////////////////////////////////////////////////
-// Recognize builtins
-///////////////////////////////////////////////////////////////////////////////
-
-static void recognize_builtin(Running_Program* program, const Parse_Program& parse) {
-    program->type = Running_Program::PROCESS;
-
-    // Line that only assigns to variables runs as special builtin.
-    //
-    // Note: this can also be hit when evaluating `$()` or `$(;)` in which
-    // case we still can use VARIABLES because it'll just do nothing.
-    if (parse.v.args.len == 0) {
-        program->type = Running_Program::VARIABLES;
-        program->v.builtin.st.variables = {};
-        program->v.builtin.st.variables.names = parse.variable_names;
-        program->v.builtin.st.variables.values = parse.variable_values;
-        return;
-    }
-
-    for (size_t i = 0; i <= cfg.builtin_level; ++i) {
-        cz::Slice<const Builtin> builtins = builtin_levels[i];
-        for (size_t j = 0; j < builtins.len; ++j) {
-            const Builtin& builtin = builtins[j];
-            if (parse.v.args[0] == builtin.name) {
-                program->type = builtin.type;
-                return;
-            }
-        }
-    }
-}
-
-static void setup_builtin(Running_Program* program, cz::Allocator allocator, Stdio_State stdio) {
-    if (program->type == Running_Program::SOURCE) {
-        program->v.builtin.st.source = {};
-        program->v.builtin.st.source.stdio = stdio;
-    } else if (program->type == Running_Program::SLEEP) {
-        program->v.builtin.st.sleep = {};
-        program->v.builtin.st.sleep.start = std::chrono::steady_clock::now();
-    } else if (program->type == Running_Program::ECHO) {
-        program->v.builtin.st.echo = {};
-        program->v.builtin.st.echo.outer = 1;
-    } else if (program->type == Running_Program::CAT) {
-        program->v.builtin.st.cat = {};
-        program->v.builtin.st.cat.buffer = (char*)allocator.alloc({4096, 1});
-        program->v.builtin.st.cat.outer = 0;
-    } else if (program->type == Running_Program::SET_VAR) {
-        program->v.builtin.st.set_var = {};
-    }
 }
 
 ////////////////////////////////////////////////////////////////////////////////
