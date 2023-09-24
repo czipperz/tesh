@@ -56,6 +56,8 @@ static Error run_program(Shell_State* shell,
 static void recognize_builtin(Running_Program* program, const Parse_Program& parse);
 static void setup_builtin(Running_Program* program, cz::Allocator allocator, Stdio_State stdio);
 
+static void print_error(Output_Object& out, Backlog_State* backlog, Error error);
+
 ///////////////////////////////////////////////////////////////////////////////
 
 enum Walk_Status {
@@ -224,16 +226,7 @@ bool finish_line(Shell_State* shell,
     cleanup_pipeline(line);
     Error error = start_execute_line(shell, tty, node, backlog, line, background);
     if (error != Error_Success) {
-        Process_Output err = {};
-        if (node->stdio.err.type == File_Type_Terminal) {
-            err.type = Process_Output::BACKLOG;
-            err.v.backlog = backlog;
-        } else {
-            err.type = Process_Output::FILE;
-            err.v.file = node->stdio.err.file;
-        }
-
-        (void)err.write(cz::format(temp_allocator, "tesh: Error: ", error_string(error), "\n"));
+        print_error(node->stdio.err, backlog, error);
     }
 
     return true;
@@ -450,17 +443,7 @@ static void start_execute_pipeline(Shell_State* shell,
         Error error =
             link_stdio(&stdio, &pipe_in, &parse_program, allocator, program_nodes, p, bind_stdin);
         if (error != Error_Success) {
-        handle_error:
-            Process_Output err = {};
-            if (node->stdio.err.type == File_Type_Terminal) {
-                err.type = Process_Output::BACKLOG;
-                err.v.backlog = backlog;
-            } else {
-                err.type = Process_Output::FILE;
-                err.v.file = node->stdio.err.file;
-            }
-
-            (void)err.write(cz::format(temp_allocator, "tesh: Error: ", error_string(error), "\n"));
+            print_error(node->stdio.err, backlog, error);
             return;
         }
 
@@ -470,8 +453,10 @@ static void start_execute_pipeline(Shell_State* shell,
         Running_Program running_program = {};
         error = run_program(shell, node->local, allocator, tty, &running_program, parse_program,
                             stdio, backlog, error_path);
-        if (error != Error_Success)
-            goto handle_error;
+        if (error != Error_Success) {
+            print_error(node->stdio.err, backlog, error);
+            return;
+        }
 
         programs.reserve(cz::heap_allocator(), 1);
         programs.push(running_program);
@@ -1037,4 +1022,21 @@ static void setup_builtin(Running_Program* program, cz::Allocator allocator, Std
     } else if (program->type == Running_Program::SET_VAR) {
         program->v.builtin.st.set_var = {};
     }
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// Print error
+////////////////////////////////////////////////////////////////////////////////
+
+static void print_error(Output_Object& out, Backlog_State* backlog, Error error) {
+    Process_Output err = {};
+    if (out.type == File_Type_Terminal) {
+        err.type = Process_Output::BACKLOG;
+        err.v.backlog = backlog;
+    } else {
+        err.type = Process_Output::FILE;
+        err.v.file = out.file;
+    }
+
+    (void)err.write(cz::format(temp_allocator, "tesh: Error: ", error_string(error), "\n"));
 }
