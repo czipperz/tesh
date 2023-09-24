@@ -665,18 +665,14 @@ wide_terminal  1/0   -- Turn on or off wide terminal mode.  This will lock the t
             cz::Vector<cz::Str> args = builtin.args.slice_start(2).clone(allocator);
             Stdio_State stdio = st.stdio;
 
-            // Convert this node to a sub node.
+            // Canibalize this node into the script to be ran (ala
+            // execve) by converting `program` to a sub node.
+            // Note: Because this is `source` we don't use COW mode.
             program->type = Running_Program::SUB;
-            Running_Node* node = &program->v.sub;
-            *node = {};
-            node->stdio = stdio;
-            node->local = allocator.alloc<Shell_Local>();
-            *node->local = {};
-            node->local->parent = local;
-            node->local->args = args;
-            node->local->relationship = Shell_Local::ARGS_ONLY;
+            program->v.sub = build_sub_running_node(local, stdio, allocator);
+            program->v.sub.local->args = args;
 
-            error = start_execute_node(shell, *tty, backlog, node, root);
+            error = start_execute_node(shell, *tty, backlog, &program->v.sub, root);
             if (error == Error_Success) {
                 break;
             }

@@ -412,3 +412,9 @@ bool tick_running_node(Shell_State* shell,
                        Pseudo_Terminal* tty,
                        Backlog_State* backlog,
                        bool* force_quit);
+
+////////////////////////////////////////////////////////////////////////////////
+
+Running_Node build_sub_running_node(Shell_Local* parent_local,
+                                    const Stdio_State& stdio,
+                                    cz::Allocator allocator);

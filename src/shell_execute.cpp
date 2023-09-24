@@ -469,14 +469,7 @@ static void start_execute_pipeline(Shell_State* shell,
             }
 
             running_program.type = Running_Program::SUB;
-            running_program.v.sub = {};
-            running_program.v.sub.stdio = stdio;
-            // TODO: is it safe to just copy local wholesale instead of making this duplicate?
-            running_program.v.sub.local = allocator.alloc<Shell_Local>();
-            *running_program.v.sub.local = {};
-            running_program.v.sub.local->parent = node->local;
-            running_program.v.sub.local->args = {};  // no args ==> equal to parent
-            running_program.v.sub.local->relationship = Shell_Local::ARGS_ONLY;
+            running_program.v.sub = build_sub_running_node(node->local, stdio, allocator);
 
             error = start_execute_node(shell, tty, backlog, &running_program.v.sub, program_node);
             if (error != Error_Success) {
@@ -490,6 +483,21 @@ static void start_execute_pipeline(Shell_State* shell,
     }
 
     pipeline->programs = programs.clone(allocator);
+}
+
+/// Build a subnode.  We need a `Running_Node` in order to execute a `Shell_Node`.
+/// By default, this just copies the parent's environment.  Most callers will edit
+/// the created `Shell_Local` to change the spawned environment.
+Running_Node build_sub_running_node(Shell_Local* parent_local,
+                                    const Stdio_State& stdio,
+                                    cz::Allocator allocator) {
+    Running_Node node = {};
+    node.stdio = stdio;
+    node.local = allocator.alloc<Shell_Local>();
+    *node.local = {};
+    node.local->parent = parent_local;
+    node.local->relationship = Shell_Local::ARGS_ONLY;
+    return node;
 }
 
 static void expand_file_argument(cz::Str* path, Shell_Local* local, cz::Allocator allocator) {
@@ -704,11 +712,9 @@ static Error run_program(Shell_State* shell,
     // Parenthesized expression.  Fork (copy on write) vars.
     if (parse.is_sub) {
         program->type = Running_Program::SUB;
-        program->v.sub = {};
-        program->v.sub.stdio = stdio;
-        program->v.sub.local = allocator.alloc<Shell_Local>();
-        *program->v.sub.local = {};
-        program->v.sub.local->parent = local;
+        program->v.sub = build_sub_running_node(local, stdio, allocator);
+
+        program->v.sub.local->relationship = Shell_Local::COW;
         program->v.sub.local->exported_vars = local->exported_vars.clone(cz::heap_allocator());
         program->v.sub.local->variable_names = local->variable_names.clone(cz::heap_allocator());
         program->v.sub.local->variable_values = local->variable_values.clone(cz::heap_allocator());
@@ -719,7 +725,7 @@ static Error run_program(Shell_State* shell,
             local->variable_names[i].increment();
             local->variable_values[i].increment();
         }
-        program->v.sub.local->relationship = Shell_Local::COW;
+
         return start_execute_node(shell, tty, backlog, &program->v.sub, parse.v.sub);
     }
 
@@ -739,13 +745,8 @@ static Error run_program(Shell_State* shell,
 
         if (result != 0) {
             program->type = Running_Program::SUB;
-            program->v.sub = {};
-            program->v.sub.stdio = stdio;
-            program->v.sub.local = allocator.alloc<Shell_Local>();
-            *program->v.sub.local = {};
-            program->v.sub.local->parent = local;
+            program->v.sub = build_sub_running_node(local, stdio, allocator);
             program->v.sub.local->args = args.clone(allocator);
-            program->v.sub.local->relationship = Shell_Local::ARGS_ONLY;
 
             // Track the alias stack to prevent infinite recursion on 'alias ls=ls; ls'.
             if (result == 1) {
