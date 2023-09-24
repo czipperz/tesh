@@ -16,6 +16,7 @@
 // Forward Declarations
 ///////////////////////////////////////////////////////////////////////////////
 
+static void backlog_push_buffer(Backlog_State* backlog);
 static void truncate_to(Backlog_State* backlog, uint64_t new_length);
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -28,10 +29,8 @@ void init_backlog(Backlog_State* backlog, uint64_t id, uint64_t max_length) {
     backlog->arena.init();
     backlog->max_length = max_length;
 
-    char* buffer = (char*)cz::heap_allocator().alloc({4096, 1});
-    CZ_ASSERT(buffer);
-    backlog->buffers.reserve(cz::heap_allocator(), 1);
-    backlog->buffers.push(buffer);
+    // Always need to have a buffer on hand if there is space to grow.
+    backlog_push_buffer(backlog);
 
     backlog->start2 = std::chrono::system_clock::now();
     backlog->start = std::chrono::steady_clock::now();
@@ -50,6 +49,13 @@ void cleanup_backlog(cz::Slice<Backlog_State*> backlogs, Backlog_State* backlog)
     backlog->events.drop(cz::heap_allocator());
     backlog->escape_backlog.drop(cz::heap_allocator());
     backlog->arena.drop();
+}
+
+static void backlog_push_buffer(Backlog_State* backlog) {
+    backlog->buffers.reserve(cz::heap_allocator(), 1);
+    char* buffer = (char*)cz::heap_allocator().alloc({BACKLOG_BUFFER_SIZE, 1});
+    CZ_ASSERT(buffer);
+    backlog->buffers.push(buffer);
 }
 
 void backlog_dec_refcount(cz::Slice<Backlog_State*> backlogs, Backlog_State* backlog) {
@@ -98,22 +104,16 @@ static int64_t append_chunk(Backlog_State* backlog, cz::Str text) {
 
         size_t written = to_write;
         while (written != text.len) {
-            backlog->buffers.reserve(cz::heap_allocator(), 1);
-            char* buffer = (char*)cz::heap_allocator().alloc({BACKLOG_BUFFER_SIZE, 1});
-            CZ_ASSERT(buffer);
-            backlog->buffers.push(buffer);
+            backlog_push_buffer(backlog);
 
             to_write = cz::min(text.len - written, (size_t)BACKLOG_BUFFER_SIZE);
-            memcpy(buffer, text.buffer + written, to_write);
+            memcpy(backlog->buffers.last(), text.buffer + written, to_write);
             written += to_write;
         }
 
         if (backlog->length + text.len != backlog->max_length) {
             // Always need to have a buffer on hand if there is space to grow.
-            backlog->buffers.reserve(cz::heap_allocator(), 1);
-            char* buffer = (char*)cz::heap_allocator().alloc({BACKLOG_BUFFER_SIZE, 1});
-            CZ_ASSERT(buffer);
-            backlog->buffers.push(buffer);
+            backlog_push_buffer(backlog);
         }
     } else {
         // Just stick everything in the current buffer since there will still be space left.
