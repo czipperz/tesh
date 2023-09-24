@@ -2,9 +2,6 @@ name: Build with CMake and GCC
 
 on:
   push:
-    branches:
-      - master
-  pull_request:
 
 jobs:
   build:
