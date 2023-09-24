@@ -2,6 +2,7 @@
 
 #include <cz/heap.hpp>
 #include <cz/parse.hpp>
+#include <tracy/Tracy.hpp>
 #include "global.hpp"
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -630,6 +631,8 @@ static void truncate_to(Backlog_State* backlog, uint64_t new_length) {
 ///////////////////////////////////////////////////////////////////////////////
 
 uint64_t append_text(Backlog_State* backlog, cz::Str text) {
+    ZoneScoped;
+
     const char escape = 0x1b;
     const char del = 0x08;
     uint64_t done = 0;
