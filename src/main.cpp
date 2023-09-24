@@ -4,7 +4,6 @@
 #include <inttypes.h>
 #include <stdint.h>
 #include <stdio.h>
-#include <tracy/Tracy.hpp>
 #include <cz/binary_search.hpp>
 #include <cz/date.hpp>
 #include <cz/dedup.hpp>
@@ -21,6 +20,7 @@
 #include <cz/util.hpp>
 #include <cz/vector.hpp>
 #include <cz/working_directory.hpp>
+#include <tracy/Tracy.hpp>
 
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
@@ -186,6 +186,8 @@ bool read_process_data(Shell_State* shell,
                        Render_State* rend,
                        Prompt_State* prompt,
                        bool* force_quit) {
+    ZoneScoped;
+
     bool changes = false;
     for (size_t i = 0; i < shell->scripts.len; ++i) {
         Running_Script* script = &shell->scripts[i];
@@ -1739,9 +1741,9 @@ static void kill_process(Shell_State* shell,
                          Backlog_State* backlog,
                          Running_Script* script) {
 #ifdef TRACY_ENABLE
-    // cz::String message =
-    //     cz::format(temp_allocator, "End: ", script->root.fg.pipeline.command_line);
-    // TracyMessage(message.buffer, message.len);
+    cz::String message = cz::format(temp_allocator, "User kill: ");
+    append_parse_node(temp_allocator, &message, script->parse_root, /*add_semicolon=*/false);
+    TracyMessage(message.buffer, message.len);
 #endif
 
     backlog->exit_code = -1;

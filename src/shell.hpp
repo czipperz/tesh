@@ -313,6 +313,7 @@ struct Running_Script {
     cz::Buffer_Array arena;
     Pseudo_Terminal tty;
     Running_Node root;
+    Parse_Node* parse_root; // Just used for debugging
 };
 
 ///////////////////////////////////////////////////////////////////////////////

@@ -149,6 +149,8 @@ Error start_execute_script(Shell_State* shell,
     if (!create_pseudo_terminal(&running.tty, shell->width, shell->height))
         return Error_IO;
 
+    running.parse_root = root;
+
     running.root.local = &shell->local;
 
 #ifdef _WIN32

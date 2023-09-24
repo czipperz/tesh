@@ -104,6 +104,8 @@ static void tick_pipeline(Shell_State* shell,
 ///////////////////////////////////////////////////////////////////////////////
 
 static void read_tty_output(Backlog_State* backlog, Pseudo_Terminal* tty, bool cap_read_calls) {
+    ZoneScoped;
+
     static char buffer[4096];
 
 #ifdef _WIN32
