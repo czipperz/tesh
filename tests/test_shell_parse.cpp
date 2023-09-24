@@ -95,7 +95,7 @@ static void test_append_node(cz::Allocator allocator,
     }
 }
 
-static Error parse_and_emit(const Shell_State* shell, cz::String* string, cz::Str text) {
+static Error parse_and_emit(cz::String* string, cz::Str text) {
     Parse_Node root = {};
     Error error = parse_script(cz::heap_allocator(), &root, text);
     if (error == Error_Success)
@@ -115,17 +115,15 @@ static cz::Str expand(const Shell_State* shell, cz::Str arg) {
 }
 
 TEST_CASE("parse_script empty line") {
-    Shell_State shell = {};
     cz::String string = {};
-    Error error = parse_and_emit(&shell, &string, "");
+    Error error = parse_and_emit(&string, "");
     REQUIRE(error == Error_Success);
     CHECK(string.as_str() == "");
 }
 
 TEST_CASE("parse_script one word") {
-    Shell_State shell = {};
     cz::String string = {};
-    Error error = parse_and_emit(&shell, &string, "abc");
+    Error error = parse_and_emit(&string, "abc");
     REQUIRE(error == Error_Success);
     CHECK(string.as_str() ==
           "\
@@ -134,9 +132,8 @@ program:\n\
 }
 
 TEST_CASE("parse_script two words") {
-    Shell_State shell = {};
     cz::String string = {};
-    Error error = parse_and_emit(&shell, &string, "abc def");
+    Error error = parse_and_emit(&string, "abc def");
     REQUIRE(error == Error_Success);
     CHECK(string.as_str() ==
           "\
@@ -146,9 +143,8 @@ program:\n\
 }
 
 TEST_CASE("parse_script two words whitespace") {
-    Shell_State shell = {};
     cz::String string = {};
-    Error error = parse_and_emit(&shell, &string, "   abc   def   ");
+    Error error = parse_and_emit(&string, "   abc   def   ");
     REQUIRE(error == Error_Success);
     CHECK(string.as_str() ==
           "\
@@ -158,9 +154,8 @@ program:\n\
 }
 
 TEST_CASE("parse_script pipe simple 1") {
-    Shell_State shell = {};
     cz::String string = {};
-    Error error = parse_and_emit(&shell, &string, "a | b");
+    Error error = parse_and_emit(&string, "a | b");
     REQUIRE(error == Error_Success);
     CHECK(string.as_str() ==
           "\
@@ -172,9 +167,8 @@ pipeline:\n\
 }
 
 TEST_CASE("parse_script pipe simple 2") {
-    Shell_State shell = {};
     cz::String string = {};
-    Error error = parse_and_emit(&shell, &string, "a b|c d");
+    Error error = parse_and_emit(&string, "a b|c d");
     REQUIRE(error == Error_Success);
     CHECK(string.as_str() ==
           "\
@@ -188,9 +182,8 @@ pipeline:\n\
 }
 
 TEST_CASE("parse_script single quotes basic cases") {
-    Shell_State shell = {};
     cz::String string = {};
-    Error error = parse_and_emit(&shell, &string, "a '' 'b' 'abcabc'");
+    Error error = parse_and_emit(&string, "a '' 'b' 'abcabc'");
     REQUIRE(error == Error_Success);
     CHECK(string.as_str() ==
           "\
@@ -202,23 +195,20 @@ program:\n\
 }
 
 TEST_CASE("parse_script single quote unterminated 1") {
-    Shell_State shell = {};
     cz::String string = {};
-    Error error = parse_and_emit(&shell, &string, "'");
+    Error error = parse_and_emit(&string, "'");
     REQUIRE(error == Error_Parse_UnterminatedString);
 }
 
 TEST_CASE("parse_script single quote unterminated 2") {
-    Shell_State shell = {};
     cz::String string = {};
-    Error error = parse_and_emit(&shell, &string, "c  'b  \n  a");
+    Error error = parse_and_emit(&string, "c  'b  \n  a");
     REQUIRE(error == Error_Parse_UnterminatedString);
 }
 
 TEST_CASE("parse_script single quotes weird cases") {
-    Shell_State shell = {};
     cz::String string = {};
-    Error error = parse_and_emit(&shell, &string, "' \n\n ' 'c'a'b'");
+    Error error = parse_and_emit(&string, "' \n\n ' 'c'a'b'");
     REQUIRE(error == Error_Success);
     CHECK(string.as_str() ==
           "\
@@ -228,9 +218,8 @@ program:\n\
 }
 
 TEST_CASE("parse_script double quote basic") {
-    Shell_State shell = {};
     cz::String string = {};
-    Error error = parse_and_emit(&shell, &string, "\"a\" \"\" \"abc\"");
+    Error error = parse_and_emit(&string, "\"a\" \"\" \"abc\"");
     REQUIRE(error == Error_Success);
     CHECK(string.as_str() ==
           "\
@@ -241,9 +230,8 @@ program:\n\
 }
 
 TEST_CASE("parse_script double quote escape") {
-    Shell_State shell = {};
     cz::String string = {};
-    Error error = parse_and_emit(&shell, &string, "\"\\\\ \\n \\a \\$ \\` \\\" \\& \\:\"");
+    Error error = parse_and_emit(&string, "\"\\\\ \\n \\a \\$ \\` \\\" \\& \\:\"");
     REQUIRE(error == Error_Success);
     CHECK(string.as_str() ==
           "\
@@ -252,9 +240,8 @@ program:\n\
 }
 
 TEST_CASE("parse_script double quote escape outside") {
-    Shell_State shell = {};
     cz::String string = {};
-    Error error = parse_and_emit(&shell, &string, "\\\"ok");
+    Error error = parse_and_emit(&string, "\\\"ok");
     REQUIRE(error == Error_Success);
     CHECK(string.as_str() ==
           "\
@@ -263,9 +250,8 @@ program:\n\
 }
 
 TEST_CASE("parse_script variable ended in quote") {
-    Shell_State shell = {};
     cz::String string = {};
-    Error error = parse_and_emit(&shell, &string, "\"$VARS\\\"\"");
+    Error error = parse_and_emit(&string, "\"$VARS\\\"\"");
     REQUIRE(error == Error_Success);
     CHECK(string.as_str() ==
           "\
@@ -274,9 +260,8 @@ program:\n\
 }
 
 TEST_CASE("parse_script variable") {
-    Shell_State shell = {};
     cz::String string = {};
-    Error error = parse_and_emit(&shell, &string, "a=b c=d");
+    Error error = parse_and_emit(&string, "a=b c=d");
     REQUIRE(error == Error_Success);
     CHECK(string.as_str() ==
           "\
@@ -288,9 +273,8 @@ program:\n\
 }
 
 TEST_CASE("parse_script variable after arg is arg") {
-    Shell_State shell = {};
     cz::String string = {};
-    Error error = parse_and_emit(&shell, &string, "a=b arg c=d");
+    Error error = parse_and_emit(&string, "a=b arg c=d");
     REQUIRE(error == Error_Success);
     CHECK(string.as_str() ==
           "\
@@ -302,9 +286,8 @@ program:\n\
 }
 
 TEST_CASE("parse_script file indirection") {
-    Shell_State shell = {};
     cz::String string = {};
-    Error error = parse_and_emit(&shell, &string, "echo < in arg1 > out arg2 2> err arg3");
+    Error error = parse_and_emit(&string, "echo < in arg1 > out arg2 2> err arg3");
     REQUIRE(error == Error_Success);
     CHECK(string.as_str() ==
           "\
@@ -319,9 +302,8 @@ program:\n\
 }
 
 TEST_CASE("parse_script file indirection stderr must be 2> no space") {
-    Shell_State shell = {};
     cz::String string = {};
-    Error error = parse_and_emit(&shell, &string, "echo 2 > out");
+    Error error = parse_and_emit(&string, "echo 2 > out");
     REQUIRE(error == Error_Success);
     CHECK(string.as_str() ==
           "\
@@ -332,9 +314,8 @@ program:\n\
 }
 
 TEST_CASE("parse_script file indirection 2>&1") {
-    Shell_State shell = {};
     cz::String string = {};
-    Error error = parse_and_emit(&shell, &string, "echo 2>&1");
+    Error error = parse_and_emit(&string, "echo 2>&1");
     REQUIRE(error == Error_Success);
     CHECK(string.as_str() ==
           "\
@@ -344,9 +325,8 @@ program:\n\
 }
 
 TEST_CASE("parse_script file indirection >&2") {
-    Shell_State shell = {};
     cz::String string = {};
-    Error error = parse_and_emit(&shell, &string, "echo >&2");
+    Error error = parse_and_emit(&string, "echo >&2");
     REQUIRE(error == Error_Success);
     CHECK(string.as_str() ==
           "\
@@ -356,9 +336,8 @@ program:\n\
 }
 
 TEST_CASE("parse_script file indirection 2>&1 propagate") {
-    Shell_State shell = {};
     cz::String string = {};
-    Error error = parse_and_emit(&shell, &string, "echo >file 2>&1");
+    Error error = parse_and_emit(&string, "echo >file 2>&1");
     REQUIRE(error == Error_Success);
     CHECK(string.as_str() ==
           "\
@@ -369,9 +348,8 @@ program:\n\
 }
 
 TEST_CASE("parse_script file indirection >&2 propagate") {
-    Shell_State shell = {};
     cz::String string = {};
-    Error error = parse_and_emit(&shell, &string, "echo 2>file >&2");
+    Error error = parse_and_emit(&string, "echo 2>file >&2");
     REQUIRE(error == Error_Success);
     CHECK(string.as_str() ==
           "\
@@ -420,9 +398,8 @@ TEST_CASE("parse_script dollar sign space in quotes") {
 }
 
 TEST_CASE("parse_script semicolon combiner") {
-    Shell_State shell = {};
     cz::String string = {};
-    Error error = parse_and_emit(&shell, &string, "echo hi; echo bye");
+    Error error = parse_and_emit(&string, "echo hi; echo bye");
     REQUIRE(error == Error_Success);
     CHECK(string.as_str() ==
           "\
@@ -435,9 +412,8 @@ program:\n\
 }
 
 TEST_CASE("parse_script newline combiner") {
-    Shell_State shell = {};
     cz::String string = {};
-    Error error = parse_and_emit(&shell, &string, "echo hi \n echo bye");
+    Error error = parse_and_emit(&string, "echo hi \n echo bye");
     REQUIRE(error == Error_Success);
     CHECK(string.as_str() ==
           "\
@@ -450,9 +426,8 @@ program:\n\
 }
 
 TEST_CASE("parse_script && combiner") {
-    Shell_State shell = {};
     cz::String string = {};
-    Error error = parse_and_emit(&shell, &string, "echo hi && echo bye");
+    Error error = parse_and_emit(&string, "echo hi && echo bye");
     REQUIRE(error == Error_Success);
     CHECK(string.as_str() ==
           "\
@@ -466,9 +441,8 @@ and:\n\
 }
 
 TEST_CASE("parse_script || combiner") {
-    Shell_State shell = {};
     cz::String string = {};
-    Error error = parse_and_emit(&shell, &string, "echo hi || echo bye");
+    Error error = parse_and_emit(&string, "echo hi || echo bye");
     REQUIRE(error == Error_Success);
     CHECK(string.as_str() ==
           "\
@@ -482,10 +456,9 @@ or:\n\
 }
 
 TEST_CASE("parse_script && || precedence") {
-    Shell_State shell = {};
     cz::String string = {};
     Error error =
-        parse_and_emit(&shell, &string, "echo hi && echo bye || echo hello && echo world");
+        parse_and_emit(&string, "echo hi && echo bye || echo hello && echo world");
     REQUIRE(error == Error_Success);
     CHECK(string.as_str() ==
           "\
@@ -507,9 +480,8 @@ or:\n\
 }
 
 TEST_CASE("parse_script & combiner") {
-    Shell_State shell = {};
     cz::String string = {};
-    Error error = parse_and_emit(&shell, &string, "echo hi & echo bye");
+    Error error = parse_and_emit(&string, "echo hi & echo bye");
     REQUIRE(error == Error_Success);
     CHECK(string.as_str() ==
           "\
@@ -524,7 +496,7 @@ program:\n\
 TEST_CASE("parse_script backslash escapes newline") {
     Shell_State shell = {};
     cz::String string = {};
-    Error error = parse_and_emit(&shell, &string, "d\\\nef");
+    Error error = parse_and_emit(&string, "d\\\nef");
     REQUIRE(error == Error_Success);
     CHECK(string.as_str() ==
           "\
@@ -623,9 +595,9 @@ TEST_CASE("parse_script argument expansion 4") {
 }
 
 TEST_CASE("parse_script argument expansion 5") {
+    Shell_State shell = {};
     temp_allocator = cz::heap_allocator();
 
-    Shell_State shell = {};
     shell.local.args.reserve(cz::heap_allocator(), 3);
     shell.local.args.push("program");
     shell.local.args.push("thearg1 has spaces");
@@ -634,17 +606,15 @@ TEST_CASE("parse_script argument expansion 5") {
 }
 
 TEST_CASE("parse_script comment basic") {
-    Shell_State shell = {};
     cz::String string = {};
-    Error error = parse_and_emit(&shell, &string, "# hi");
+    Error error = parse_and_emit(&string, "# hi");
     REQUIRE(error == Error_Success);
     CHECK(string.as_str() == "");
 }
 
 TEST_CASE("parse_script # after word isn't comment") {
-    Shell_State shell = {};
     cz::String string = {};
-    Error error = parse_and_emit(&shell, &string, "a# hi");
+    Error error = parse_and_emit(&string, "a# hi");
     REQUIRE(error == Error_Success);
     CHECK(string.as_str() ==
           "\
@@ -654,9 +624,8 @@ program:\n\
 }
 
 TEST_CASE("parse_script # after empty string isn't comment") {
-    Shell_State shell = {};
     cz::String string = {};
-    Error error = parse_and_emit(&shell, &string, "''# \"\"#");
+    Error error = parse_and_emit(&string, "''# \"\"#");
     REQUIRE(error == Error_Success);
     CHECK(string.as_str() ==
           "\
@@ -666,9 +635,8 @@ program:\n\
 }
 
 TEST_CASE("parse_script # doesn't honor '\\\\\\n'") {
-    Shell_State shell = {};
     cz::String string = {};
-    Error error = parse_and_emit(&shell, &string, "a #\\\nb");
+    Error error = parse_and_emit(&string, "a #\\\nb");
     REQUIRE(error == Error_Success);
     CHECK(string.as_str() ==
           "\
@@ -680,7 +648,6 @@ program:\n\
 
 #if 0
 TEST_CASE("parse_script alias simple") {
-    Shell_State shell = {};
     set_alias(&shell, "aa", "bb");
     Parse_Script script = {};
     Error error = tokenize(&shell, cz::heap_allocator(), &script, "aa cc");
@@ -696,7 +663,6 @@ TEST_CASE("parse_script alias simple") {
 }
 
 TEST_CASE("parse_script alias not expanded when value of variable") {
-    Shell_State shell = {};
     set_alias(&shell, "aa", "bb");
     set_var(&shell.local, "x", "aa");
     Parse_Script script = {};
@@ -713,7 +679,6 @@ TEST_CASE("parse_script alias not expanded when value of variable") {
 }
 
 TEST_CASE("parse_script alias not expanded when quoted") {
-    Shell_State shell = {};
     set_alias(&shell, "aa", "bb");
     Parse_Script script = {};
     Error error = tokenize(&shell, cz::heap_allocator(), &script, "'aa' cc");
@@ -733,7 +698,7 @@ TEST_CASE("parse_script expand ${x}") {
     Shell_State shell = {};
     set_var(&shell.local, "aa", "bb");
     cz::String string = {};
-    Error error = parse_and_emit(&shell, &string, "${aa} cc");
+    Error error = parse_and_emit(&string, "${aa} cc");
     REQUIRE(error == Error_Success);
     CHECK(string.as_str() ==
           "\
@@ -745,9 +710,8 @@ program:\n\
 }
 
 TEST_CASE("parse_script ()") {
-    Shell_State shell = {};
     cz::String string = {};
-    Error error = parse_and_emit(&shell, &string, "(a ; b) && (c || d)");
+    Error error = parse_and_emit(&string, "(a ; b) && (c || d)");
     REQUIRE(error == Error_Success);
     CHECK(string.as_str() ==
           "\
@@ -769,9 +733,8 @@ and:\n\
 }
 
 TEST_CASE("parse_script if statement basic") {
-    Shell_State shell = {};
     cz::String string = {};
-    Error error = parse_and_emit(&shell, &string, "if true; then echo; fi");
+    Error error = parse_and_emit(&string, "if true; then echo; fi");
     REQUIRE(error == Error_Success);
     CHECK(string.as_str() ==
           "\
@@ -785,9 +748,8 @@ if:\n\
 }
 
 TEST_CASE("parse_script if else statement") {
-    Shell_State shell = {};
     cz::String string = {};
-    Error error = parse_and_emit(&shell, &string, "if true; then echo hi; else echo bye; fi");
+    Error error = parse_and_emit(&string, "if true; then echo hi; else echo bye; fi");
     REQUIRE(error == Error_Success);
     CHECK(string.as_str() ==
           "\
@@ -806,10 +768,9 @@ if:\n\
 }
 
 TEST_CASE("parse_script if elif statement") {
-    Shell_State shell = {};
     cz::String string = {};
     Error error =
-        parse_and_emit(&shell, &string, "if true; then echo hi; elif cond2; then echo bye; fi");
+        parse_and_emit(&string, "if true; then echo hi; elif cond2; then echo bye; fi");
     REQUIRE(error == Error_Success);
     CHECK(string.as_str() ==
           "\
@@ -836,9 +797,8 @@ TEST_CASE("parse_script function basic") {
     // Temporary hack.
     permanent_allocator = cz::heap_allocator();
 
-    Shell_State shell = {};
     cz::String string = {};
-    Error error = parse_and_emit(&shell, &string, "f() { echo }; }");
+    Error error = parse_and_emit(&string, "f() { echo }; }");
     REQUIRE(error == Error_Success);
     CHECK(string.as_str() ==
           "\
@@ -855,9 +815,8 @@ TEST_CASE("parse_script subexpr $()") {
     permanent_allocator = cz::heap_allocator();
     tesh_sub_counter = 0;
 
-    Shell_State shell = {};
     cz::String string = {};
-    Error error = parse_and_emit(&shell, &string, "a$(c x$(y)z d)b");
+    Error error = parse_and_emit(&string, "a$(c x$(y)z d)b");
     REQUIRE(error == Error_Success);
     CHECK(string.as_str() ==
           "\
@@ -887,9 +846,8 @@ TEST_CASE("parse_script assign var $()") {
     permanent_allocator = cz::heap_allocator();
     tesh_sub_counter = 0;
 
-    Shell_State shell = {};
     cz::String string = {};
-    Error error = parse_and_emit(&shell, &string, "x=$(hi)");
+    Error error = parse_and_emit(&string, "x=$(hi)");
     REQUIRE(error == Error_Success);
     CHECK(string.as_str() ==
           "\
@@ -910,9 +868,8 @@ TEST_CASE("parse_script subexpr $() inside quotes") {
     permanent_allocator = cz::heap_allocator();
     tesh_sub_counter = 0;
 
-    Shell_State shell = {};
     cz::String string = {};
-    Error error = parse_and_emit(&shell, &string, "a\"$(c x$(y)z d)\"b");
+    Error error = parse_and_emit(&string, "a\"$(c x$(y)z d)\"b");
     REQUIRE(error == Error_Success);
     CHECK(string.as_str() ==
           "\
@@ -942,9 +899,8 @@ TEST_CASE("parse_script subexpr <()") {
     permanent_allocator = cz::heap_allocator();
     tesh_sub_counter = 0;
 
-    Shell_State shell = {};
     cz::String string = {};
-    Error error = parse_and_emit(&shell, &string, "a<(c <(y) d)b");
+    Error error = parse_and_emit(&string, "a<(c <(y) d)b");
     REQUIRE(error == Error_Success);
     CHECK(string.as_str() ==
           "\
@@ -984,9 +940,8 @@ TEST_CASE("parse_script subexpr <() inside quotes does nothing") {
     permanent_allocator = cz::heap_allocator();
     tesh_sub_counter = 0;
 
-    Shell_State shell = {};
     cz::String string = {};
-    Error error = parse_and_emit(&shell, &string, "a\"<(c x<(y)z d)\"b");
+    Error error = parse_and_emit(&string, "a\"<(c x<(y)z d)\"b");
     REQUIRE(error == Error_Success);
     CHECK(string.as_str() ==
           "\
