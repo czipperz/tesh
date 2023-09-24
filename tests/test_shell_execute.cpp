@@ -2,8 +2,8 @@
 
 #include "config.hpp"
 #include "global.hpp"
-#include "shell.hpp"
 #include "prompt.hpp"
+#include "shell.hpp"
 
 static Backlog_State execute(cz::Str command) {
     cz::Buffer_Array temp_arena;
@@ -42,8 +42,8 @@ static Backlog_State execute(cz::Str command) {
     return backlog;
 }
 
-TEST_CASE("execute: echo hi") {
-    Backlog_State backlog = execute("echo hi");
+TEST_CASE("execute: file=$(mktemp) && echo hi | cat > $file && cat $file") {
+    Backlog_State backlog = execute("file=$(mktemp) && echo hi | cat > $file && cat $file");
     CHECK(backlog.exit_code == 0);
     CHECK(dbg_stringify_backlog(&backlog) == "hi\n");
 }
