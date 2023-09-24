@@ -5,7 +5,7 @@
 #include "shell.hpp"
 #include "prompt.hpp"
 
-TEST_CASE("execute: echo hi") {
+static Backlog_State execute(cz::Str command) {
     cz::Buffer_Array temp_arena;
     temp_arena.init();
     temp_allocator = temp_arena.allocator();
@@ -20,8 +20,11 @@ TEST_CASE("execute: echo hi") {
     init_backlog(&backlog, /*id=*/0, /*max_length=*/1ull << 30 /*1GB*/);
     backlog.refcount++;
 
-    bool result = run_script(&shell, &backlog, "echo hi");
-    CHECK(result);
+    bool result = run_script(&shell, &backlog, command);
+    if (!result) {
+        backlog.exit_code = -1;
+        return backlog;
+    }
 
     Render_State rend = {};
     rend.attached_outer = -1;
@@ -36,6 +39,11 @@ TEST_CASE("execute: echo hi") {
         SDL_Delay(1);
     }
 
+    return backlog;
+}
+
+TEST_CASE("execute: echo hi") {
+    Backlog_State backlog = execute("echo hi");
     CHECK(backlog.exit_code == 0);
     CHECK(dbg_stringify_backlog(&backlog) == "hi\n");
 }
