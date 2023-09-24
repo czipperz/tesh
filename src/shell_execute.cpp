@@ -426,36 +426,63 @@ static void start_execute_pipeline(Shell_State* shell,
     for (size_t p = 0; p < program_nodes.len; ++p) {
         Shell_Node* program_node = &program_nodes[p];
 
+        Running_Program running_program = {};
+
         if (program_node->type == Shell_Node::FUNCTION) {
             // Declare the function and ignore all pipe and file indirection.
             set_function(node->local, program_node->v.function.name, program_node->v.function.body);
             continue;
-        }
+        } else if (program_node->type == Shell_Node::PROGRAM) {
+            // Normal case for example `echo` and `cat` in `echo | cat`.
+            Parse_Program parse_program = *program_node->v.program;
 
-        CZ_ASSERT(program_node->type == Shell_Node::PROGRAM);  // TODO
-        Parse_Program parse_program = *program_node->v.program;
+            expand_file_argument(&parse_program.in_file, node->local, allocator);
+            expand_file_argument(&parse_program.out_file, node->local, allocator);
+            expand_file_argument(&parse_program.err_file, node->local, allocator);
 
-        expand_file_argument(&parse_program.in_file, node->local, allocator);
-        expand_file_argument(&parse_program.out_file, node->local, allocator);
-        expand_file_argument(&parse_program.err_file, node->local, allocator);
+            Stdio_State stdio = node->stdio;
+            Error error = link_stdio(&stdio, &pipe_in, &parse_program, allocator, program_nodes, p,
+                                     bind_stdin);
+            if (error != Error_Success) {
+                print_error(node->stdio.err, backlog, error);
+                return;
+            }
 
-        Stdio_State stdio = node->stdio;
-        Error error =
-            link_stdio(&stdio, &pipe_in, &parse_program, allocator, program_nodes, p, bind_stdin);
-        if (error != Error_Success) {
-            print_error(node->stdio.err, backlog, error);
-            return;
-        }
+            cz::Str error_path = {};
+            open_redirected_files(&stdio, &error_path, parse_program, allocator, node->local);
 
-        cz::Str error_path = {};
-        open_redirected_files(&stdio, &error_path, parse_program, allocator, node->local);
+            error = run_program(shell, node->local, allocator, tty, &running_program, parse_program,
+                                stdio, backlog, error_path);
+            if (error != Error_Success) {
+                print_error(node->stdio.err, backlog, error);
+                return;
+            }
+        } else {
+            // Compound pipeline + subnode.  For example:
+            // `(echo hi | cat)` in `(echo hi | cat) | grep x`.
+            Stdio_State stdio = node->stdio;
+            Error error = link_stdio(&stdio, &pipe_in, /*parse_program=*/nullptr, allocator,
+                                     program_nodes, p, bind_stdin);
+            if (error != Error_Success) {
+                print_error(node->stdio.err, backlog, error);
+                return;
+            }
 
-        Running_Program running_program = {};
-        error = run_program(shell, node->local, allocator, tty, &running_program, parse_program,
-                            stdio, backlog, error_path);
-        if (error != Error_Success) {
-            print_error(node->stdio.err, backlog, error);
-            return;
+            running_program.type = Running_Program::SUB;
+            running_program.v.sub = {};
+            running_program.v.sub.stdio = stdio;
+            // TODO: is it safe to just copy local wholesale instead of making this duplicate?
+            running_program.v.sub.local = allocator.alloc<Shell_Local>();
+            *running_program.v.sub.local = {};
+            running_program.v.sub.local->parent = node->local;
+            running_program.v.sub.local->args = {};  // no args ==> equal to parent
+            running_program.v.sub.local->relationship = Shell_Local::ARGS_ONLY;
+
+            error = start_execute_node(shell, tty, backlog, &running_program.v.sub, program_node);
+            if (error != Error_Success) {
+                print_error(node->stdio.err, backlog, error);
+                return;
+            }
         }
 
         programs.reserve(cz::heap_allocator(), 1);

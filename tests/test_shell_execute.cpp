@@ -49,7 +49,7 @@ TEST_CASE("execute: file=$(mktemp) && echo hi | cat > $file && cat $file") {
 }
 
 TEST_CASE("execute: pipe + $() combos") {
-    Backlog_State backlog = execute("echo $(echo one | cat)");
+    Backlog_State backlog = execute("echo $(echo one | cat); echo $(echo two | cat) | cat");
     CHECK(backlog.exit_code == 0);
-    CHECK(dbg_stringify_backlog(&backlog) == "one\n");
+    CHECK(dbg_stringify_backlog(&backlog) == "one\ntwo\n");
 }
