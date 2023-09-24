@@ -1,12 +1,12 @@
 #include "shell.hpp"
 
-#include <tracy/Tracy.hpp>
 #include <cz/debug.hpp>
 #include <cz/defer.hpp>
 #include <cz/format.hpp>
 #include <cz/heap.hpp>
 #include <cz/path.hpp>
 #include <cz/process.hpp>
+#include <tracy/Tracy.hpp>
 
 #include "config.hpp"
 #include "global.hpp"
@@ -94,6 +94,8 @@ void create_null_file() {
 ///////////////////////////////////////////////////////////////////////////////
 
 bool run_script(Shell_State* shell, Backlog_State* backlog, cz::Str command) {
+    ZoneScoped;
+
 #ifdef TRACY_ENABLE
     {
         cz::String message = cz::format(temp_allocator, "Start: ", command);
@@ -142,6 +144,8 @@ Error start_execute_script(Shell_State* shell,
                            Backlog_State* backlog,
                            cz::Buffer_Array arena,
                            Parse_Node* root) {
+    ZoneScoped;
+
     Running_Script running = {};
     running.id = backlog->id;
     running.arena = arena;
@@ -178,6 +182,8 @@ Error start_execute_node(Shell_State* shell,
                          Backlog_State* backlog,
                          Running_Node* node,
                          Parse_Node* root) {
+    ZoneScoped;
+
     node->fg.arena = alloc_arena(shell);
 
     if (!descend_to_first_pipeline(&node->fg.path, root))
@@ -201,6 +207,8 @@ bool finish_line(Shell_State* shell,
                  Backlog_State* backlog,
                  Running_Pipeline* line,
                  bool background) {
+    ZoneScoped;
+
 #if defined(TRACY_ENABLE) && 0
     {
         cz::String message = cz::format(temp_allocator, "End: ", line->pipeline.command_line);
@@ -236,6 +244,8 @@ bool finish_line(Shell_State* shell,
 ///////////////////////////////////////////////////////////////////////////////
 
 static bool descend_to_first_pipeline(cz::Vector<Parse_Node*>* path, Parse_Node* child) {
+    ZoneScoped;
+
     do_descend_to_first_pipeline(path, child);
     if (path->last() != nullptr)
         return true;
@@ -350,6 +360,8 @@ static Error start_execute_line(Shell_State* shell,
                                 Backlog_State* backlog,
                                 Running_Pipeline* pipeline,
                                 bool background) {
+    ZoneScoped;
+
     // Don't do this on Windows to avoid a race condition because the pipe gets flushed post exit.
 #ifndef _WIN32
     if (backlog->length > 0 && backlog->get(backlog->length - 1) != '\n') {
@@ -432,6 +444,12 @@ static void start_execute_pipeline(Shell_State* shell,
             set_function(node->local, program_node->v.function.name, program_node->v.function.body);
             continue;
         } else if (program_node->type == Parse_Node::PROGRAM) {
+#ifdef TRACY_ENABLE
+            cz::String message = cz::format(temp_allocator, "run program: ");
+            append_parse_node(temp_allocator, &message, program_node, /*add_semicolon=*/false);
+            TracyMessage(message.buffer, message.len);
+#endif
+
             // Normal case for example `echo` and `cat` in `echo | cat`.
             Parse_Program parse_program = *program_node->v.program;
 
@@ -500,6 +518,8 @@ Running_Node build_sub_running_node(Shell_Local* parent_local,
 }
 
 static void expand_file_argument(cz::Str* path, Shell_Local* local, cz::Allocator allocator) {
+    ZoneScoped;
+
     if (!path->starts_with("__tesh_std_")) {
         cz::String file = {};
         expand_arg_single(local, *path, allocator, &file);
@@ -516,6 +536,8 @@ static Error link_stdio(Stdio_State* stdio,
                         cz::Slice<Parse_Node> program_nodes,
                         size_t p,
                         bool bind_stdin) {
+    ZoneScoped;
+
     Stdio_State old_stdio = *stdio;
 
     // Bind stdin.
@@ -697,6 +719,8 @@ static Error run_program(Shell_State* shell,
                          Stdio_State stdio,
                          Backlog_State* backlog,
                          cz::Str error_path) {
+    ZoneScoped;
+
     {
         cz::Vector<cz::Str> variable_values = {};
         variable_values.reserve_exact(allocator, parse.variable_values.len);

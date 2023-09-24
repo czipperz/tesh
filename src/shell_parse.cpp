@@ -8,6 +8,7 @@
 #include <cz/parse.hpp>
 #include <cz/path.hpp>
 #include <cz/working_directory.hpp>
+#include <tracy/Tracy.hpp>
 
 #include "global.hpp"
 
@@ -109,6 +110,8 @@ static void deref_var_at_point(const Shell_Local* local,
 ///////////////////////////////////////////////////////////////////////////////
 
 Error parse_script(cz::Allocator allocator, Parse_Node* root, cz::Str text) {
+    ZoneScoped;
+
     cz::Vector<cz::Str> tokens = {};
     CZ_DEFER(tokens.drop(cz::heap_allocator()));
     Error error = tokenize(allocator, &tokens, text);
@@ -131,6 +134,8 @@ Error parse_script(cz::Allocator allocator, Parse_Node* root, cz::Str text) {
 ///////////////////////////////////////////////////////////////////////////////
 
 static Error tokenize(cz::Allocator allocator, cz::Vector<cz::Str>* tokens, cz::Str text) {
+    ZoneScoped;
+
     size_t index = 0;
     while (1) {
         size_t token_start = index;
