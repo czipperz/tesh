@@ -566,9 +566,15 @@ static Error link_stdio(Stdio_State* stdio,
     // Make pipes for the next iteration.
     if ((stdio->out.type == File_Type_Pipe || stdio->err.type == File_Type_Pipe) &&
         (p + 1 < program_nodes.len)) {
+        bool create_pipe = true;
+
+        // If next item in the pipeline doesn't read from stdin then this
+        // program's stdout is dead so just leave it null and don't create a pipe.
         Shell_Node* next = &program_nodes[p + 1];
-        CZ_ASSERT(next->type == Shell_Node::PROGRAM);  // TODO
-        if (next->v.program->in_file == "__tesh_std_in") {
+        if (next->type == Shell_Node::PROGRAM && next->v.program->in_file != "__tesh_std_in")
+            create_pipe = false;
+
+        if (create_pipe) {
             cz::Output_File pipe_out;
             if (!cz::create_pipe(pipe_in, &pipe_out))
                 return Error_IO;
