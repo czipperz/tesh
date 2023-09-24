@@ -459,7 +459,7 @@ static void start_execute_pipeline(Shell_State* shell,
             }
         } else {
             // Compound pipeline + subnode.  For example:
-            // `(echo hi | cat)` in `(echo hi | cat) | grep x`.
+            // `(echo hi; cat file)` in `(echo hi; cat file) | grep x`.
             Stdio_State stdio = node->stdio;
             Error error = link_stdio(&stdio, &pipe_in, /*parse_program=*/nullptr, allocator,
                                      program_nodes, p, bind_stdin);
