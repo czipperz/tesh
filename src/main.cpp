@@ -4,7 +4,7 @@
 #include <inttypes.h>
 #include <stdint.h>
 #include <stdio.h>
-#include <Tracy.hpp>
+#include <tracy/Tracy.hpp>
 #include <cz/binary_search.hpp>
 #include <cz/date.hpp>
 #include <cz/dedup.hpp>

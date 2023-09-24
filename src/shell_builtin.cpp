@@ -1,6 +1,6 @@
 #include "shell.hpp"
 
-#include <Tracy.hpp>
+#include <tracy/Tracy.hpp>
 #include <cz/char_type.hpp>
 #include <cz/defer.hpp>
 #include <cz/directory.hpp>

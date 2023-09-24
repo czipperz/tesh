@@ -1,6 +1,6 @@
 #include "shell.hpp"
 
-#include <Tracy.hpp>
+#include <tracy/Tracy.hpp>
 #include "prompt.hpp"
 
 ///////////////////////////////////////////////////////////////////////////////

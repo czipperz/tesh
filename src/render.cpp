@@ -2,7 +2,7 @@
 
 #include <SDL_image.h>
 #include <inttypes.h>
-#include <Tracy.hpp>
+#include <tracy/Tracy.hpp>
 #include <cz/binary_search.hpp>
 #include <cz/date.hpp>
 #include <cz/format.hpp>

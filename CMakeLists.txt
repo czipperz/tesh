@@ -49,13 +49,13 @@ add_dependencies(${PROJECT_NAME} update_global)
 
 # Setup cz.
 # TRACY_INCLUDE_DIRS allows cz to include the Tracy headers.
-set(TRACY_INCLUDE_DIRS ${CMAKE_SOURCE_DIR}/tracy)
+set(TRACY_INCLUDE_DIRS ${CMAKE_SOURCE_DIR}/tracy/public)
 add_subdirectory(cz)
 include_directories(cz/include)
 
 # Setup Tracy.
-add_library(tracy tracy/TracyClient.cpp)
-include_directories(tracy)
+add_library(tracy ${TRACY_INCLUDE_DIRS}/TracyClient.cpp)
+include_directories(${TRACY_INCLUDE_DIRS})
 if (TRACY_ENABLE)
     add_definitions(-DTRACY_ENABLE)
 
