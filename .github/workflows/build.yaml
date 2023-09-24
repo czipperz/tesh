@@ -14,7 +14,7 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y cmake g++ libncurses5 libsdl2-dev libsdl2-image-2.0-0 libsdl2-ttf-2.0-0
+        sudo apt-get install -y cmake g++ libsdl2-dev libsdl2-image-dev libsdl2-ttf-dev
         cmake --version
         g++ --version
 
