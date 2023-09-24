@@ -15,10 +15,6 @@ static void test_append_node(cz::Allocator allocator,
     case Shell_Node::PROGRAM: {
         Parse_Program* program = node->v.program;
         append(allocator, string, cz::many(' ', depth * spd), "program", async_str, ":\n");
-        for (size_t i = 0; i < program->subexprs.len; ++i) {
-            append(allocator, string, cz::many(' ', (depth + 1) * spd), "sub", i, ":\n");
-            test_append_node(allocator, string, program->subexprs[i], depth + 2);
-        }
         for (size_t i = 0; i < program->variable_names.len; ++i) {
             append(allocator, string, cz::many(' ', (depth + 1) * spd), "var", i, ": ",
                    program->variable_names[i], '\n');

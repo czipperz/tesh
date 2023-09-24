@@ -160,30 +160,22 @@ void append_node(cz::Allocator allocator,
     case Shell_Node::PROGRAM: {
         Parse_Program* program = node->v.program;
 
-        for (size_t i = 0; i < program->subexprs.len; ++i) {
-            if (i > 0)
-                cz::append(allocator, string, ' ');
-            cz::append(allocator, string, "__tesh_sub", i, "=$(");
-            append_node(allocator, string, program->subexprs[i], false);
-            cz::append(allocator, string, ")");
-        }
-
         for (size_t i = 0; i < program->variable_names.len; ++i) {
-            if (i > 0 || program->subexprs.len > 0)
+            if (i > 0)
                 cz::append(allocator, string, ' ');
             cz::append(allocator, string, program->variable_names[i], '=',
                        program->variable_values[i]);
         }
 
         if (program->is_sub) {
-            if (program->variable_names.len > 0 || program->subexprs.len > 0)
+            if (program->variable_names.len > 0)
                 cz::append(allocator, string, ' ');
             cz::append(allocator, string, "(");
             append_node(allocator, string, program->v.sub, false);
             cz::append(allocator, string, ")");
         } else {
             for (size_t i = 0; i < program->v.args.len; ++i) {
-                if (i > 0 || program->variable_names.len > 0 || program->subexprs.len > 0)
+                if (i > 0 || program->variable_names.len > 0)
                     cz::append(allocator, string, ' ');
                 cz::append(allocator, string, program->v.args[i]);
             }

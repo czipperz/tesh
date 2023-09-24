@@ -336,11 +336,11 @@ bool tick_builtin(Shell_State* shell,
 
 ///////////////////////////////////////////////////////////////////////////////
 
+/// Either a command line invocation: `program arg1 arg2 arg3` or a subshell: `(...)`.
+/// Also allows for setting environment variables and redirecting to files.
 struct Parse_Program {
     cz::Vector<cz::Str> variable_names;
     cz::Vector<cz::Str> variable_values;
-
-    cz::Vector<Shell_Node*> subexprs;
 
     bool is_sub;
     union {
