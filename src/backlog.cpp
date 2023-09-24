@@ -81,30 +81,42 @@ cz::String dbg_stringify_backlog(Backlog_State* backlog) {
 ///////////////////////////////////////////////////////////////////////////////
 
 static int64_t append_chunk(Backlog_State* backlog, cz::Str text) {
-    if (backlog->length == backlog->max_length)
+    // Truncate `text` if it would overfill the backlog.
+    if (backlog->length + text.len > backlog->max_length) {
+        CZ_DEBUG_ASSERT(backlog->length < backlog->max_length);
+        text.len = backlog->max_length - backlog->length;
+    }
+    if (text.len == 0)
         return 0;
 
-    uint64_t overhang = INNER_INDEX(backlog->length + text.len);
-    uint64_t inner = INNER_INDEX(backlog->length);
-    if (overhang < text.len) {
-        uint64_t underhang = text.len - overhang;
-        if (underhang > 0) {
-            memcpy(backlog->buffers.last() + inner, text.buffer + 0, underhang);
+    uint64_t current_inner = INNER_INDEX(backlog->length);
+    if (current_inner + text.len >= BACKLOG_BUFFER_SIZE) {
+        // Finish off the current buffer.
+        size_t to_write = BACKLOG_BUFFER_SIZE - current_inner;
+        memcpy(backlog->buffers.last() + current_inner, text.buffer, to_write);
 
-            if (backlog->length + underhang == backlog->max_length) {
-                text = text.slice_end(underhang);
-                goto finish;
-            }
+        size_t written = to_write;
+        while (written != text.len) {
+            backlog->buffers.reserve(cz::heap_allocator(), 1);
+            char* buffer = (char*)cz::heap_allocator().alloc({BACKLOG_BUFFER_SIZE, 1});
+            CZ_ASSERT(buffer);
+            backlog->buffers.push(buffer);
+
+            to_write = cz::min(text.len - written, (size_t)BACKLOG_BUFFER_SIZE);
+            memcpy(buffer, text.buffer + written, to_write);
+            written += to_write;
         }
 
-        backlog->buffers.reserve(cz::heap_allocator(), 1);
-        char* buffer = (char*)cz::heap_allocator().alloc({BACKLOG_BUFFER_SIZE, 1});
-        CZ_ASSERT(buffer);
-        backlog->buffers.push(buffer);
-
-        memcpy(backlog->buffers.last() + 0, text.buffer + underhang, overhang);
+        if (backlog->length + text.len != backlog->max_length) {
+            // Always need to have a buffer on hand if there is space to grow.
+            backlog->buffers.reserve(cz::heap_allocator(), 1);
+            char* buffer = (char*)cz::heap_allocator().alloc({BACKLOG_BUFFER_SIZE, 1});
+            CZ_ASSERT(buffer);
+            backlog->buffers.push(buffer);
+        }
     } else {
-        memcpy(backlog->buffers.last() + inner, text.buffer, text.len);
+        // Just stick everything in the current buffer since there will still be space left.
+        memcpy(backlog->buffers.last() + current_inner, text.buffer, text.len);
     }
 
 finish:
@@ -119,6 +131,8 @@ finish:
     }
 
     backlog->length += text.len;
+    CZ_DEBUG_ASSERT(backlog->length < backlog->max_length);
+
     return text.len;
 }
 
