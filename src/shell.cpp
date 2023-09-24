@@ -291,9 +291,9 @@ void cleanup_local(Shell_Local* local) {
 }
 
 void cleanup_stdio(Stdio_State* stdio) {
-    close_rc_file(stdio->in_count, stdio->in);
-    close_rc_file(stdio->out_count, stdio->out);
-    close_rc_file(stdio->err_count, stdio->err);
+    close_rc_file(stdio->in.count, stdio->in.file);
+    close_rc_file(stdio->out.count, stdio->out.file);
+    close_rc_file(stdio->err.count, stdio->err.file);
 }
 
 cz::Buffer_Array alloc_arena(Shell_State* shell) {

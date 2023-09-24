@@ -155,13 +155,13 @@ Error start_execute_script(Shell_State* shell,
     running.root.local = &shell->local;
 
 #ifdef _WIN32
-    running.root.stdio.in = running.tty.child_in;
-    running.root.stdio.out = running.tty.child_out;
+    running.root.stdio.in.file = running.tty.child_in;
+    running.root.stdio.out.file = running.tty.child_out;
 #else
-    running.root.stdio.in.handle = running.tty.child_bi;
-    running.root.stdio.out.handle = running.tty.child_bi;
+    running.root.stdio.in.file.handle = running.tty.child_bi;
+    running.root.stdio.out.file.handle = running.tty.child_bi;
 #endif
-    running.root.stdio.err = running.root.stdio.out;  // stderr = stdout at top level
+    running.root.stdio.err.file = running.root.stdio.out.file;  // stderr = stdout at top level
 
     Error error = start_execute_node(shell, running.tty, backlog, &running.root, root);
     if (error != Error_Success) {
@@ -227,12 +227,12 @@ bool finish_line(Shell_State* shell,
     Error error = start_execute_line(shell, tty, node, backlog, line, background);
     if (error != Error_Success) {
         Process_Output err = {};
-        if (node->stdio.err_type == File_Type_Terminal) {
+        if (node->stdio.err.type == File_Type_Terminal) {
             err.type = Process_Output::BACKLOG;
             err.v.backlog = backlog;
         } else {
             err.type = Process_Output::FILE;
-            err.v.file = node->stdio.err;
+            err.v.file = node->stdio.err.file;
         }
 
         (void)err.write(cz::format(temp_allocator, "tesh: Error: ", error_string(error), "\n"));
@@ -452,12 +452,12 @@ static void start_execute_pipeline(Shell_State* shell,
         if (error != Error_Success) {
         handle_error:
             Process_Output err = {};
-            if (node->stdio.err_type == File_Type_Terminal) {
+            if (node->stdio.err.type == File_Type_Terminal) {
                 err.type = Process_Output::BACKLOG;
                 err.v.backlog = backlog;
             } else {
                 err.type = Process_Output::FILE;
-                err.v.file = node->stdio.err;
+                err.v.file = node->stdio.err.file;
             }
 
             (void)err.write(cz::format(temp_allocator, "tesh: Error: ", error_string(error), "\n"));
@@ -517,74 +517,70 @@ static Error link_stdio(Stdio_State* stdio,
 
     // Bind stdin.
     if (parse_program.in_file != "__tesh_std_in") {
-        stdio->in_type = File_Type_File;
-        stdio->in = {};
-        stdio->in_count = nullptr;
+        stdio->in.type = File_Type_File;
+        stdio->in.file = {};
+        stdio->in.count = nullptr;
     } else if (p > 0) {
         if (pipe_in->is_open()) {
-            stdio->in_type = File_Type_Pipe;
-            stdio->in = *pipe_in;
-            stdio->in_count = allocator.alloc<size_t>();
-            *stdio->in_count = 1;
+            stdio->in.type = File_Type_Pipe;
+            stdio->in.file = *pipe_in;
+            stdio->in.count = allocator.alloc<size_t>();
+            *stdio->in.count = 1;
         } else {
-            stdio->in_type = File_Type_None;
-            stdio->in = {};
-            stdio->in_count = nullptr;
+            stdio->in.type = File_Type_None;
+            stdio->in.file = {};
+            stdio->in.count = nullptr;
         }
     } else if (!bind_stdin) {
-        stdio->in_type = File_Type_None;
-        stdio->in = {};
-        stdio->in_count = nullptr;
+        stdio->in.type = File_Type_None;
+        stdio->in.file = {};
+        stdio->in.count = nullptr;
     } else {
-        if (stdio->in_count)
-            ++*stdio->in_count;
+        if (stdio->in.count)
+            ++*stdio->in.count;
     }
     *pipe_in = {};
 
     // Bind stdout.
     if (parse_program.out_file != "__tesh_std_out") {
         if (parse_program.out_file == "__tesh_std_err") {
-            stdio->out_type = old_stdio.err_type;
             stdio->out = old_stdio.err;
-            stdio->out_count = old_stdio.err_count;
-            if (stdio->out_count)
-                ++*stdio->out_count;
+            if (stdio->out.count)
+                ++*stdio->out.count;
         } else {
-            stdio->out_type = File_Type_File;
-            stdio->out = {};
-            stdio->out_count = nullptr;
+            stdio->out.type = File_Type_File;
+            stdio->out.file = {};
+            stdio->out.count = nullptr;
         }
     } else if (p + 1 < program_nodes.len) {
-        stdio->out_type = File_Type_Pipe;
+        stdio->out.type = File_Type_Pipe;
     } else {
-        if (stdio->out_count)
-            ++*stdio->out_count;
+        if (stdio->out.count)
+            ++*stdio->out.count;
     }
 
     // Bind stderr.
     if (parse_program.err_file != "__tesh_std_err") {
         if (parse_program.err_file == "__tesh_std_out") {
             if (p + 1 < program_nodes.len) {
-                stdio->err_type = File_Type_Pipe;
+                stdio->err.type = File_Type_Pipe;
             } else {
-                stdio->err_type = old_stdio.out_type;
                 stdio->err = old_stdio.out;
-                stdio->err_count = old_stdio.out_count;
-                if (stdio->err_count)
-                    ++*stdio->err_count;
+                if (stdio->err.count)
+                    ++*stdio->err.count;
             }
         } else {
-            stdio->err_type = File_Type_File;
-            stdio->err = {};
-            stdio->err_count = nullptr;
+            stdio->err.type = File_Type_File;
+            stdio->err.file = {};
+            stdio->err.count = nullptr;
         }
     } else {
-        if (stdio->err_count)
-            ++*stdio->err_count;
+        if (stdio->err.count)
+            ++*stdio->err.count;
     }
 
     // Make pipes for the next iteration.
-    if ((stdio->out_type == File_Type_Pipe || stdio->err_type == File_Type_Pipe) &&
+    if ((stdio->out.type == File_Type_Pipe || stdio->err.type == File_Type_Pipe) &&
         (p + 1 < program_nodes.len)) {
         Shell_Node* next = &program_nodes[p + 1];
         CZ_ASSERT(next->type == Shell_Node::PROGRAM);  // TODO
@@ -600,14 +596,14 @@ static Error link_stdio(Stdio_State* stdio,
 
             size_t* count = allocator.alloc<size_t>();
             *count = 0;
-            if (stdio->out_type == File_Type_Pipe) {
-                stdio->out = pipe_out;
-                stdio->out_count = count;
+            if (stdio->out.type == File_Type_Pipe) {
+                stdio->out.file = pipe_out;
+                stdio->out.count = count;
                 ++*count;
             }
-            if (stdio->err_type == File_Type_Pipe) {
-                stdio->err = pipe_out;
-                stdio->err_count = count;
+            if (stdio->err.type == File_Type_Pipe) {
+                stdio->err.file = pipe_out;
+                stdio->err.count = count;
                 ++*count;
             }
         }
@@ -622,51 +618,51 @@ static void open_redirected_files(Stdio_State* stdio,
                                   cz::Allocator allocator,
                                   Shell_Local* local) {
     cz::String path = {};
-    if (stdio->in_type == File_Type_File && !parse_program.in_file.starts_with("__tesh_std_")) {
+    if (stdio->in.type == File_Type_File && !parse_program.in_file.starts_with("__tesh_std_")) {
         if (parse_program.in_file == "/dev/null") {
-            stdio->in = null_input;
-            stdio->in_count = &null_input_count;
-            ++*stdio->in_count;
+            stdio->in.file = null_input;
+            stdio->in.count = &null_input_count;
+            ++*stdio->in.count;
         } else if (error_path->len == 0) {
             path.len = 0;
             cz::path::make_absolute(parse_program.in_file, get_wd(local), temp_allocator, &path);
-            if (stdio->in.open(path.buffer)) {
-                stdio->in_count = allocator.alloc<size_t>();
-                *stdio->in_count = 1;
+            if (stdio->in.file.open(path.buffer)) {
+                stdio->in.count = allocator.alloc<size_t>();
+                *stdio->in.count = 1;
             } else {
                 *error_path = parse_program.in_file;
             }
         }
     }
 
-    if (stdio->out_type == File_Type_File && !parse_program.out_file.starts_with("__tesh_std_")) {
+    if (stdio->out.type == File_Type_File && !parse_program.out_file.starts_with("__tesh_std_")) {
         if (parse_program.out_file == "/dev/null") {
-            stdio->out = null_output;
-            stdio->out_count = &null_output_count;
-            ++*stdio->out_count;
+            stdio->out.file = null_output;
+            stdio->out.count = &null_output_count;
+            ++*stdio->out.count;
         } else if (error_path->len == 0) {
             path.len = 0;
             cz::path::make_absolute(parse_program.out_file, get_wd(local), temp_allocator, &path);
-            if (stdio->out.open(path.buffer)) {
-                stdio->out_count = allocator.alloc<size_t>();
-                *stdio->out_count = 1;
+            if (stdio->out.file.open(path.buffer)) {
+                stdio->out.count = allocator.alloc<size_t>();
+                *stdio->out.count = 1;
             } else {
                 *error_path = parse_program.out_file;
             }
         }
     }
 
-    if (stdio->err_type == File_Type_File && !parse_program.err_file.starts_with("__tesh_std_")) {
+    if (stdio->err.type == File_Type_File && !parse_program.err_file.starts_with("__tesh_std_")) {
         if (parse_program.out_file == "/dev/null") {
-            stdio->err = null_output;
-            stdio->err_count = &null_output_count;
-            ++*stdio->err_count;
+            stdio->err.file = null_output;
+            stdio->err.count = &null_output_count;
+            ++*stdio->err.count;
         } else if (error_path->len == 0) {
             path.len = 0;
             cz::path::make_absolute(parse_program.err_file, get_wd(local), temp_allocator, &path);
-            if (stdio->err.open(path.buffer)) {
-                stdio->err_count = allocator.alloc<size_t>();
-                *stdio->err_count = 1;
+            if (stdio->err.file.open(path.buffer)) {
+                stdio->err.count = allocator.alloc<size_t>();
+                *stdio->err.count = 1;
             } else {
                 *error_path = parse_program.err_file;
             }
@@ -773,14 +769,14 @@ static Error run_program(Shell_State* shell,
     make_builtin:
         setup_builtin(program, allocator, stdio);
 
-        if (stdio.in_type == File_Type_Pipe && !stdio.in.set_non_blocking())
+        if (stdio.in.type == File_Type_Pipe && !stdio.in.file.set_non_blocking())
             return Error_IO;
-        if (stdio.out_type == File_Type_Pipe && !stdio.out.set_non_blocking())
+        if (stdio.out.type == File_Type_Pipe && !stdio.out.file.set_non_blocking())
             return Error_IO;
-        if (stdio.err_type == File_Type_Pipe && !stdio.err.set_non_blocking())
+        if (stdio.err.type == File_Type_Pipe && !stdio.err.file.set_non_blocking())
             return Error_IO;
 
-        if (stdio.in_type == File_Type_Terminal) {
+        if (stdio.in.type == File_Type_Terminal) {
             program->v.builtin.in.polling = true;
 #ifdef _WIN32
             program->v.builtin.in.file = tty.child_in;
@@ -789,24 +785,24 @@ static Error run_program(Shell_State* shell,
 #endif
         } else {
             program->v.builtin.in.polling = false;
-            program->v.builtin.in.file = stdio.in;
-            program->v.builtin.in_count = stdio.in_count;
+            program->v.builtin.in.file = stdio.in.file;
+            program->v.builtin.in_count = stdio.in.count;
         }
-        if (stdio.out_type == File_Type_Terminal) {
+        if (stdio.out.type == File_Type_Terminal) {
             program->v.builtin.out.type = Process_Output::BACKLOG;
             program->v.builtin.out.v.backlog = backlog;
         } else {
             program->v.builtin.out.type = Process_Output::FILE;
-            program->v.builtin.out.v.file = stdio.out;
-            program->v.builtin.out_count = stdio.out_count;
+            program->v.builtin.out.v.file = stdio.out.file;
+            program->v.builtin.out_count = stdio.out.count;
         }
-        if (stdio.err_type == File_Type_Terminal) {
+        if (stdio.err.type == File_Type_Terminal) {
             program->v.builtin.err.type = Process_Output::BACKLOG;
             program->v.builtin.err.v.backlog = backlog;
         } else {
             program->v.builtin.err.type = Process_Output::FILE;
-            program->v.builtin.err.v.file = stdio.err;
-            program->v.builtin.err_count = stdio.err_count;
+            program->v.builtin.err.v.file = stdio.err.file;
+            program->v.builtin.err_count = stdio.err.count;
         }
 
         program->v.builtin.args = args.clone(allocator);
@@ -832,63 +828,63 @@ static Error run_program(Shell_State* shell,
 #endif
 
     // If spawning an actual program, we need to open the null file instead of passing a null fd.
-    if (stdio.in_type == File_Type_None) {
-        stdio.in_type = File_Type_File;
-        stdio.in = null_input;
-        stdio.in_count = &null_input_count;
-        ++*stdio.in_count;
+    if (stdio.in.type == File_Type_None) {
+        stdio.in.type = File_Type_File;
+        stdio.in.file = null_input;
+        stdio.in.count = &null_input_count;
+        ++*stdio.in.count;
     }
-    if (stdio.out_type == File_Type_None) {
-        stdio.out_type = File_Type_File;
-        stdio.out = null_output;
-        stdio.out_count = &null_output_count;
-        ++*stdio.out_count;
+    if (stdio.out.type == File_Type_None) {
+        stdio.out.type = File_Type_File;
+        stdio.out.file = null_output;
+        stdio.out.count = &null_output_count;
+        ++*stdio.out.count;
     }
-    if (stdio.err_type == File_Type_None) {
-        stdio.err_type = File_Type_File;
-        stdio.err = null_output;
-        stdio.err_count = &null_output_count;
-        ++*stdio.err_count;
+    if (stdio.err.type == File_Type_None) {
+        stdio.err.type = File_Type_File;
+        stdio.err.file = null_output;
+        stdio.err.count = &null_output_count;
+        ++*stdio.err.count;
     }
 
     cz::Process_Options options;
 #ifdef _WIN32
-    if (stdio.in_type == File_Type_Terminal && stdio.out_type == File_Type_Terminal &&
-        stdio.err_type == File_Type_Terminal) {
+    if (stdio.in.type == File_Type_Terminal && stdio.out.type == File_Type_Terminal &&
+        stdio.err.type == File_Type_Terminal) {
         // TODO: test pseudo console + stdio.
         options.pseudo_console = tty.pseudo_console;
     } else {
-        if (stdio.in_type == File_Type_Terminal) {
+        if (stdio.in.type == File_Type_Terminal) {
             options.std_in = tty.child_in;
         } else {
-            options.std_in = stdio.in;
+            options.std_in = stdio.in.file;
         }
-        if (stdio.out_type == File_Type_Terminal) {
+        if (stdio.out.type == File_Type_Terminal) {
             options.std_out = tty.child_out;
         } else {
-            options.std_out = stdio.out;
+            options.std_out = stdio.out.file;
         }
-        if (stdio.err_type == File_Type_Terminal) {
+        if (stdio.err.type == File_Type_Terminal) {
             options.std_err = tty.child_out;  // yes, out!
         } else {
-            options.std_err = stdio.err;
+            options.std_err = stdio.err.file;
         }
     }
 #else
-    if (stdio.in_type == File_Type_Terminal) {
+    if (stdio.in.type == File_Type_Terminal) {
         options.std_in.handle = tty.child_bi;
     } else {
-        options.std_in = stdio.in;
+        options.std_in = stdio.in.file;
     }
-    if (stdio.out_type == File_Type_Terminal) {
+    if (stdio.out.type == File_Type_Terminal) {
         options.std_out.handle = tty.child_bi;
     } else {
-        options.std_out = stdio.out;
+        options.std_out = stdio.out.file;
     }
-    if (stdio.err_type == File_Type_Terminal) {
+    if (stdio.err.type == File_Type_Terminal) {
         options.std_err.handle = tty.child_bi;
     } else {
-        options.std_err = stdio.err;
+        options.std_err = stdio.err.file;
     }
 #endif
 
@@ -912,9 +908,9 @@ static Error run_program(Shell_State* shell,
     if (options.std_err.is_open() && !options.std_err.set_non_inheritable())
         return Error_IO;
 
-    close_rc_file(stdio.in_count, stdio.in);
-    close_rc_file(stdio.out_count, stdio.out);
-    close_rc_file(stdio.err_count, stdio.err);
+    close_rc_file(stdio.in.count, stdio.in.file);
+    close_rc_file(stdio.out.count, stdio.out.file);
+    close_rc_file(stdio.err.count, stdio.err.file);
 
     if (!result)
         return Error_IO;

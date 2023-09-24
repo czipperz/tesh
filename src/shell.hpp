@@ -172,16 +172,21 @@ enum File_Type {
     File_Type_None,
 };
 
+struct Input_Object {
+    File_Type type = File_Type_Terminal;
+    cz::Input_File file;
+    size_t* count;
+};
+
+struct Output_Object {
+    File_Type type = File_Type_Terminal;
+    cz::Output_File file;
+    size_t* count;
+};
+
 struct Stdio_State {
-    File_Type in_type = File_Type_Terminal;
-    File_Type out_type = File_Type_Terminal;
-    File_Type err_type = File_Type_Terminal;
-    cz::Input_File in;
-    cz::Output_File out;
-    cz::Output_File err;
-    size_t* in_count;
-    size_t* out_count;
-    size_t* err_count;
+    Input_Object in;
+    Output_Object out, err;
 };
 
 void cleanup_stdio(Stdio_State* stdio);
