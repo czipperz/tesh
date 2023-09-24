@@ -1,4 +1,4 @@
-name: Build with CMake and GCC
+name: Build
 
 on:
   push:
@@ -11,13 +11,13 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v2
 
-    - name: Install CMake and GCC
+    - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y cmake g++
+        sudo apt-get install -y cmake g++ libncurses5 libsdl2-dev libsdl2-image-2.0-0 libsdl2-ttf-2.0-0
         cmake --version
         g++ --version
 
-    - name: Run build-debug.sh
+    - name: ./build-debug
       run: |
-        ./build-debug.sh
+        ./build-debug
