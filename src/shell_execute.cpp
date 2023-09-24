@@ -32,7 +32,7 @@ static void start_execute_pipeline(Shell_State* shell,
 static void expand_file_argument(cz::Str* path, Shell_Local* local, cz::Allocator allocator);
 static Error link_stdio(Stdio_State* stdio,
                         cz::Input_File* pipe_in,
-                        const Parse_Program& parse_program,
+                        const Parse_Program* parse_program,
                         cz::Allocator allocator,
                         cz::Slice<Shell_Node> program_nodes,
                         size_t p,
@@ -448,7 +448,7 @@ static void start_execute_pipeline(Shell_State* shell,
 
         Stdio_State stdio = node->stdio;
         Error error =
-            link_stdio(&stdio, &pipe_in, parse_program, allocator, program_nodes, p, bind_stdin);
+            link_stdio(&stdio, &pipe_in, &parse_program, allocator, program_nodes, p, bind_stdin);
         if (error != Error_Success) {
         handle_error:
             Process_Output err = {};
@@ -492,7 +492,7 @@ static void expand_file_argument(cz::Str* path, Shell_Local* local, cz::Allocato
 
 static Error link_stdio(Stdio_State* stdio,
                         cz::Input_File* pipe_in,
-                        const Parse_Program& parse_program,
+                        const Parse_Program* parse_program,
                         cz::Allocator allocator,
                         cz::Slice<Shell_Node> program_nodes,
                         size_t p,
@@ -500,7 +500,7 @@ static Error link_stdio(Stdio_State* stdio,
     Stdio_State old_stdio = *stdio;
 
     // Bind stdin.
-    if (parse_program.in_file != "__tesh_std_in") {
+    if (parse_program && parse_program->in_file != "__tesh_std_in") {
         stdio->in.type = File_Type_File;
         stdio->in.file = {};
         stdio->in.count = nullptr;
@@ -526,8 +526,8 @@ static Error link_stdio(Stdio_State* stdio,
     *pipe_in = {};
 
     // Bind stdout.
-    if (parse_program.out_file != "__tesh_std_out") {
-        if (parse_program.out_file == "__tesh_std_err") {
+    if (parse_program && parse_program->out_file != "__tesh_std_out") {
+        if (parse_program->out_file == "__tesh_std_err") {
             stdio->out = old_stdio.err;
             if (stdio->out.count)
                 ++*stdio->out.count;
@@ -544,8 +544,8 @@ static Error link_stdio(Stdio_State* stdio,
     }
 
     // Bind stderr.
-    if (parse_program.err_file != "__tesh_std_err") {
-        if (parse_program.err_file == "__tesh_std_out") {
+    if (parse_program && parse_program->err_file != "__tesh_std_err") {
+        if (parse_program->err_file == "__tesh_std_out") {
             if (p + 1 < program_nodes.len) {
                 stdio->err.type = File_Type_Pipe;
             } else {
