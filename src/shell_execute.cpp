@@ -643,7 +643,7 @@ static void open_redirected_files(Stdio_State* stdio,
     }
 
     if (stdio->err.type == File_Type_File && !parse_program.err_file.starts_with("__tesh_std_")) {
-        if (parse_program.out_file == "/dev/null") {
+        if (parse_program.err_file == "/dev/null") {
             stdio->err.file = null_output;
             stdio->err.count = &null_output_count;
             ++*stdio->err.count;
