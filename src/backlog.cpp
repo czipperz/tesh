@@ -111,8 +111,9 @@ static int64_t append_chunk(Backlog_State* backlog, cz::Str text) {
             written += to_write;
         }
 
-        if (backlog->length + text.len != backlog->max_length) {
-            // Always need to have a buffer on hand if there is space to grow.
+        // Always need to have a buffer on hand if there is space to grow.
+        if (backlog->length + text.len != backlog->max_length &&
+            INNER_INDEX(backlog->length + text.len) == 0) {
             backlog_push_buffer(backlog);
         }
     } else {
