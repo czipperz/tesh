@@ -44,6 +44,10 @@
 // Forward declarations
 ///////////////////////////////////////////////////////////////////////////////
 
+static void inject_working_directory(Shell_Local* local);
+static void initialize_history_path(Prompt_State* command_prompt, Shell_Local* local);
+static void initialize_font(Font_State* font, double dpi_scale);
+
 static Backlog_State* push_backlog(Shell_State* shell, cz::Vector<Backlog_State*>* backlogs);
 static void scroll_down1(Render_State* rend, int lines);
 static void scroll_down(Render_State* rend, int lines);
@@ -2915,7 +2919,7 @@ static void load_default_configuration() {
     cfg.selected_completion_fg_color = 201;
 }
 
-static void load_environment_variables(Shell_State* shell) {
+static void load_environment_variables(Shell_Local* local) {
     ZoneScoped;
 
 #ifdef _WIN32
@@ -2935,8 +2939,8 @@ static void load_environment_variables(Shell_State* shell) {
                 // Windows special environment variables have
                 // a = as the first character so ignore those.
                 if (key.len > 0) {
-                    set_var(&shell->local, key, value);
-                    make_env_var(&shell->local, key);
+                    set_var(local, key, value);
+                    make_env_var(local, key);
                 }
             }
         }
@@ -2944,11 +2948,11 @@ static void load_environment_variables(Shell_State* shell) {
 
     // Set HOME to the user home directory.
     cz::Str temp;
-    if (!get_var(&shell->local, "HOME", &temp)) {
+    if (!get_var(local, "HOME", &temp)) {
         cz::String home = {};
         if (cz::env::get_home(cz::heap_allocator(), &home)) {
-            set_var(&shell->local, "HOME", home);
-            make_env_var(&shell->local, "HOME");
+            set_var(local, "HOME", home);
+            make_env_var(local, "HOME");
         }
     }
 #else
@@ -2958,8 +2962,8 @@ static void load_environment_variables(Shell_State* shell) {
         cz::Str key, value;
         if (line.split_excluding('=', &key, &value)) {
             if (key.len > 0) {
-                set_var(&shell->local, key, value);
-                make_env_var(&shell->local, key);
+                set_var(local, key, value);
+                make_env_var(local, key);
             }
         }
     }
@@ -3005,26 +3009,13 @@ int actual_main(int argc, char** argv) {
     search.prompt.prefix = "SEARCH> ";
     rend.complete_redraw = true;
 
-    rend.font.size = cfg.default_font_size;
-
     if (argc == 2) {
         cz::set_working_directory(argv[1]);
     }
 
-    {
-        cz::String working_directory = {};
-        if (!cz::get_working_directory(temp_allocator, &working_directory)) {
-            fprintf(stderr, "Failed to get working directory\n");
-            return 1;
-        }
-        set_wd(&shell.local, working_directory);
-    }
-
-    load_environment_variables(&shell);
-    cz::Str home = {};
-    if (get_var(&shell.local, "HOME", &home)) {
-        command_prompt.history_path = cz::format(cz::heap_allocator(), home, "/.tesh_history");
-    }
+    inject_working_directory(&shell.local);
+    load_environment_variables(&shell.local);
+    initialize_history_path(&command_prompt, &shell.local);
 
     create_null_file();
 
@@ -3067,14 +3058,8 @@ int actual_main(int argc, char** argv) {
 
     load_cursors(&window);
 
-    resize_font(rend.font.size, window.dpi_scale, &rend.font);
+    initialize_font(&rend.font, window.dpi_scale);
     rend.complete_redraw = true;
-
-    // Old versions of SDL_ttf don't parse FontLineSkip correctly so we manually set it.
-    rend.font.height =
-        cz::max(TTF_FontLineSkip(rend.font.sdl), (int)(TTF_FontHeight(rend.font.sdl) * 1.05f));
-    rend.font.width = 10;
-    TTF_GlyphMetrics(rend.font.sdl, ' ', nullptr, nullptr, nullptr, nullptr, &rend.font.width);
 
     {
         int w, h;
@@ -3137,6 +3122,33 @@ int actual_main(int argc, char** argv) {
     }
 
     return 0;
+}
+
+static void inject_working_directory(Shell_Local* local) {
+    cz::String working_directory = {};
+    if (!cz::get_working_directory(temp_allocator, &working_directory)) {
+        fprintf(stderr, "Error: Failed to get working directory\n");
+        set_wd(local, "/");  // Hopefully this is ok lol.
+        return;
+    }
+    set_wd(local, working_directory);
+}
+
+static void initialize_history_path(Prompt_State* command_prompt, Shell_Local* local) {
+    cz::Str home = {};
+    if (get_var(local, "HOME", &home)) {
+        command_prompt->history_path = cz::format(permanent_allocator, home, "/.tesh_history");
+    }
+}
+
+static void initialize_font(Font_State* font, double dpi_scale) {
+    font->size = cfg.default_font_size;
+    resize_font(font->size, dpi_scale, font);
+
+    // Old versions of SDL_ttf don't parse FontLineSkip correctly so we manually set it.
+    font->height = cz::max(TTF_FontLineSkip(font->sdl), (int)(TTF_FontHeight(font->sdl) * 1.05f));
+    font->width = 10;
+    TTF_GlyphMetrics(font->sdl, ' ', nullptr, nullptr, nullptr, nullptr, &font->width);
 }
 
 static Backlog_State* push_backlog(Shell_State* shell, cz::Vector<Backlog_State*>* backlogs) {
