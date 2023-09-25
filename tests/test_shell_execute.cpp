@@ -28,9 +28,6 @@ static void setup_environment() {
     shell.height = 100;
     cfg.windows_wide_terminal = true;
     cfg.builtin_level = 2;
-
-    rend.attached_outer = -1;
-    rend.selected_outer = -1;
 }
 
 static void define_test(cz::Str command, int expected_exit_code, cz::Str expected_output) {

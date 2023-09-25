@@ -3052,9 +3052,6 @@ int actual_main(int argc, char** argv) {
         shell.height = h / rend.font.height;
     }
 
-    rend.attached_outer = -1;
-    rend.selected_outer = -1;
-
     {
         // Start running ~/.teshrc.
         cz::String source_command = cz::format(temp_allocator, "source ~/.teshrc");
