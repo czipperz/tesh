@@ -74,7 +74,7 @@ static void ensure_end_of_selected_process_on_screen(Render_State* rend,
                                                      bool gotostart);
 
 static void auto_scroll_start_paging(Render_State* rend) {
-    if (rend->window_rows <= 3)
+    if (rend->grid_rows <= 3)
         return;
 
     Visual_Point backup = rend->backlog_start;
@@ -85,9 +85,9 @@ static void auto_scroll_start_paging(Render_State* rend) {
     top_prompt.outer = (rend->visbacklogs.len == 0 ? 0 : rend->visbacklogs.len - 1);
 
     rend->backlog_start = top_prompt;
-    scroll_down1(rend, rend->window_rows - 3);
+    scroll_down1(rend, rend->grid_rows - 3);
 
-    if (rend->backlog_start.y + 3 >= rend->window_rows) {
+    if (rend->backlog_start.y + 3 >= rend->grid_rows) {
         // More than one page of content so stop auto paging.
         rend->backlog_start = top_prompt;
         rend->complete_redraw = true;
@@ -117,13 +117,13 @@ static void render_frame(SDL_Window* window,
     std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
 
     SDL_Surface* window_surface = SDL_GetWindowSurface(window);
-    rend->window_rows = window_surface->h / rend->font_height;
-    rend->window_rows_ru = (window_surface->h + rend->font_height - 1) / rend->font_height;
-    rend->window_cols = window_surface->w / rend->font_width;
+    rend->grid_rows = window_surface->h / rend->font_height;
+    rend->grid_rows_ru = (window_surface->h + rend->font_height - 1) / rend->font_height;
+    rend->grid_cols = window_surface->w / rend->font_width;
 
-    if (rend->window_rows != shell->height || rend->window_cols != shell->width) {
-        shell->height = rend->window_rows;
-        shell->width = rend->window_cols;
+    if (rend->grid_rows != shell->height || rend->grid_cols != shell->width) {
+        shell->height = rend->grid_rows;
+        shell->width = rend->grid_cols;
         for (size_t i = 0; i < shell->scripts.len; ++i) {
             Running_Script* script = &shell->scripts[i];
             set_window_size(&script->tty, shell->width, shell->height);
@@ -148,7 +148,7 @@ static void render_frame(SDL_Window* window,
 
     if (!rend->grid_is_valid) {
         rend->grid.len = 0;
-        size_t new_len = rend->window_rows_ru * rend->window_cols;
+        size_t new_len = rend->grid_rows_ru * rend->grid_cols;
         rend->grid.reserve_exact(cz::heap_allocator(), new_len);
         rend->grid.len = new_len;
         rend->grid_is_valid = true;
@@ -253,12 +253,12 @@ static void scroll_down1(Render_State* rend, int lines) {
         while (1) {
             if (start->inner >= end) {
                 if (start->inner == end && end > 0 && backlog->get(end - 1) != '\n') {
-                    coord_trans(start, rend->window_cols, '\n');
+                    coord_trans(start, rend->grid_cols, '\n');
                     if (start->y >= desired_y)
                         break;
                 }
 
-                coord_trans(start, rend->window_cols, '\n');
+                coord_trans(start, rend->grid_cols, '\n');
 
                 start->outer++;
                 start->inner = 0;
@@ -276,7 +276,7 @@ static void scroll_down1(Render_State* rend, int lines) {
 
             char seq[5] = {backlog->get(start->inner)};
             make_backlog_code_point(seq, backlog, start->inner);
-            coord_trans(start, rend->window_cols, seq[0]);
+            coord_trans(start, rend->grid_cols, seq[0]);
             start->inner += strlen(seq) - 1;
 
             if (start->y >= desired_y) {
@@ -374,8 +374,8 @@ static void scroll_up(Render_State* rend, int lines) {
                 actual_column += delta;
 
                 // If trip line boundary then record it.
-                if (visual_column >= rend->window_cols) {
-                    visual_column -= rend->window_cols;
+                if (visual_column >= rend->grid_cols) {
+                    visual_column -= rend->grid_cols;
                     visual_line_starts[vlsi++] = iter;
                     if (vlsi == lines)
                         vlsi = 0;
@@ -432,11 +432,11 @@ void clear_screen(Render_State* rend, Shell_State* shell, Prompt_State* prompt, 
 }
 
 static void ensure_prompt_on_screen(Render_State* rend) {
-    if (rend->window_rows > 3) {
+    if (rend->grid_rows > 3) {
         Visual_Point backup = rend->backlog_start;
         rend->backlog_start = {};
         rend->backlog_start.outer = rend->visbacklogs.len;
-        scroll_up(rend, rend->window_rows - 3);
+        scroll_up(rend, rend->grid_rows - 3);
         if (rend->backlog_start.outer > backup.outer)
             rend->complete_redraw = true;
         else if (rend->backlog_start.outer == backup.outer &&
@@ -1236,7 +1236,7 @@ static void ensure_selected_process_on_screen(Render_State* rend) {
 static void scroll_to_end_of_selected_process(Render_State* rend, uint64_t selected_outer) {
     rend->backlog_start = {};
     rend->backlog_start.outer = (selected_outer == -1 ? rend->visbacklogs.len : selected_outer + 1);
-    int lines = cz::max(rend->window_rows, 6) - 3;
+    int lines = cz::max(rend->grid_rows, 6) - 3;
     scroll_up(rend, lines);
 }
 
@@ -1273,7 +1273,7 @@ static bool is_selected_backlog_on_screen(Render_State* rend, uint64_t selected_
         return false;
 
     Visual_Point backup = rend->backlog_start;
-    scroll_down(rend, rend->window_rows - 1);
+    scroll_down(rend, rend->grid_rows - 1);
     Visual_Point new_start = rend->backlog_start;
     rend->backlog_start = backup;
 
@@ -1288,18 +1288,18 @@ static bool handle_scroll_commands(Shell_State* shell,
                                    SDL_Keycode key) {
     Scroll_Mode scroll_mode = MANUAL_SCROLL;
     if ((mod == 0 && key == SDLK_PAGEDOWN) || (mod == KMOD_CTRL && key == SDLK_v)) {
-        int lines = cz::max(rend->window_rows, 6) - 3;
+        int lines = cz::max(rend->grid_rows, 6) - 3;
         scroll_down(rend, lines);
     } else if ((mod == 0 && key == SDLK_PAGEUP) || (mod == KMOD_ALT && key == SDLK_v)) {
-        int lines = cz::max(rend->window_rows, 6) - 3;
+        int lines = cz::max(rend->grid_rows, 6) - 3;
         scroll_up(rend, lines);
     } else if ((mod == KMOD_CTRL && key == SDLK_d) &&
                ((rend->attached_outer == -1 && prompt->text.len == 0) ||
                 (rend->scroll_mode == MANUAL_SCROLL || rend->scroll_mode == PROMPT_SCROLL))) {
-        int lines = rend->window_rows / 2;
+        int lines = rend->grid_rows / 2;
         scroll_down(rend, lines);
     } else if (mod == KMOD_CTRL && key == SDLK_u) {
-        int lines = rend->window_rows / 2;
+        int lines = rend->grid_rows / 2;
         scroll_up(rend, lines);
     } else if (mod == KMOD_ALT && key == SDLK_n) {
         scroll_down(rend, 1);
@@ -1857,7 +1857,7 @@ static void set_initial_search_position(Search_State* search, Render_State* rend
         search->inner = rend->backlog_start.inner;
     } else {
         Visual_Point backup = rend->backlog_start;
-        scroll_down1(rend, rend->window_rows);
+        scroll_down1(rend, rend->grid_rows);
 
         search->outer = rend->backlog_start.outer;
         search->inner = rend->backlog_start.inner;
@@ -1985,7 +1985,7 @@ finish_search:
         rend->backlog_start.outer = (search->outer != rend->visbacklogs.len ? search->outer : -1);
         rend->backlog_start.inner = search->inner;
         if (is_forward) {
-            int lines = cz::max(rend->window_rows, 6) - 3;
+            int lines = cz::max(rend->grid_rows, 6) - 3;
             scroll_up(rend, lines);
             if (visual_point_compare(backup, rend->backlog_start) > 0)
                 rend->backlog_start = backup;
@@ -2270,7 +2270,7 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
 
                 rend->selected_outer = rend->attached_outer;
                 rend->scroll_mode = AUTO_SCROLL;
-                int lines = cz::max(rend->window_rows, 3) - 3;
+                int lines = cz::max(rend->grid_rows, 3) - 3;
                 scroll_up(rend, lines);
                 break;
             }
@@ -2770,7 +2770,7 @@ void reorder_attached_to_last(Render_State* rend) {
     rend->selected_outer = rend->attached_outer;
     rend->backlog_start = {};
     rend->backlog_start.outer = rend->visbacklogs.len;
-    int lines = cz::max(rend->window_rows, 3) - 3;
+    int lines = cz::max(rend->grid_rows, 3) - 3;
     scroll_up(rend, lines);
 }
 
@@ -3172,7 +3172,7 @@ static Visual_Tile visual_tile_at(Render_State* rend, int x, int y) {
     CZ_DEBUG_ASSERT(rend->grid_is_valid);
     int row = y / rend->font_height;
     int column = x / rend->font_width;
-    return rend->grid[row * rend->window_cols + column];
+    return rend->grid[row * rend->grid_cols + column];
 }
 
 static Visual_Tile visual_tile_at_cursor(Render_State* rend) {

@@ -70,7 +70,7 @@ void resize_font(int font_size, Render_State* rend) {
     ZoneScoped;
     TTF_Font* new_font = NULL;
     SDL_RWops* font_mem;
-    int ptsize = (font_size * rend->dpi_scale);
+    int ptsize = (int)(font_size * rend->dpi_scale);
     if (cfg.font_path.len > 0) {
         new_font = TTF_OpenFont(cfg.font_path.buffer, ptsize);
     }
@@ -170,14 +170,14 @@ bool render_code_point(SDL_Surface* window_surface,
                        const char seq[5],
                        bool set_tile) {
     if (set_tile) {
-        size_t index = point->y * rend->window_cols + point->x;
+        size_t index = point->y * rend->grid_cols + point->x;
         if (index < rend->grid.len) {
             Visual_Tile* tile = &rend->grid[index];
             tile->outer = point->outer + 1;
             tile->inner = point->inner;
 
             if (seq[0] == '\n') {
-                for (int x = point->x + 1; x < rend->window_cols; ++x) {
+                for (int x = point->x + 1; x < rend->grid_cols; ++x) {
                     ++tile;
                     tile->outer = point->outer + 1;
                     tile->inner = point->inner;
@@ -211,7 +211,7 @@ bool render_code_point(SDL_Surface* window_surface,
 
     SDL_Rect rect = {point->x * rend->font_width, point->y * rend->font_height, 0, 0};
     uint64_t old_y = point->y;
-    int width = coord_trans(point, rend->window_cols, seq[0]);
+    int width = coord_trans(point, rend->grid_cols, seq[0]);
     point->inner += strlen(seq) - 1;
 
     if (point->y != old_y) {
@@ -223,7 +223,7 @@ bool render_code_point(SDL_Surface* window_surface,
         rect.y += rend->font_height;
 
         // Beyond bottom of screen.
-        if (point->y >= rend->window_rows_ru)
+        if (point->y >= rend->grid_rows_ru)
             return false;
 
         // Newlines aren't drawn.
@@ -471,7 +471,7 @@ bool render_backlog(SDL_Surface* window_surface,
     }
 
     CZ_ASSERT(point->y >= 0);
-    if (point->y >= rend->window_rows_ru)
+    if (point->y >= rend->grid_rows_ru)
         return false;
 
     SDL_Color bg_color = cfg.process_colors[backlog->id % cfg.process_colors.len];
@@ -487,7 +487,7 @@ bool render_backlog(SDL_Surface* window_surface,
     bool info_has_start = false, info_has_end = false;
     Visual_Point info_start = {}, info_end = {};
     int info_y = point->y;
-    int info_x_start = (int)(rend->window_cols - info.len);
+    int info_x_start = (int)(rend->grid_cols - info.len);
 
     uint8_t fg_color = cfg.backlog_fg_color;
 
@@ -560,7 +560,7 @@ bool render_backlog(SDL_Surface* window_surface,
         }
     }
 
-    if (info_has_start && info.len < rend->window_cols) {
+    if (info_has_start && info.len < rend->grid_cols) {
         if (!info_has_end)
             info_end = info_start;
         info_start.x = info_x_start;
@@ -594,7 +594,7 @@ void render_prompt(SDL_Surface* window_surface,
 
         // Display prompt at bottom of screen no matter what.
         point = &temp_point;
-        point->y = rend->window_rows - 1;
+        point->y = rend->grid_rows - 1;
     }
 
     if (rend->attached_outer == -1) {
@@ -715,7 +715,7 @@ void render_prompt(SDL_Surface* window_surface,
             }
 
             chars_on_line += longest_entry + 1;
-            if (chars_on_line + longest_entry + 1 > rend->window_cols) {
+            if (chars_on_line + longest_entry + 1 > rend->grid_cols) {
                 render_code_point(window_surface, rend, point, background, cfg.backlog_fg_color,
                                   false, "\n", true);
                 chars_on_line = 0;

@@ -59,12 +59,12 @@ struct Render_State {
     float dpi_scale;
     int font_width;
     int font_height;
-    int window_cols;
-    int window_rows;
-    int window_rows_ru;
 
     Surface_Cache caches[256];
 
+    int grid_cols;
+    int grid_rows;
+    int grid_rows_ru;
     bool grid_is_valid;
     cz::Vector<Visual_Tile> grid;
 
