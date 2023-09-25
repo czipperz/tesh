@@ -110,7 +110,7 @@ bool run_script(Shell_State* shell, Backlog_State* backlog, cz::Str command) {
     *root = {};
 
     cz::String text = command.clone_null_terminate(arena.allocator());
-    Error error = parse_script(arena.allocator(), root, text);
+    Error error = parse_script(shell->arena.allocator(), arena.allocator(), root, text);
     if (error != Error_Success)
         goto fail;
 

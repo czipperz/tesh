@@ -42,57 +42,67 @@ static Error advance_through_double_quote_string(cz::Str text,
                                                  Slice_State* slice,
                                                  cz::Vector<Parse_Node>* subexprs,
                                                  bool force_alloc,
+                                                 cz::Allocator shell_allocator,
                                                  cz::Allocator allocator);
 static Error advance_through_dollar_sign(cz::Str text,
                                          size_t* index,
                                          Slice_State* slice,
                                          cz::Vector<Parse_Node>* subexprs,
                                          bool force_alloc,
+                                         cz::Allocator shell_allocator,
                                          cz::Allocator allocator);
 static Error advance_through_out_of_line_file(cz::Str text,
                                               size_t* index,
                                               Slice_State* slice,
                                               cz::Vector<Parse_Node>* subexprs,
                                               bool force_alloc,
+                                              cz::Allocator shell_allocator,
                                               cz::Allocator allocator);
 
-static Error parse_sequence(cz::Allocator allocator,
+static Error parse_sequence(cz::Allocator shell_allocator,
+                            cz::Allocator allocator,
                             bool force_alloc,
                             cz::Slice<cz::Str> tokens,
                             Parse_Node* node,
                             size_t* index,
                             cz::Slice<cz::Str> terminators);
 
-static Error parse_binary(cz::Allocator allocator,
+static Error parse_binary(cz::Allocator shell_allocator,
+                          cz::Allocator allocator,
                           bool force_alloc,
                           cz::Slice<cz::Str> tokens,
                           int max_precedence,
                           Parse_Node* node,
                           size_t* index);
 
-static Error parse_pipeline(cz::Allocator allocator,
+static Error parse_pipeline(cz::Allocator shell_allocator,
+                            cz::Allocator allocator,
                             bool force_alloc,
                             cz::Slice<cz::Str> tokens,
                             Parse_Node* node,
                             size_t* index);
 
-static Error parse_program(cz::Allocator allocator,
+static Error parse_program(cz::Allocator shell_allocator,
+                           cz::Allocator allocator,
                            bool force_alloc,
                            cz::Slice<cz::Str> tokens,
                            Parse_Node* node,
                            size_t* index);
-static Error deal_with_token(cz::Allocator allocator,
+static Error deal_with_token(cz::Allocator shell_allocator,
+                             cz::Allocator allocator,
                              bool force_alloc,
                              Parse_Program* program,
                              cz::Vector<Parse_Node>* subexprs,
                              cz::Str token);
 
-static Error parse_if(cz::Allocator allocator,
+static Error parse_if(cz::Allocator shell_allocator,
+                      cz::Allocator allocator,
                       bool force_alloc,
                       cz::Slice<cz::Str> tokens,
                       Parse_Node* node,
                       size_t* index);
-static Error parse_function_declaration(cz::Allocator allocator,
+static Error parse_function_declaration(cz::Allocator shell_allocator,
+                                        cz::Allocator allocator,
                                         bool force_alloc,
                                         cz::Slice<cz::Str> tokens,
                                         Parse_Node* node,
@@ -109,7 +119,10 @@ static void deref_var_at_point(const Shell_Local* local,
 // Driver
 ///////////////////////////////////////////////////////////////////////////////
 
-Error parse_script(cz::Allocator allocator, Parse_Node* root, cz::Str text) {
+Error parse_script(cz::Allocator shell_allocator,
+                   cz::Allocator allocator,
+                   Parse_Node* root,
+                   cz::Str text) {
     ZoneScoped;
 
     cz::Vector<cz::Str> tokens = {};
@@ -119,7 +132,8 @@ Error parse_script(cz::Allocator allocator, Parse_Node* root, cz::Str text) {
         return error;
 
     size_t index = 0;
-    error = parse_sequence(allocator, /*force_alloc=*/false, tokens, root, &index, {});
+    error =
+        parse_sequence(shell_allocator, allocator, /*force_alloc=*/false, tokens, root, &index, {});
     if (error != Error_Success)
         return error;
 
@@ -191,7 +205,7 @@ static Error advance_through_token(cz::Str text,
             if (*index + 1 < text.len && text[*index + 1] == '(') {  // <()
                 ++*index;
                 Error error =
-                    advance_through_out_of_line_file(text, index, nullptr, nullptr, false, {});
+                    advance_through_out_of_line_file(text, index, nullptr, nullptr, false, {}, {});
                 if (error != Error_Success)
                     return error;
                 break;
@@ -280,14 +294,14 @@ static Error advance_through_token(cz::Str text,
         case '"': {
             *any_special = true;
             Error error =
-                advance_through_double_quote_string(text, index, nullptr, nullptr, false, {});
+                advance_through_double_quote_string(text, index, nullptr, nullptr, false, {}, {});
             if (error != Error_Success)
                 return error;
         } break;
 
         case '$': {
             *any_special = true;
-            Error error = advance_through_dollar_sign(text, index, nullptr, nullptr, false, {});
+            Error error = advance_through_dollar_sign(text, index, nullptr, nullptr, false, {}, {});
             if (error != Error_Success)
                 return error;
         } break;
@@ -332,6 +346,7 @@ static Error advance_through_double_quote_string(cz::Str text,
                                                  Slice_State* slice,
                                                  cz::Vector<Parse_Node>* subexprs,
                                                  bool force_alloc,
+                                                 cz::Allocator shell_allocator,
                                                  cz::Allocator allocator) {
     ++*index;
     while (1) {
@@ -348,8 +363,8 @@ static Error advance_through_double_quote_string(cz::Str text,
         }
 
         if (text[*index] == '$') {
-            Error error =
-                advance_through_dollar_sign(text, index, slice, subexprs, force_alloc, allocator);
+            Error error = advance_through_dollar_sign(text, index, slice, subexprs, force_alloc,
+                                                      shell_allocator, allocator);
             if (error != Error_Success)
                 return error;
             continue;
@@ -401,6 +416,7 @@ static Error advance_through_dollar_sign(cz::Str text,
                                          Slice_State* slice,
                                          cz::Vector<Parse_Node>* subexprs,
                                          bool force_alloc,
+                                         cz::Allocator shell_allocator,
                                          cz::Allocator allocator) {
     size_t start = *index;
     ++*index;
@@ -466,8 +482,8 @@ static Error advance_through_dollar_sign(cz::Str text,
 
             cz::Str terminators[] = {")"};
             size_t token_index = 0;
-            Error error =
-                parse_sequence(allocator, force_alloc, tokens, &subnode, &token_index, terminators);
+            Error error = parse_sequence(shell_allocator, allocator, force_alloc, tokens, &subnode,
+                                         &token_index, terminators);
             if (error != Error_Success)
                 return error;
 
@@ -532,6 +548,7 @@ static Error advance_through_out_of_line_file(cz::Str text,
                                               Slice_State* slice,
                                               cz::Vector<Parse_Node>* subexprs,
                                               bool force_alloc,
+                                              cz::Allocator shell_allocator,
                                               cz::Allocator allocator) {
     CZ_DEBUG_ASSERT(text[*index] == '(');
 
@@ -550,8 +567,8 @@ static Error advance_through_out_of_line_file(cz::Str text,
 
         cz::Str terminators[] = {")"};
         size_t token_index = 0;
-        Error error =
-            parse_sequence(allocator, force_alloc, tokens, &subnode, &token_index, terminators);
+        Error error = parse_sequence(shell_allocator, allocator, force_alloc, tokens, &subnode,
+                                     &token_index, terminators);
         if (error != Error_Success)
             return error;
 
@@ -645,7 +662,8 @@ static int get_precedence(cz::Str token) {
 // Parse sequence
 ///////////////////////////////////////////////////////////////////////////////
 
-static Error parse_sequence(cz::Allocator allocator,
+static Error parse_sequence(cz::Allocator shell_allocator,
+                            cz::Allocator allocator,
                             bool force_alloc,
                             cz::Slice<cz::Str> tokens,
                             Parse_Node* node,
@@ -684,7 +702,8 @@ static Error parse_sequence(cz::Allocator allocator,
         }
 
         Parse_Node step = {};
-        Error error = parse_binary(allocator, force_alloc, tokens, 8, &step, index);
+        Error error =
+            parse_binary(shell_allocator, allocator, force_alloc, tokens, 8, &step, index);
         if (error != Error_Success)
             return error;
 
@@ -705,7 +724,8 @@ static Error parse_sequence(cz::Allocator allocator,
 // Parse binary
 ///////////////////////////////////////////////////////////////////////////////
 
-static Error parse_binary(cz::Allocator allocator,
+static Error parse_binary(cz::Allocator shell_allocator,
+                          cz::Allocator allocator,
                           bool force_alloc,
                           cz::Slice<cz::Str> tokens,
                           int max_precedence,
@@ -717,9 +737,10 @@ static Error parse_binary(cz::Allocator allocator,
     Parse_Node sub = {};
     Error error;
     if (max_precedence == 6) {
-        error = parse_pipeline(allocator, force_alloc, tokens, &sub, index);
+        error = parse_pipeline(shell_allocator, allocator, force_alloc, tokens, &sub, index);
     } else {
-        error = parse_binary(allocator, force_alloc, tokens, max_precedence - 2, &sub, index);
+        error = parse_binary(shell_allocator, allocator, force_alloc, tokens, max_precedence - 2,
+                             &sub, index);
     }
     if (error != Error_Success)
         return error;
@@ -750,9 +771,10 @@ static Error parse_binary(cz::Allocator allocator,
         // Since we're doing LTR loop here, there's no point in
         // having a child do it as well at the same precedence.
         if (precedence == max_precedence) {
-            error = parse_pipeline(allocator, force_alloc, tokens, &sub, index);
+            error = parse_pipeline(shell_allocator, allocator, force_alloc, tokens, &sub, index);
         } else {
-            error = parse_binary(allocator, force_alloc, tokens, precedence, &sub, index);
+            error = parse_binary(shell_allocator, allocator, force_alloc, tokens, precedence, &sub,
+                                 index);
         }
         if (error != Error_Success)
             return error;
@@ -763,7 +785,8 @@ static Error parse_binary(cz::Allocator allocator,
 // Parse pipeline
 ///////////////////////////////////////////////////////////////////////////////
 
-static Error parse_pipeline(cz::Allocator allocator,
+static Error parse_pipeline(cz::Allocator shell_allocator,
+                            cz::Allocator allocator,
                             bool force_alloc,
                             cz::Slice<cz::Str> tokens,
                             Parse_Node* node,
@@ -772,7 +795,7 @@ static Error parse_pipeline(cz::Allocator allocator,
 
     for (size_t iterations = 0;; ++iterations) {
         Parse_Node pnode = {};
-        Error error = parse_program(allocator, force_alloc, tokens, &pnode, index);
+        Error error = parse_program(shell_allocator, allocator, force_alloc, tokens, &pnode, index);
         if (error != Error_Success)
             return error;
 
@@ -817,14 +840,15 @@ static Error parse_pipeline(cz::Allocator allocator,
 // Parse program
 ///////////////////////////////////////////////////////////////////////////////
 
-static Error parse_program(cz::Allocator allocator,
+static Error parse_program(cz::Allocator shell_allocator,
+                           cz::Allocator allocator,
                            bool force_alloc,
                            cz::Slice<cz::Str> tokens,
                            Parse_Node* node,
                            size_t* index) {
     if (*index < tokens.len) {
         if (tokens[*index] == "if") {
-            return parse_if(allocator, force_alloc, tokens, node, index);
+            return parse_if(shell_allocator, allocator, force_alloc, tokens, node, index);
         }
     }
 
@@ -838,15 +862,16 @@ static Error parse_program(cz::Allocator allocator,
         if (get_precedence(token)) {
             if (token == "(") {
                 if (!program.is_sub && program.v.args.len == 1) {
-                    // Function declaration
-                    return parse_function_declaration(allocator, force_alloc, tokens, node, index,
-                                                      program.v.args[0]);
+                    // Function declaration.
+                    return parse_function_declaration(shell_allocator, allocator, force_alloc,
+                                                      tokens, node, index, program.v.args[0]);
                 } else if (program.is_sub || program.v.args.len > 0) {
                     return Error_Parse_UnterminatedProgram;
                 } else {
                     ++*index;
                     Parse_Node inner = {};
-                    Error error = parse_sequence(allocator, force_alloc, tokens, &inner, index, {});
+                    Error error = parse_sequence(shell_allocator, allocator, force_alloc, tokens,
+                                                 &inner, index, {});
                     if (error != Error_Success)
                         return error;
                     if (*index >= tokens.len || tokens[*index] != ")")
@@ -899,7 +924,8 @@ static Error parse_program(cz::Allocator allocator,
             continue;
         }
 
-        Error error = deal_with_token(allocator, force_alloc, &program, &subexprs, token);
+        Error error =
+            deal_with_token(shell_allocator, allocator, force_alloc, &program, &subexprs, token);
         if (error != Error_Success)
             return error;
         ++*index;
@@ -931,7 +957,8 @@ static Error parse_program(cz::Allocator allocator,
     return Error_Success;
 }
 
-static Error deal_with_token(cz::Allocator allocator,
+static Error deal_with_token(cz::Allocator shell_allocator,
+                             cz::Allocator allocator,
                              bool force_alloc,
                              Parse_Program* program,
                              cz::Vector<Parse_Node>* subexprs,
@@ -951,15 +978,15 @@ static Error deal_with_token(cz::Allocator allocator,
 
         case '"': {
             any_special = true;
-            Error error = advance_through_double_quote_string(token, &index, &slice, subexprs,
-                                                              force_alloc, allocator);
+            Error error = advance_through_double_quote_string(
+                token, &index, &slice, subexprs, force_alloc, shell_allocator, allocator);
             CZ_ASSERT(error == Error_Success);
         } break;
 
         case '$': {
             any_special = true;
             Error error = advance_through_dollar_sign(token, &index, &slice, subexprs, force_alloc,
-                                                      allocator);
+                                                      shell_allocator, allocator);
             CZ_ASSERT(error == Error_Success);
         } break;
 
@@ -968,7 +995,7 @@ static Error deal_with_token(cz::Allocator allocator,
             ++index;
             CZ_DEBUG_ASSERT(token[index] == '(');
             Error error = advance_through_out_of_line_file(token, &index, &slice, subexprs,
-                                                           force_alloc, allocator);
+                                                           force_alloc, shell_allocator, allocator);
             CZ_ASSERT(error == Error_Success);
         } break;
 
@@ -1603,7 +1630,8 @@ static void deref_var_at_point(const Shell_Local* local,
     }
 }
 
-static Error parse_if(cz::Allocator allocator,
+static Error parse_if(cz::Allocator shell_allocator,
+                      cz::Allocator allocator,
                       bool force_alloc,
                       cz::Slice<cz::Str> tokens,
                       Parse_Node* node,
@@ -1612,7 +1640,7 @@ static Error parse_if(cz::Allocator allocator,
 
 again:
     Parse_Node cond = {};
-    Error error = parse_binary(allocator, force_alloc, tokens, 8, &cond, index);
+    Error error = parse_binary(shell_allocator, allocator, force_alloc, tokens, 8, &cond, index);
     if (error != Error_Success)
         return error;
 
@@ -1633,7 +1661,8 @@ again:
 
     cz::Str terminators[] = {"fi", "else", "elif"};
     Parse_Node then = {};
-    error = parse_sequence(allocator, force_alloc, tokens, &then, index, terminators);
+    error =
+        parse_sequence(shell_allocator, allocator, force_alloc, tokens, &then, index, terminators);
     if (error != Error_Success)
         return error;
 
@@ -1646,7 +1675,8 @@ again:
         other = allocator.alloc<Parse_Node>();
         *other = {};
         cz::Str terminators2[] = {"fi"};
-        error = parse_sequence(allocator, force_alloc, tokens, other, index, terminators2);
+        error = parse_sequence(shell_allocator, allocator, force_alloc, tokens, other, index,
+                               terminators2);
         if (error != Error_Success)
             return error;
     } else if (tokens[*index] == "elif") {
@@ -1678,16 +1708,13 @@ again:
     return Error_Success;
 }
 
-static Error parse_function_declaration(cz::Allocator allocator,
+static Error parse_function_declaration(cz::Allocator shell_allocator,
+                                        cz::Allocator allocator,
                                         bool force_alloc,
                                         cz::Slice<cz::Str> tokens,
                                         Parse_Node* node,
                                         size_t* index,
                                         cz::Str name) {
-    // TODO: the function needs to be nearly permanently allocated
-    // because it is used beyond the end of the pipeline.
-    allocator = permanent_allocator;
-
     if (*index == tokens.len)
         return Error_Parse_UnterminatedFunctionDeclaration;
     if (tokens[*index] != "(")
@@ -1708,8 +1735,10 @@ static Error parse_function_declaration(cz::Allocator allocator,
 
     cz::Str terminators[] = {"}"};
     Parse_Node body = {};
-    Error error =
-        parse_sequence(allocator, /*force_alloc=*/true, tokens, &body, index, terminators);
+    // Note that we use allocator=shell_allocator so that the function
+    // definiton is persistently stored beyond the runtime of this script.
+    Error error = parse_sequence(shell_allocator, /*allocator=*/shell_allocator,
+                                 /*force_alloc=*/true, tokens, &body, index, terminators);
     if (error != Error_Success)
         return error;
 
@@ -1722,7 +1751,7 @@ static Error parse_function_declaration(cz::Allocator allocator,
     *node = {};
     node->type = Parse_Node::FUNCTION;
     node->v.function.name = name;
-    node->v.function.body = allocator.clone(body);
+    node->v.function.body = shell_allocator.clone(body);
 
     return Error_Success;
 }

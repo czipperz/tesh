@@ -22,6 +22,7 @@ static void setup_environment() {
     temp_arena.init();
     temp_allocator = temp_arena.allocator();
 
+    shell.arena.init();
     shell.width = 100;
     shell.height = 100;
     cfg.windows_wide_terminal = true;

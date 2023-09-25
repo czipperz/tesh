@@ -366,18 +366,19 @@ bool tick_builtin(Shell_State* shell,
 
             cz::Str key, value;
             if (arg.split_excluding('=', &key, &value)) {
-                // TODO: not permanent but close...
-                cz::Str script = cz::format(permanent_allocator, value, " \"$@\"");
+                cz::Allocator shell_allocator = shell->arena.allocator();
 
-                Parse_Node* node = permanent_allocator.alloc<Parse_Node>();
+                cz::Str script = cz::format(shell_allocator, value, " \"$@\"");
+
+                Parse_Node* node = shell_allocator.alloc<Parse_Node>();
                 *node = {};
-                Error error = parse_script(permanent_allocator, node, script);
+                Error error = parse_script(shell_allocator, shell_allocator, node, script);
 
                 // Try not appending the "$@" just in case the user
                 // does 'alias x="if true; then echo hi; fi"'.
                 if (error == Error_Parse_ExpectedEndOfStatement) {
                     error =
-                        parse_script(permanent_allocator, node, script.slice_end(script.len - 5));
+                        parse_script(shell_allocator, shell_allocator, node, script.slice_end(script.len - 5));
                 }
 
                 if (error != Error_Success) {
@@ -595,7 +596,7 @@ wide_terminal  1/0   -- Turn on or off wide terminal mode.  This will lock the t
         Parse_Node* root = allocator.alloc<Parse_Node>();
         *root = {};
 
-        Error error = parse_script(allocator, root, contents);
+        Error error = parse_script(shell->arena.allocator(), allocator, root, contents);
         if (error == Error_Success) {
             cz::Vector<cz::Str> args = builtin->args.slice_start(2).clone(allocator);
             Stdio_State stdio = st.stdio;

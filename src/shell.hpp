@@ -57,6 +57,11 @@ struct Shell_State {
 
     cz::Vector<Running_Script> scripts;
 
+    /// Arena for things that live as long as the shell does.  In particular, functions and aliases.
+    cz::Buffer_Array arena;
+
+    /// Garbage collection center for arenas.  Kept alive for
+    /// optimization purposes (to make it faster to run a new script).
     cz::Vector<cz::Buffer_Array> arenas;
 };
 
@@ -313,7 +318,7 @@ struct Running_Script {
     cz::Buffer_Array arena;
     Pseudo_Terminal tty;
     Running_Node root;
-    Parse_Node* parse_root; // Just used for debugging
+    Parse_Node* parse_root;  // Just used for debugging
 };
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -390,7 +395,10 @@ struct Parse_Node {
 };
 
 /// Parse a string into a `Parse_Node` tree.  Does not do variable expansion.
-Error parse_script(cz::Allocator allocator, Parse_Node* root, cz::Str text);
+Error parse_script(cz::Allocator shell_allocator,
+                   cz::Allocator allocator,
+                   Parse_Node* root,
+                   cz::Str text);
 
 void expand_arg_single(const Shell_Local* local,
                        cz::Str arg,

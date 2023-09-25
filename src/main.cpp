@@ -44,7 +44,7 @@
 // Forward declarations
 ///////////////////////////////////////////////////////////////////////////////
 
-static Backlog_State* push_backlog(cz::Vector<Backlog_State*>* backlogs, uint64_t id);
+static Backlog_State* push_backlog(Shell_State* shell, cz::Vector<Backlog_State*>* backlogs);
 static void scroll_down1(Render_State* rend, int lines);
 static void scroll_down(Render_State* rend, int lines);
 static void stop_merging_edits(Prompt_State* prompt);
@@ -1774,7 +1774,7 @@ static bool submit_prompt(Shell_State* shell,
     if (script) {
         backlog = (*backlogs)[script->id];
     } else {
-        backlog = push_backlog(backlogs, backlogs->len);
+        backlog = push_backlog(shell, backlogs);
         if (rend) {
             rend->visbacklogs.reserve(cz::heap_allocator(), 1);
             rend->visbacklogs.push(backlog);
@@ -2973,6 +2973,8 @@ int actual_main(int argc, char** argv) {
     Search_State search = {};
     Shell_State shell = {};
 
+    shell.arena.init();
+
     load_default_configuration();
 
     command_prompt.edit_arena.init();
@@ -3131,12 +3133,12 @@ int actual_main(int argc, char** argv) {
     return 0;
 }
 
-static Backlog_State* push_backlog(cz::Vector<Backlog_State*>* backlogs, uint64_t id) {
-    Backlog_State* backlog = permanent_allocator.alloc<Backlog_State>();
+static Backlog_State* push_backlog(Shell_State* shell, cz::Vector<Backlog_State*>* backlogs) {
+    Backlog_State* backlog = shell->arena.allocator().alloc<Backlog_State>();
     CZ_ASSERT(backlog);
     *backlog = {};
 
-    init_backlog(backlog, id, cfg.max_length);
+    init_backlog(backlog, backlogs->len, cfg.max_length);
 
     backlogs->reserve(cz::heap_allocator(), 1);
     backlogs->push(backlog);

@@ -97,7 +97,7 @@ static void test_append_node(cz::Allocator allocator,
 
 static Error parse_and_emit(cz::String* string, cz::Str text) {
     Parse_Node root = {};
-    Error error = parse_script(cz::heap_allocator(), &root, text);
+    Error error = parse_script(cz::heap_allocator(), cz::heap_allocator(), &root, text);
     if (error == Error_Success)
         test_append_node(cz::heap_allocator(), string, &root, 0);
     return error;
