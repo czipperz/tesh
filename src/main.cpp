@@ -53,7 +53,7 @@ static int word_char_category(char ch);
 static void finish_hyperlink(Backlog_State* backlog);
 static Visual_Tile visual_tile_at_cursor(Render_State* rend);
 static Visual_Tile visual_tile_at(Render_State* rend, int x, int y);
-static void set_cursor(Render_State* rend, Visual_Tile tile);
+static void set_cursor_icon(Render_State* rend, Visual_Tile tile);
 static const char* get_hyperlink_at(Render_State* rend, Visual_Tile tile);
 static void kill_process(Shell_State* shell,
                          Render_State* rend,
@@ -2330,7 +2330,7 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
                 // Redraw because it changes how links are drawn.
                 if (rend->grid_is_valid) {
                     Visual_Tile tile = visual_tile_at_cursor(rend);
-                    set_cursor(rend, tile);
+                    set_cursor_icon(rend, tile);
                 }
                 rend->complete_redraw = true;
                 ++num_events;
@@ -2386,7 +2386,7 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
                 // Redraw because it changes how links are drawn.
                 if (rend->grid_is_valid) {
                     Visual_Tile tile = visual_tile_at_cursor(rend);
-                    set_cursor(rend, tile);
+                    set_cursor_icon(rend, tile);
                 }
                 rend->complete_redraw = true;
                 ++num_events;
@@ -2747,7 +2747,7 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
                 break;
 
             Visual_Tile tile = visual_tile_at(rend, event.motion.x, event.motion.y);
-            set_cursor(rend, tile);
+            set_cursor_icon(rend, tile);
 
             if (rend->selection.type == SELECT_DISABLED || rend->selection.type == SELECT_FINISHED)
                 break;
@@ -3178,7 +3178,7 @@ static Visual_Tile visual_tile_at_cursor(Render_State* rend) {
     return visual_tile_at(rend, x, y);
 }
 
-static void set_cursor(Render_State* rend, Visual_Tile tile) {
+static void set_cursor_icon(Render_State* rend, Visual_Tile tile) {
     const char* hyperlink = get_hyperlink_at(rend, tile);
     SDL_Cursor* cursor = (hyperlink ? rend->click_cursor : rend->default_cursor);
     SDL_SetCursor(cursor);
