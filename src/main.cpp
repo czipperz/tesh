@@ -53,7 +53,7 @@ static int word_char_category(char ch);
 static void finish_hyperlink(Backlog_State* backlog);
 static Visual_Tile visual_tile_at_cursor(Render_State* rend);
 static Visual_Tile visual_tile_at(Render_State* rend, int x, int y);
-static void set_cursor_icon(Render_State* rend, Visual_Tile tile);
+static void set_cursor_icon(Window_State* window, Render_State* rend, Visual_Tile tile);
 static const char* get_hyperlink_at(Render_State* rend, Visual_Tile tile);
 static void kill_process(Shell_State* shell,
                          Render_State* rend,
@@ -106,7 +106,7 @@ static void stop_selecting(Render_State* rend) {
     rend->complete_redraw = true;
 }
 
-static void render_frame(SDL_Window* window,
+static void render_frame(Window_State* window,
                          Render_State* rend,
                          Prompt_State* prompt,
                          Search_State* search,
@@ -116,10 +116,10 @@ static void render_frame(SDL_Window* window,
 
     std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
 
-    SDL_Surface* window_surface = SDL_GetWindowSurface(window);
-    rend->grid_rows = window_surface->h / rend->font_height;
-    rend->grid_rows_ru = (window_surface->h + rend->font_height - 1) / rend->font_height;
-    rend->grid_cols = window_surface->w / rend->font_width;
+    SDL_Surface* window_surface = SDL_GetWindowSurface(window->sdl);
+    rend->grid_rows = window_surface->h / rend->font.height;
+    rend->grid_rows_ru = (window_surface->h + rend->font.height - 1) / rend->font.height;
+    rend->grid_cols = window_surface->w / rend->font.width;
 
     if (rend->grid_rows != shell->height || rend->grid_cols != shell->width) {
         shell->height = rend->grid_rows;
@@ -173,7 +173,7 @@ static void render_frame(SDL_Window* window,
     {
         const SDL_Rect rects[] = {{0, 0, window_surface->w, window_surface->h}};
         ZoneScopedN("update_window_surface");
-        SDL_UpdateWindowSurfaceRects(window, rects, CZ_DIM(rects));
+        SDL_UpdateWindowSurfaceRects(window->sdl, rects, CZ_DIM(rects));
     }
 
     rend->complete_redraw = false;
@@ -185,6 +185,7 @@ static void render_frame(SDL_Window* window,
 
 bool read_process_data(Shell_State* shell,
                        cz::Slice<Backlog_State*> backlogs,
+                       Window_State* window,
                        Render_State* rend,
                        Prompt_State* prompt,
                        bool* force_quit) {
@@ -196,7 +197,7 @@ bool read_process_data(Shell_State* shell,
         Backlog_State* backlog = backlogs[script->id];
         size_t starting_length = backlog->length;
 
-        if (tick_running_node(shell, rend, prompt, &script->root, &script->tty, backlog,
+        if (tick_running_node(shell, window, rend, prompt, &script->root, &script->tty, backlog,
                               force_quit)) {
             if (*force_quit)
                 return true;
@@ -2002,9 +2003,9 @@ finish_search:
 static int process_events(cz::Vector<Backlog_State*>* backlogs,
                           Prompt_State* command_prompt,
                           Search_State* search,
+                          Window_State* window,
                           Render_State* rend,
-                          Shell_State* shell,
-                          SDL_Window* window) {
+                          Shell_State* shell) {
     static uint32_t ignore_key_events_until = 0;
 
     // If previous KEYDOWN was A-* then track it.
@@ -2042,17 +2043,18 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
             if (event.window.event == SDL_WINDOWEVENT_MOVED ||
                 event.window.event == SDL_WINDOWEVENT_SIZE_CHANGED) {
                 // Process dpi changes.
-                float new_dpi_scale = get_dpi_scale(window);
-                bool dpi_changed = (rend->dpi_scale + 0.01f < new_dpi_scale ||  //
-                                    rend->dpi_scale - 0.01f > new_dpi_scale);
+                float new_dpi_scale = get_dpi_scale(window->sdl);
+                bool dpi_changed = (window->dpi_scale + 0.01f < new_dpi_scale ||  //
+                                    window->dpi_scale - 0.01f > new_dpi_scale);
                 if (dpi_changed) {
                     int w, h;
-                    SDL_GetWindowSize(window, &w, &h);
-                    w = (int)(w * (new_dpi_scale / rend->dpi_scale));
-                    h = (int)(h * (new_dpi_scale / rend->dpi_scale));
-                    SDL_SetWindowSize(window, w, h);
-                    rend->dpi_scale = new_dpi_scale;
-                    resize_font(rend->font_size, rend);
+                    SDL_GetWindowSize(window->sdl, &w, &h);
+                    w = (int)(w * (new_dpi_scale / window->dpi_scale));
+                    h = (int)(h * (new_dpi_scale / window->dpi_scale));
+                    SDL_SetWindowSize(window->sdl, w, h);
+                    window->dpi_scale = new_dpi_scale;
+                    resize_font(rend->font.size, window->dpi_scale, &rend->font);
+                    rend->complete_redraw = true;
                 }
             }
 
@@ -2314,13 +2316,14 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
 
             // Note: C-= used to zoom in so you don't have to hold shift.
             if (mod == KMOD_CTRL && (key == SDLK_EQUALS || key == SDLK_MINUS)) {
-                int new_font_size = rend->font_size;
+                int new_font_size = rend->font.size;
                 if (key == SDLK_EQUALS) {
                     new_font_size += 4;
                 } else {
                     new_font_size = cz::max(new_font_size - 4, 4);
                 }
-                resize_font(new_font_size, rend);
+                resize_font(new_font_size, window->dpi_scale, &rend->font);
+                rend->complete_redraw = true;
                 rend->grid_is_valid = false;
                 ++num_events;
                 break;
@@ -2330,7 +2333,7 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
                 // Redraw because it changes how links are drawn.
                 if (rend->grid_is_valid) {
                     Visual_Tile tile = visual_tile_at_cursor(rend);
-                    set_cursor_icon(rend, tile);
+                    set_cursor_icon(window, rend, tile);
                 }
                 rend->complete_redraw = true;
                 ++num_events;
@@ -2386,7 +2389,7 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
                 // Redraw because it changes how links are drawn.
                 if (rend->grid_is_valid) {
                     Visual_Tile tile = visual_tile_at_cursor(rend);
-                    set_cursor_icon(rend, tile);
+                    set_cursor_icon(window, rend, tile);
                 }
                 rend->complete_redraw = true;
                 ++num_events;
@@ -2616,13 +2619,14 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
 
             SDL_Keymod mods = SDL_GetModState();
             if (mods & KMOD_CTRL) {
-                int new_font_size = rend->font_size;
+                int new_font_size = rend->font.size;
                 if (event.wheel.y > 0) {
                     new_font_size += 2;
                 } else if (event.wheel.y < 0) {
                     new_font_size = cz::max(new_font_size - 2, 2);
                 }
-                resize_font(new_font_size, rend);
+                resize_font(new_font_size, window->dpi_scale, &rend->font);
+                rend->complete_redraw = true;
                 rend->grid_is_valid = false;
             } else {
                 if (event.wheel.y < 0) {
@@ -2747,7 +2751,7 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
                 break;
 
             Visual_Tile tile = visual_tile_at(rend, event.motion.x, event.motion.y);
-            set_cursor_icon(rend, tile);
+            set_cursor_icon(window, rend, tile);
 
             if (rend->selection.type == SELECT_DISABLED || rend->selection.type == SELECT_FINISHED)
                 break;
@@ -2967,6 +2971,7 @@ static void load_environment_variables(Shell_State* shell) {
 ///////////////////////////////////////////////////////////////////////////////
 
 int actual_main(int argc, char** argv) {
+    Window_State window = {};
     Render_State rend = {};
     cz::Vector<Backlog_State*> backlogs = {};
     Prompt_State command_prompt = {};
@@ -3001,7 +3006,7 @@ int actual_main(int argc, char** argv) {
     search.prompt.prefix = "SEARCH> ";
     rend.complete_redraw = true;
 
-    rend.font_size = cfg.default_font_size;
+    rend.font.size = cfg.default_font_size;
 
     if (argc == 2) {
         cz::set_working_directory(argv[1]);
@@ -3047,35 +3052,36 @@ int actual_main(int argc, char** argv) {
     }
     CZ_DEFER(IMG_Quit());
 
-    rend.dpi_scale = get_dpi_scale(NULL);
+    window.dpi_scale = get_dpi_scale(NULL);
 
-    SDL_Window* window =
+    window.sdl =
         SDL_CreateWindow("Tesh", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
-                         (int)(800 * rend.dpi_scale), (int)(800 * rend.dpi_scale),
+                         (int)(800 * window.dpi_scale), (int)(800 * window.dpi_scale),
                          SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI);
-    if (!window) {
+    if (!window.sdl) {
         fprintf(stderr, "SDL_CreateWindow failed: %s\n", SDL_GetError());
         return 1;
     }
-    CZ_DEFER(SDL_DestroyWindow(window));
+    CZ_DEFER(SDL_DestroyWindow(window.sdl));
 
-    set_icon(window);
+    set_icon(window.sdl);
 
-    load_cursors(&rend);
+    load_cursors(&window);
 
-    resize_font(rend.font_size, &rend);
+    resize_font(rend.font.size, window.dpi_scale, &rend.font);
+    rend.complete_redraw = true;
 
     // Old versions of SDL_ttf don't parse FontLineSkip correctly so we manually set it.
-    rend.font_height =
-        cz::max(TTF_FontLineSkip(rend.font), (int)(TTF_FontHeight(rend.font) * 1.05f));
-    rend.font_width = 10;
-    TTF_GlyphMetrics(rend.font, ' ', nullptr, nullptr, nullptr, nullptr, &rend.font_width);
+    rend.font.height =
+        cz::max(TTF_FontLineSkip(rend.font.sdl), (int)(TTF_FontHeight(rend.font.sdl) * 1.05f));
+    rend.font.width = 10;
+    TTF_GlyphMetrics(rend.font.sdl, ' ', nullptr, nullptr, nullptr, nullptr, &rend.font.width);
 
     {
         int w, h;
-        SDL_GetWindowSize(window, &w, &h);
-        shell.width = w / rend.font_width;
-        shell.height = h / rend.font_height;
+        SDL_GetWindowSize(window.sdl, &w, &h);
+        shell.width = w / rend.font.width;
+        shell.height = h / rend.font.height;
     }
 
     rend.attached_outer = -1;
@@ -3096,19 +3102,20 @@ int actual_main(int argc, char** argv) {
         temp_arena.clear();
 
         try {
-            int status = process_events(&backlogs, &command_prompt, &search, &rend, &shell, window);
+            int status =
+                process_events(&backlogs, &command_prompt, &search, &window, &rend, &shell);
             if (status < 0)
                 break;
 
             bool force_quit = false;
-            if (read_process_data(&shell, backlogs, &rend, &command_prompt, &force_quit))
+            if (read_process_data(&shell, backlogs, &window, &rend, &command_prompt, &force_quit))
                 status = 1;
 
             if (force_quit)
                 break;
 
             if (rend.complete_redraw || status > 0 || shell.scripts.len > 0 || !rend.grid_is_valid)
-                render_frame(window, &rend, &command_prompt, &search, backlogs, &shell);
+                render_frame(&window, &rend, &command_prompt, &search, backlogs, &shell);
         } catch (cz::PanicReachedException& ex) {
             fprintf(stderr, "Fatal error: %s\n", ex.what());
             return 1;
@@ -3170,8 +3177,8 @@ static const char* get_hyperlink_at(Render_State* rend, Visual_Tile tile) {
 
 static Visual_Tile visual_tile_at(Render_State* rend, int x, int y) {
     CZ_DEBUG_ASSERT(rend->grid_is_valid);
-    int row = y / rend->font_height;
-    int column = x / rend->font_width;
+    int row = y / rend->font.height;
+    int column = x / rend->font.width;
     return rend->grid[row * rend->grid_cols + column];
 }
 
@@ -3181,9 +3188,9 @@ static Visual_Tile visual_tile_at_cursor(Render_State* rend) {
     return visual_tile_at(rend, x, y);
 }
 
-static void set_cursor_icon(Render_State* rend, Visual_Tile tile) {
+static void set_cursor_icon(Window_State* window, Render_State* rend, Visual_Tile tile) {
     const char* hyperlink = get_hyperlink_at(rend, tile);
-    SDL_Cursor* cursor = (hyperlink ? rend->click_cursor : rend->default_cursor);
+    SDL_Cursor* cursor = (hyperlink ? window->click_cursor : window->default_cursor);
     SDL_SetCursor(cursor);
 }
 

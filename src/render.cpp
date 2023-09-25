@@ -2,11 +2,11 @@
 
 #include <SDL_image.h>
 #include <inttypes.h>
-#include <tracy/Tracy.hpp>
 #include <cz/binary_search.hpp>
 #include <cz/date.hpp>
 #include <cz/format.hpp>
 #include <cz/string.hpp>
+#include <tracy/Tracy.hpp>
 
 #include "backlog.hpp"
 #include "config.hpp"
@@ -51,10 +51,10 @@ void set_icon(SDL_Window* sdl_window) {
     }
 }
 
-void close_font(Render_State* rend) {
+void close_font(Font_State* font) {
     ZoneScoped;
-    for (int ch = 0; ch < CZ_DIM(rend->caches); ch++) {
-        Surface_Cache* cache = &rend->caches[ch];
+    for (int ch = 0; ch < CZ_DIM(font->caches); ch++) {
+        Surface_Cache* cache = &font->caches[ch];
         for (int i = 0; i < cache->surfaces.len; i++) {
             SDL_Surface** surface = &cache->surfaces.get(i);
             SDL_FreeSurface(*surface);
@@ -63,14 +63,14 @@ void close_font(Render_State* rend) {
         cache->code_points.len = 0;
         cache->surfaces.len = 0;
     }
-    TTF_CloseFont(rend->font);
+    TTF_CloseFont(font->sdl);
 }
 
-void resize_font(int font_size, Render_State* rend) {
+void resize_font(int font_size, double dpi_scale, Font_State* font) {
     ZoneScoped;
     TTF_Font* new_font = NULL;
     SDL_RWops* font_mem;
-    int ptsize = (int)(font_size * rend->dpi_scale);
+    int ptsize = (int)(font_size * dpi_scale);
     if (cfg.font_path.len > 0) {
         new_font = TTF_OpenFont(cfg.font_path.buffer, ptsize);
     }
@@ -80,17 +80,15 @@ void resize_font(int font_size, Render_State* rend) {
         new_font = TTF_OpenFontRW(font_mem, 0, ptsize);
     }
     if (new_font) {
-        close_font(rend);
+        close_font(font);
 
-        rend->font = new_font;
-        rend->font_size = font_size;
+        font->sdl = new_font;
+        font->size = font_size;
         // Old versions of SDL_ttf don't parse FontLineSkip correctly so we manually set it.
-        rend->font_height =
-            cz::max(TTF_FontLineSkip(rend->font), (int)(TTF_FontHeight(rend->font) * 1.05f));
+        font->height =
+            cz::max(TTF_FontLineSkip(font->sdl), (int)(TTF_FontHeight(font->sdl) * 1.05f));
         // TODO: handle failure
-        TTF_GlyphMetrics(rend->font, ' ', nullptr, nullptr, nullptr, nullptr, &rend->font_width);
-
-        rend->complete_redraw = true;
+        TTF_GlyphMetrics(font->sdl, ' ', nullptr, nullptr, nullptr, nullptr, &font->width);
     }
 }
 
@@ -103,25 +101,25 @@ static SDL_Surface* rasterize_code_point(const char* text,
     return TTF_RenderUTF8_Blended(font, text, fgc);
 }
 
-static SDL_Surface* rasterize_code_point_cached(Render_State* rend,
+static SDL_Surface* rasterize_code_point_cached(Font_State* font,
                                                 const char seq[5],
                                                 uint8_t color256) {
     uint32_t code_point = unicode::utf8_code_point((const uint8_t*)seq);
 
     // Check the cache.
-    Surface_Cache* cache = &rend->caches[color256];
+    Surface_Cache* cache = &font->caches[color256];
     size_t index;
     if (cz::binary_search(cache->code_points.as_slice(), code_point, &index))
         return cache->surfaces[index];  // Cache hit.
 
     // Cache miss.  Rasterize and add to the cache.
-    SDL_Surface* surface = rasterize_code_point(seq, rend->font, 0, cfg.theme[color256]);
+    SDL_Surface* surface = rasterize_code_point(seq, font->sdl, 0, cfg.theme[color256]);
 
     // I've seen this case actually come up before so re-render as an invalid character.
     if (!surface) {
         if (!strcmp(seq, "\1"))
             CZ_PANIC("Failed to render");
-        return rasterize_code_point_cached(rend, "\1", color256);
+        return rasterize_code_point_cached(font, "\1", color256);
     }
 
     cache->code_points.reserve(cz::heap_allocator(), 1);
@@ -209,18 +207,18 @@ bool render_code_point(SDL_Surface* window_surface,
         }
     }
 
-    SDL_Rect rect = {point->x * rend->font_width, point->y * rend->font_height, 0, 0};
+    SDL_Rect rect = {point->x * rend->font.width, point->y * rend->font.height, 0, 0};
     uint64_t old_y = point->y;
     int width = coord_trans(point, rend->grid_cols, seq[0]);
     point->inner += strlen(seq) - 1;
 
     if (point->y != old_y) {
         rect.w = window_surface->w - rect.x;
-        rect.h = rend->font_height;
+        rect.h = rend->font.height;
         SDL_FillRect(window_surface, &rect, background);
 
         rect.x = 0;
-        rect.y += rend->font_height;
+        rect.y += rend->font.height;
 
         // Beyond bottom of screen.
         if (point->y >= rend->grid_rows_ru)
@@ -233,22 +231,22 @@ bool render_code_point(SDL_Surface* window_surface,
 
     ZoneScopedN("blit_character");
     if (seq[0] == '\t') {
-        rect.w = width * rend->font_width;
-        rect.h = rend->font_height;
+        rect.w = width * rend->font.width;
+        rect.h = rend->font.height;
         SDL_FillRect(window_surface, &rect, background);
     } else {
         const char binseq[5] = {1};
         const char* seq2 = (seq[0] != '\0' ? seq : binseq);
-        SDL_Surface* s = rasterize_code_point_cached(rend, seq2, foreground);
-        rect.w = rend->font_width;
-        rect.h = rend->font_height;
+        SDL_Surface* s = rasterize_code_point_cached(&rend->font, seq2, foreground);
+        rect.w = rend->font.width;
+        rect.h = rend->font.height;
         SDL_FillRect(window_surface, &rect, background);
         SDL_BlitSurface(s, NULL, window_surface, &rect);
     }
 
     if (underline) {
         // TODO cache
-        int baseline = TTF_FontAscent(rend->font) + 1;
+        int baseline = TTF_FontAscent(rend->font.sdl) + 1;
         SDL_Rect ur = {};
         ur.x = rect.x;
         ur.y = rect.y + baseline;
@@ -272,8 +270,8 @@ size_t find_visbacklog(Render_State* rend, uint64_t the_id) {
     return -1;
 }
 
-float get_dpi_scale(SDL_Window* window) {
-    int display = SDL_GetWindowDisplayIndex(window);
+float get_dpi_scale(SDL_Window* sdl_window) {
+    int display = SDL_GetWindowDisplayIndex(sdl_window);
     if (display == -1)
         display = 0;
 
@@ -284,14 +282,14 @@ float get_dpi_scale(SDL_Window* window) {
     return dpi / dpi_default;
 }
 
-void load_cursors(Render_State* rend) {
-    rend->default_cursor = SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_ARROW);
+void load_cursors(Window_State* window) {
+    window->default_cursor = SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_ARROW);
     // rend->select_cursor = SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_IBEAM);
-    rend->click_cursor = SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_HAND);
+    window->click_cursor = SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_HAND);
 
-    CZ_ASSERT(rend->default_cursor);
+    CZ_ASSERT(window->default_cursor);
     // CZ_ASSERT(rend->select_cursor);
-    CZ_ASSERT(rend->click_cursor);
+    CZ_ASSERT(window->click_cursor);
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -630,8 +628,8 @@ void render_prompt(SDL_Surface* window_surface,
         bool draw_cursor = (!drawn_cursor && i >= prompt->cursor);
         SDL_Rect cursor_rect;
         if (draw_cursor) {
-            cursor_rect = {point->x * rend->font_width - 1, point->y * rend->font_height, 2,
-                           rend->font_height};
+            cursor_rect = {point->x * rend->font.width - 1, point->y * rend->font.height, 2,
+                           rend->font.height};
             SDL_FillRect(window_surface, &cursor_rect, cursor_color);
             drawn_cursor = true;
         }
@@ -657,8 +655,8 @@ void render_prompt(SDL_Surface* window_surface,
 
     if (prompt->cursor == prompt->text.len) {
         // Draw cursor.
-        SDL_Rect cursor_rect = {eol.x * rend->font_width - 1, eol.y * rend->font_height, 2,
-                                rend->font_height};
+        SDL_Rect cursor_rect = {eol.x * rend->font.width - 1, eol.y * rend->font.height, 2,
+                                rend->font.height};
         SDL_FillRect(window_surface, &cursor_rect, cursor_color);
     }
 

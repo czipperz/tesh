@@ -53,14 +53,28 @@ enum Scroll_Mode {
 
 struct Backlog_State;
 
-struct Render_State {
-    TTF_Font* font;
-    int font_size;
-    float dpi_scale;
-    int font_width;
-    int font_height;
+struct Font_State {
+    TTF_Font* sdl;
+
+    int size;
+    int width;
+    int height;
 
     Surface_Cache caches[256];
+};
+
+struct Window_State {
+    SDL_Window* sdl;
+
+    float dpi_scale;
+
+    SDL_Cursor* default_cursor;
+    // SDL_Cursor * select_cursor;
+    SDL_Cursor* click_cursor;
+};
+
+struct Render_State {
+    Font_State font;
 
     int grid_cols;
     int grid_rows;
@@ -77,10 +91,6 @@ struct Render_State {
 
     Selection selection;
 
-    SDL_Cursor* default_cursor;
-    // SDL_Cursor * select_cursor;
-    SDL_Cursor* click_cursor;
-
     // We want to be able to change the order to be different than the
     // order the processes were ran in.  So store the visual order here,
     // because everything that cares about it also wants the render state.
@@ -91,8 +101,8 @@ struct Render_State {
 
 void set_icon(SDL_Window* sdl_window);
 
-void close_font(Render_State* rend);
-void resize_font(int font_size, Render_State* rend);
+void close_font(Font_State* font);
+void resize_font(int font_size, double dpi_scale, Font_State* font);
 
 int coord_trans(Visual_Point* point, int num_cols, char ch);
 
@@ -104,14 +114,13 @@ bool render_code_point(SDL_Surface* window_surface,
                        bool underline,
                        const char seq[5],
                        bool set_tile);
-void resize_font(int font_size, Render_State* rend);
 
 size_t find_visbacklog(Render_State* rend, uint64_t the_id);
 
 void reorder_attached_to_last(Render_State* rend);
 
-float get_dpi_scale(SDL_Window* window);
-void load_cursors(Render_State* rend);
+float get_dpi_scale(SDL_Window* sdl_window);
+void load_cursors(Window_State* window);
 
 bool render_backlog(SDL_Surface* window_surface,
                     Render_State* rend,

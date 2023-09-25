@@ -140,6 +140,7 @@ void setup_builtin(Running_Builtin* builtin, cz::Allocator allocator, Stdio_Stat
 
 bool tick_builtin(Shell_State* shell,
                   Shell_Local* local,
+                  Window_State* window,
                   Render_State* rend,
                   Prompt_State* prompt,
                   Backlog_State* backlog,
@@ -459,7 +460,8 @@ wide_terminal  1/0   -- Turn on or off wide terminal mode.  This will lock the t
         } else if (option == "font_path") {
             cfg.font_path.drop(cz::heap_allocator());
             cfg.font_path = builtin->args[2].clone_null_terminate(cz::heap_allocator());
-            resize_font(rend->font_size, rend);
+            resize_font(rend->font.size, window->dpi_scale, &rend->font);
+            rend->complete_redraw = true;
             goto finish_builtin;
         }
 
@@ -473,7 +475,8 @@ wide_terminal  1/0   -- Turn on or off wide terminal mode.  This will lock the t
             if (value <= 0) {
                 (void)builtin->err.write("configure: Invalid font size.\n");
             } else {
-                resize_font(value, rend);
+                resize_font(value, window->dpi_scale, &rend->font);
+                rend->complete_redraw = true;
             }
         } else if (option == "builtin_level") {
             if (value < 0 || value > 2) {

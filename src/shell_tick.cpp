@@ -11,6 +11,7 @@ static void read_tty_output(Backlog_State* backlog, Pseudo_Terminal* tty, bool c
 
 static void tick_pipeline(Shell_State* shell,
                           Shell_Local* local,
+                          Window_State* window,
                           Render_State* rend,
                           Prompt_State* prompt,
                           Backlog_State* backlog,
@@ -20,6 +21,7 @@ static void tick_pipeline(Shell_State* shell,
 
 static bool tick_program(Shell_State* shell,
                          Shell_Local* local,
+                         Window_State* window,
                          Render_State* rend,
                          Prompt_State* prompt,
                          Backlog_State* backlog,
@@ -34,6 +36,7 @@ static bool tick_program(Shell_State* shell,
 ///////////////////////////////////////////////////////////////////////////////
 
 bool tick_running_node(Shell_State* shell,
+                       Window_State* window,
                        Render_State* rend,
                        Prompt_State* prompt,
                        Running_Node* node,
@@ -42,14 +45,14 @@ bool tick_running_node(Shell_State* shell,
                        bool* force_quit) {
     for (size_t b = 0; b < node->bg.len; ++b) {
         Running_Pipeline* line = &node->bg[b];
-        tick_pipeline(shell, node->local, rend, prompt, backlog, line, tty, force_quit);
+        tick_pipeline(shell, node->local, window, rend, prompt, backlog, line, tty, force_quit);
         if (line->programs.len == 0) {
             finish_line(shell, *tty, node, backlog, line, /*background=*/true);
             --b;
         }
     }
 
-    tick_pipeline(shell, node->local, rend, prompt, backlog, &node->fg, tty, force_quit);
+    tick_pipeline(shell, node->local, window, rend, prompt, backlog, &node->fg, tty, force_quit);
 
     if (*force_quit)
         return true;
@@ -74,6 +77,7 @@ bool tick_running_node(Shell_State* shell,
 
 static void tick_pipeline(Shell_State* shell,
                           Shell_Local* local,
+                          Window_State* window,
                           Render_State* rend,
                           Prompt_State* prompt,
                           Backlog_State* backlog,
@@ -84,8 +88,8 @@ static void tick_pipeline(Shell_State* shell,
     for (size_t p = 0; p < pipeline->programs.len; ++p) {
         Running_Program* program = &pipeline->programs[p];
         int exit_code = 1;
-        if (tick_program(shell, local, rend, prompt, backlog, allocator, program, tty, &exit_code,
-                         force_quit)) {
+        if (tick_program(shell, local, window, rend, prompt, backlog, allocator, program, tty,
+                         &exit_code, force_quit)) {
             if (!pipeline->has_exit_code && p + 1 == pipeline->programs.len) {
                 pipeline->has_exit_code = true;
                 pipeline->last_exit_code = exit_code;
@@ -143,6 +147,7 @@ static void read_tty_output(Backlog_State* backlog, Pseudo_Terminal* tty, bool c
 
 static bool tick_program(Shell_State* shell,
                          Shell_Local* local,
+                         Window_State* window,
                          Render_State* rend,
                          Prompt_State* prompt,
                          Backlog_State* backlog,
@@ -159,7 +164,7 @@ static bool tick_program(Shell_State* shell,
         Running_Node* node = &program->v.sub;
         // TODO better rate limiting
         for (int rounds = 0; rounds < 128; ++rounds) {
-            if (!tick_running_node(shell, rend, prompt, node, tty, backlog, force_quit)) {
+            if (!tick_running_node(shell, window, rend, prompt, node, tty, backlog, force_quit)) {
                 break;
             }
         }
@@ -174,8 +179,8 @@ static bool tick_program(Shell_State* shell,
     } break;
 
     case Running_Program::ANY_BUILTIN:
-        return tick_builtin(shell, local, rend, prompt, backlog, allocator, program, tty, exit_code,
-                            force_quit);
+        return tick_builtin(shell, local, window, rend, prompt, backlog, allocator, program, tty,
+                            exit_code, force_quit);
 
     default:
         CZ_PANIC("unreachable");
