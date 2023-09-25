@@ -46,6 +46,7 @@
 
 static void inject_working_directory(Shell_Local* local);
 static void initialize_history_path(Prompt_State* command_prompt, Shell_Local* local);
+static bool initialize_sdl_globally();
 static void initialize_font(Font_State* font, double dpi_scale);
 
 static Backlog_State* push_backlog(Shell_State* shell, cz::Vector<Backlog_State*>* backlogs);
@@ -3019,27 +3020,10 @@ int actual_main(int argc, char** argv) {
 
     create_null_file();
 
-#ifdef _WIN32
-    SetProcessDpiAwareness(PROCESS_PER_MONITOR_DPI_AWARE);
-#endif
-
-    if (SDL_Init(SDL_INIT_VIDEO) != 0) {
-        fprintf(stderr, "SDL_Init failed: %s\n", SDL_GetError());
+    if (!initialize_sdl_globally())
         return 1;
-    }
     CZ_DEFER(SDL_Quit());
-
-    if (TTF_Init() < 0) {
-        fprintf(stderr, "TTF_Init failed: %s\n", TTF_GetError());
-        return 1;
-    }
     CZ_DEFER(TTF_Quit());
-
-    int img_init_flags = IMG_INIT_PNG;
-    if (IMG_Init(img_init_flags) != img_init_flags) {
-        fprintf(stderr, "IMG_Init failed: %s\n", IMG_GetError());
-        return 1;
-    }
     CZ_DEFER(IMG_Quit());
 
     window.dpi_scale = get_dpi_scale(NULL);
@@ -3139,6 +3123,30 @@ static void initialize_history_path(Prompt_State* command_prompt, Shell_Local* l
     if (get_var(local, "HOME", &home)) {
         command_prompt->history_path = cz::format(permanent_allocator, home, "/.tesh_history");
     }
+}
+
+static bool initialize_sdl_globally() {
+#ifdef _WIN32
+    SetProcessDpiAwareness(PROCESS_PER_MONITOR_DPI_AWARE);
+#endif
+
+    if (SDL_Init(SDL_INIT_VIDEO) != 0) {
+        fprintf(stderr, "SDL_Init failed: %s\n", SDL_GetError());
+        return false;
+    }
+
+    if (TTF_Init() < 0) {
+        fprintf(stderr, "TTF_Init failed: %s\n", TTF_GetError());
+        return false;
+    }
+
+    int img_init_flags = IMG_INIT_PNG;
+    if (IMG_Init(img_init_flags) != img_init_flags) {
+        fprintf(stderr, "IMG_Init failed: %s\n", IMG_GetError());
+        return false;
+    }
+
+    return true;
 }
 
 static void initialize_font(Font_State* font, double dpi_scale) {
