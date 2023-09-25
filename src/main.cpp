@@ -51,6 +51,8 @@ static void stop_merging_edits(Prompt_State* prompt);
 static void stop_completing(Prompt_State* prompt);
 static int word_char_category(char ch);
 static void finish_hyperlink(Backlog_State* backlog);
+static Visual_Tile visual_tile_at_cursor(Render_State* rend);
+static Visual_Tile visual_tile_at(Render_State* rend, int x, int y);
 static void set_cursor(Render_State* rend, Visual_Tile tile);
 static const char* get_hyperlink_at(Render_State* rend, Visual_Tile tile);
 static void kill_process(Shell_State* shell,
@@ -2327,11 +2329,7 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
             if (key == SDLK_LCTRL || key == SDLK_RCTRL) {
                 // Redraw because it changes how links are drawn.
                 if (rend->grid_is_valid) {
-                    int x, y;
-                    SDL_GetMouseState(&x, &y);
-                    int row = y / rend->font_height;
-                    int column = x / rend->font_width;
-                    Visual_Tile tile = rend->grid[row * rend->window_cols + column];
+                    Visual_Tile tile = visual_tile_at_cursor(rend);
                     set_cursor(rend, tile);
                 }
                 rend->complete_redraw = true;
@@ -2387,11 +2385,7 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
             if (key == SDLK_LCTRL || key == SDLK_RCTRL) {
                 // Redraw because it changes how links are drawn.
                 if (rend->grid_is_valid) {
-                    int x, y;
-                    SDL_GetMouseState(&x, &y);
-                    int row = y / rend->font_height;
-                    int column = x / rend->font_width;
-                    Visual_Tile tile = rend->grid[row * rend->window_cols + column];
+                    Visual_Tile tile = visual_tile_at_cursor(rend);
                     set_cursor(rend, tile);
                 }
                 rend->complete_redraw = true;
@@ -2649,11 +2643,7 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
                 // Control click for open link or attach.
                 if (mods & KMOD_CTRL) {
                     if (rend->grid_is_valid) {
-                        int x, y;
-                        SDL_GetMouseState(&x, &y);
-                        int row = y / rend->font_height;
-                        int column = x / rend->font_width;
-                        Visual_Tile tile = rend->grid[row * rend->window_cols + column];
+                        Visual_Tile tile = visual_tile_at_cursor(rend);
                         const char* hyperlink = get_hyperlink_at(rend, tile);
 
                         if (hyperlink) {
@@ -2691,9 +2681,7 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
                     break;
                 }
 
-                int row = event.button.y / rend->font_height;
-                int column = event.button.x / rend->font_width;
-                Visual_Tile tile = rend->grid[row * rend->window_cols + column];
+                Visual_Tile tile = visual_tile_at(rend, event.button.x, event.button.y);
 
                 if (!holding_shift && tile.outer == 0)
                     break;
@@ -2758,9 +2746,7 @@ static int process_events(cz::Vector<Backlog_State*>* backlogs,
             if (!rend->grid_is_valid)
                 break;
 
-            int row = event.motion.y / rend->font_height;
-            int column = event.motion.x / rend->font_width;
-            Visual_Tile tile = rend->grid[row * rend->window_cols + column];
+            Visual_Tile tile = visual_tile_at(rend, event.motion.x, event.motion.y);
             set_cursor(rend, tile);
 
             if (rend->selection.type == SELECT_DISABLED || rend->selection.type == SELECT_FINISHED)
@@ -3178,6 +3164,18 @@ static const char* get_hyperlink_at(Render_State* rend, Visual_Tile tile) {
         }
     }
     return hyperlink;
+}
+
+static Visual_Tile visual_tile_at(Render_State* rend, int x, int y) {
+    int row = y / rend->font_height;
+    int column = x / rend->font_width;
+    return rend->grid[row * rend->window_cols + column];
+}
+
+static Visual_Tile visual_tile_at_cursor(Render_State* rend) {
+    int x, y;
+    SDL_GetMouseState(&x, &y);
+    return visual_tile_at(rend, x, y);
 }
 
 static void set_cursor(Render_State* rend, Visual_Tile tile) {
