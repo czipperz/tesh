@@ -3169,6 +3169,7 @@ static const char* get_hyperlink_at(Render_State* rend, Visual_Tile tile) {
 }
 
 static Visual_Tile visual_tile_at(Render_State* rend, int x, int y) {
+    CZ_DEBUG_ASSERT(rend->grid_is_valid);
     int row = y / rend->font_height;
     int column = x / rend->font_width;
     return rend->grid[row * rend->window_cols + column];
