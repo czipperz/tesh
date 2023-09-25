@@ -2986,12 +2986,8 @@ int actual_main(int argc, char** argv) {
     load_default_configuration();
 
     shell.arena.init();
-    command_prompt.edit_arena.init();
-    command_prompt.history_arena.init();
-    command_prompt.completion.results_arena.init();
-    search.prompt.edit_arena.init();
-    search.prompt.history_arena.init();
-    search.prompt.completion.results_arena.init();
+    command_prompt.init();
+    search.prompt.init();
 
     cz::Buffer_Array permanent_arena;
     permanent_arena.init();

@@ -43,6 +43,9 @@ struct Prompt_State {
         cz::Vector<cz::Str> results;
         size_t current;
     } completion;
+
+    void init();
+    void drop();
 };
 
 // Walk the undo tree.
