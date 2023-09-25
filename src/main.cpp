@@ -1768,12 +1768,11 @@ static bool submit_prompt(Shell_State* shell,
                           bool submit,
                           bool allow_attached) {
     Running_Script* script = (allow_attached ? attached_process(shell, rend) : nullptr);
-    uint64_t process_id = (script ? script->id : backlogs->len);
     Backlog_State* backlog;
     if (script) {
-        backlog = (*backlogs)[process_id];
+        backlog = (*backlogs)[script->id];
     } else {
-        backlog = push_backlog(backlogs, process_id);
+        backlog = push_backlog(backlogs, backlogs->len);
         if (rend) {
             rend->visbacklogs.reserve(cz::heap_allocator(), 1);
             rend->visbacklogs.push(backlog);
