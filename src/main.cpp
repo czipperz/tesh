@@ -2978,10 +2978,9 @@ int actual_main(int argc, char** argv) {
     Search_State search = {};
     Shell_State shell = {};
 
-    shell.arena.init();
-
     load_default_configuration();
 
+    shell.arena.init();
     command_prompt.edit_arena.init();
     command_prompt.history_arena.init();
     command_prompt.completion.results_arena.init();
