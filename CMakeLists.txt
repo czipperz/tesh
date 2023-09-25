@@ -116,7 +116,7 @@ endif()
 # Test programs
 ###############################################################################
 
-add_executable(catforever tests/catforever.c)
-add_executable(forever    tests/forever.c)
-add_executable(mycat      tests/mycat.c)
-add_executable(myecho     tests/myecho.c)
+add_executable(catforever test-programs/catforever.c)
+add_executable(forever    test-programs/forever.c)
+add_executable(mycat      test-programs/mycat.c)
+add_executable(myecho     test-programs/myecho.c)
