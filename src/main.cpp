@@ -3030,7 +3030,7 @@ int actual_main(int argc, char** argv) {
 
     window.sdl =
         SDL_CreateWindow("Tesh", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
-                         (int)(800 * window.dpi_scale), (int)(800 * window.dpi_scale),
+                         (int)(800 * window.dpi_scale), (int)(600 * window.dpi_scale),
                          SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI);
     if (!window.sdl) {
         fprintf(stderr, "SDL_CreateWindow failed: %s\n", SDL_GetError());
