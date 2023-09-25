@@ -45,9 +45,9 @@
 ///////////////////////////////////////////////////////////////////////////////
 
 static void inject_working_directory(Shell_Local* local);
-static void initialize_history_path(Prompt_State* command_prompt, Shell_Local* local);
-static bool initialize_sdl_globally();
-static void initialize_font(Font_State* font, double dpi_scale);
+static void init_history_path(Prompt_State* command_prompt, Shell_Local* local);
+static bool init_sdl_globally();
+static void init_font(Font_State* font, double dpi_scale);
 
 static Backlog_State* push_backlog(Shell_State* shell, cz::Vector<Backlog_State*>* backlogs);
 static void scroll_down1(Render_State* rend, int lines);
@@ -3012,11 +3012,11 @@ int actual_main(int argc, char** argv) {
 
     inject_working_directory(&shell.local);
     load_environment_variables(&shell.local);
-    initialize_history_path(&command_prompt, &shell.local);
+    init_history_path(&command_prompt, &shell.local);
 
     create_null_file();
 
-    if (!initialize_sdl_globally())
+    if (!init_sdl_globally())
         return 1;
     CZ_DEFER(SDL_Quit());
     CZ_DEFER(TTF_Quit());
@@ -3038,7 +3038,7 @@ int actual_main(int argc, char** argv) {
 
     load_cursors(&window);
 
-    initialize_font(&rend.font, window.dpi_scale);
+    init_font(&rend.font, window.dpi_scale);
     rend.complete_redraw = true;
 
     {
@@ -3111,14 +3111,14 @@ static void inject_working_directory(Shell_Local* local) {
     set_wd(local, working_directory);
 }
 
-static void initialize_history_path(Prompt_State* command_prompt, Shell_Local* local) {
+static void init_history_path(Prompt_State* command_prompt, Shell_Local* local) {
     cz::Str home = {};
     if (get_var(local, "HOME", &home)) {
         command_prompt->history_path = cz::format(permanent_allocator, home, "/.tesh_history");
     }
 }
 
-static bool initialize_sdl_globally() {
+static bool init_sdl_globally() {
 #ifdef _WIN32
     SetProcessDpiAwareness(PROCESS_PER_MONITOR_DPI_AWARE);
 #endif
@@ -3142,7 +3142,7 @@ static bool initialize_sdl_globally() {
     return true;
 }
 
-static void initialize_font(Font_State* font, double dpi_scale) {
+static void init_font(Font_State* font, double dpi_scale) {
     font->size = cfg.default_font_size;
     resize_font(font->size, dpi_scale, font);
 
