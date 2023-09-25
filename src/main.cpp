@@ -47,6 +47,7 @@
 static void inject_working_directory(Shell_Local* local);
 static void init_history_path(Prompt_State* command_prompt, Shell_Local* local);
 static bool init_sdl_globally();
+static void drop_sdl_globally();
 static void init_font(Font_State* font, double dpi_scale);
 
 static Backlog_State* push_backlog(Shell_State* shell, cz::Vector<Backlog_State*>* backlogs);
@@ -3018,9 +3019,7 @@ int actual_main(int argc, char** argv) {
 
     if (!init_sdl_globally())
         return 1;
-    CZ_DEFER(SDL_Quit());
-    CZ_DEFER(TTF_Quit());
-    CZ_DEFER(IMG_Quit());
+    CZ_DEFER(drop_sdl_globally());
 
     window.dpi_scale = get_dpi_scale(NULL);
 
@@ -3140,6 +3139,12 @@ static bool init_sdl_globally() {
     }
 
     return true;
+}
+
+static void drop_sdl_globally() {
+    IMG_Quit();
+    TTF_Quit();
+    SDL_Quit();
 }
 
 static void init_font(Font_State* font, double dpi_scale) {
