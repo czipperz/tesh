@@ -213,7 +213,7 @@ static void render_frame(Window_State* window, cz::Slice<Pane_State*> panes) {
 
     {
         ZoneScopedN("update_window_surface");
-        SDL_UpdateWindowSurfaceRects(window->sdl, updated_rects.elems, updated_rects.len);
+        SDL_UpdateWindowSurfaceRects(window->sdl, updated_rects.elems, (int)updated_rects.len);
     }
 }
 
