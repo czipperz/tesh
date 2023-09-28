@@ -3201,6 +3201,8 @@ static Visual_Tile visual_tile_at(Render_State* rend, int x, int y) {
     CZ_DEBUG_ASSERT(rend->grid_is_valid);
     int row = y / rend->font.height;
     int column = x / rend->font.width;
+    if (row >= rend->grid_rows_ru || column >= rend->grid_cols)
+        return {};
     return rend->grid[row * rend->grid_cols + column];
 }
 
