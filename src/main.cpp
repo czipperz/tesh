@@ -3061,15 +3061,25 @@ int actual_main(int argc, char** argv) {
                 break;
 
             bool force_quit = false;
-            if (read_process_data(&pane->shell, pane->backlogs, &window, &pane->rend,
-                                  &pane->command_prompt, &force_quit))
-                status = 1;
+            for (Pane_State* pane : panes) {
+                if (read_process_data(&pane->shell, pane->backlogs, &window, &pane->rend,
+                                      &pane->command_prompt, &force_quit))
+                    status = 1;
+            }
 
             if (force_quit)
                 break;
 
-            if (&pane->rend.complete_redraw || status > 0 || &pane->shell.scripts.len > 0 ||
-                !&pane->rend.grid_is_valid)
+            bool redraw = (status > 0);
+            for (Pane_State* pane : panes) {
+                if (pane->shell.scripts.len > 0 || pane->rend.complete_redraw ||
+                    !pane->rend.grid_is_valid) {
+                    redraw = true;
+                    break;
+                }
+            }
+
+            if (redraw)
                 render_frame(&window, &pane->rend, &pane->command_prompt, &pane->search,
                              pane->backlogs, &pane->shell);
         } catch (cz::PanicReachedException& ex) {
