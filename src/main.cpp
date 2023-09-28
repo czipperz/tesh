@@ -120,77 +120,88 @@ static void stop_selecting(Render_State* rend) {
 static void render_frame(Window_State* window, cz::Slice<Pane_State*> panes) {
     ZoneScoped;
 
-    // TODO TODO TODO render multiple panes.
-    Pane_State* pane = panes->get(0);
-    Render_State* rend = &pane->rend;
-    Prompt_State* prompt = &pane->prompt;
-    Search_State* search = &pane->search;
-    cz::Slice<Backlog_State*> backlogs = pane->backlogs;
-    Shell_State* shell = &pane->shell;
-
+    SDL_Surface* window_surface = SDL_GetWindowSurface(window->sdl);
     std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
 
-    SDL_Surface* window_surface = SDL_GetWindowSurface(window->sdl);
-    rend->grid_rows = window_surface->h / rend->font.height;
-    rend->grid_rows_ru = (window_surface->h + rend->font.height - 1) / rend->font.height;
-    rend->grid_cols = window_surface->w / rend->font.width;
+    cz::Vector<SDL_Rect> updated_rects = {};
+    CZ_DEFER(updated_rects.drop(cz::heap_allocator()));
+    rects.reserve(cz::heap_allocator(), panes->len);
 
-    if (rend->grid_rows != shell->height || rend->grid_cols != shell->width) {
-        shell->height = rend->grid_rows;
-        shell->width = rend->grid_cols;
-        for (size_t i = 0; i < shell->scripts.len; ++i) {
-            Running_Script* script = &shell->scripts[i];
-            set_window_size(&script->tty, shell->width, shell->height);
+    for (size_t i = 0; i < panes->len; ++i) {
+        Pane_State* pane = panes->get(0);
+        Render_State* rend = &pane->rend;
+        Prompt_State* prompt = &pane->prompt;
+        Search_State* search = &pane->search;
+        cz::Slice<Backlog_State*> backlogs = pane->backlogs;
+        Shell_State* shell = &pane->shell;
+
+        SDL_Rect rect = {0, 0, window_surface->w, window_surface->h};
+
+        rend->grid_rows = window_surface->h / rend->font.height;
+        rend->grid_rows_ru = (window_surface->h + rend->font.height - 1) / rend->font.height;
+        rend->grid_cols = window_surface->w / rend->font.width;
+
+        if (rend->grid_rows != shell->height || rend->grid_cols != shell->width) {
+            shell->height = rend->grid_rows;
+            shell->width = rend->grid_cols;
+            for (size_t i = 0; i < shell->scripts.len; ++i) {
+                Running_Script* script = &shell->scripts[i];
+                set_window_size(&script->tty, shell->width, shell->height);
+            }
         }
-    }
 
-    if (rend->scroll_mode == AUTO_PAGE)
-        auto_scroll_start_paging(rend);
-    if (rend->scroll_mode == AUTO_SCROLL)
-        ensure_end_of_selected_process_on_screen(rend, rend->selected_outer, false);
-    if (rend->attached_outer != -1)
-        ensure_prompt_on_screen(rend);
+        if (rend->scroll_mode == AUTO_PAGE)
+            auto_scroll_start_paging(rend);
+        if (rend->scroll_mode == AUTO_SCROLL)
+            ensure_end_of_selected_process_on_screen(rend, rend->selected_outer, false);
+        if (rend->attached_outer != -1)
+            ensure_prompt_on_screen(rend);
 
-    // TODO remove this
-    rend->complete_redraw = true;
+        // TODO remove this
+        rend->complete_redraw = true;
 
-    if (rend->complete_redraw) {
-        ZoneScopedN("draw_background");
-        SDL_FillRect(window_surface, NULL, SDL_MapRGB(window_surface->format, 0x00, 0x00, 0x00));
-        rend->backlog_end = rend->backlog_start;
-    }
+        ////////////////////////////////////////////////////
 
-    if (!rend->grid_is_valid) {
-        rend->grid.len = 0;
-        size_t new_len = rend->grid_rows_ru * rend->grid_cols;
-        rend->grid.reserve_exact(cz::heap_allocator(), new_len);
-        rend->grid.len = new_len;
-        rend->grid_is_valid = true;
-    }
-    memset(rend->grid.elems, 0, sizeof(Visual_Tile) * rend->grid.len);
-    rend->selection.bg_color = SDL_MapRGB(window_surface->format, cfg.selection_bg_color.r,
-                                          cfg.selection_bg_color.g, cfg.selection_bg_color.b);
-
-    for (size_t i = rend->backlog_start.outer; i < rend->visbacklogs.len; ++i) {
-        if (!render_backlog(window_surface, rend, shell, prompt, backlogs, now,
-                            rend->visbacklogs[i], i)) {
-            break;
+        if (rend->complete_redraw) {
+            ZoneScopedN("draw_background");
+            SDL_FillRect(window_surface, &rect,
+                         SDL_MapRGB(window_surface->format, 0x00, 0x00, 0x00));
+            rend->backlog_end = rend->backlog_start;
         }
+
+        if (!rend->grid_is_valid) {
+            rend->grid.len = 0;
+            size_t new_len = rend->grid_rows_ru * rend->grid_cols;
+            rend->grid.reserve_exact(cz::heap_allocator(), new_len);
+            rend->grid.len = new_len;
+            rend->grid_is_valid = true;
+        }
+        memset(rend->grid.elems, 0, sizeof(Visual_Tile) * rend->grid.len);
+        rend->selection.bg_color = SDL_MapRGB(window_surface->format, cfg.selection_bg_color.r,
+                                              cfg.selection_bg_color.g, cfg.selection_bg_color.b);
+
+        for (size_t i = rend->backlog_start.outer; i < rend->visbacklogs.len; ++i) {
+            if (!render_backlog(window_surface, rend, shell, prompt, backlogs, now,
+                                rend->visbacklogs[i], i)) {
+                break;
+            }
+        }
+
+        if (rend->attached_outer == -1)
+            render_prompt(window_surface, rend, prompt, nullptr, backlogs, shell);
+
+        if (search->is_searching)
+            render_prompt(window_surface, rend, prompt, search, backlogs, shell);
+
+        rend->complete_redraw = false;
+
+        updated_rects.push(rect);
     }
-
-    if (rend->attached_outer == -1)
-        render_prompt(window_surface, rend, prompt, nullptr, backlogs, shell);
-
-    if (search->is_searching)
-        render_prompt(window_surface, rend, prompt, search, backlogs, shell);
 
     {
-        const SDL_Rect rects[] = {{0, 0, window_surface->w, window_surface->h}};
         ZoneScopedN("update_window_surface");
-        SDL_UpdateWindowSurfaceRects(window->sdl, rects, CZ_DIM(rects));
+        SDL_UpdateWindowSurfaceRects(window->sdl, updated_rects.elems, updated_rects.len);
     }
-
-    rend->complete_redraw = false;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
