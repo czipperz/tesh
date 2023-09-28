@@ -117,13 +117,16 @@ static void stop_selecting(Render_State* rend) {
     rend->complete_redraw = true;
 }
 
-static void render_frame(Window_State* window,
-                         Render_State* rend,
-                         Prompt_State* prompt,
-                         Search_State* search,
-                         cz::Slice<Backlog_State*> backlogs,
-                         Shell_State* shell) {
+static void render_frame(Window_State* window, cz::Slice<Pane_State*> panes) {
     ZoneScoped;
+
+    // TODO TODO TODO render multiple panes.
+    Pane_State* pane = panes->get(0);
+    Render_State* rend = &pane->rend;
+    Prompt_State* prompt = &pane->prompt;
+    Search_State* search = &pane->search;
+    cz::Slice<Backlog_State*> backlogs = pane->backlogs;
+    Shell_State* shell = &pane->shell;
 
     std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
 
@@ -3081,8 +3084,7 @@ int actual_main(int argc, char** argv) {
             }
 
             if (redraw)
-                render_frame(&window, &pane->rend, &pane->command_prompt, &pane->search,
-                             pane->backlogs, &pane->shell);
+                render_frame(&window, panes);
         } catch (cz::PanicReachedException& ex) {
             fprintf(stderr, "Fatal error: %s\n", ex.what());
             return 1;
