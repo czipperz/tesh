@@ -3087,7 +3087,15 @@ int actual_main(int argc, char** argv) {
             return 1;
         }
 
-        if (pane->shell.scripts.len > 0) {
+        bool any_scripts_running = false;
+        for (Pane_State* pane : panes) {
+            if (pane->shell.scripts.len > 0) {
+                any_scripts_running = true;
+                break;
+            }
+        }
+
+        if (any_scripts_running) {
             // Keep 60fps while any scripts are running.
             const uint32_t frame_length = 1000 / 60;
             uint32_t wanted_end = start_frame + frame_length;
