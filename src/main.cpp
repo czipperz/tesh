@@ -40,11 +40,24 @@
 #include "solarized_dark.hpp"
 #include "unicode.hpp"
 
+////////////////////////////////////////////////////////////////////////////////
+// Type definitions
+////////////////////////////////////////////////////////////////////////////////
+
+struct Pane_State {
+    Render_State rend;
+    cz::Vector<Backlog_State*> backlogs;
+    Prompt_State command_prompt;
+    Search_State search;
+    Shell_State shell;
+
+    void init();
+    void drop();
+};
+
 ///////////////////////////////////////////////////////////////////////////////
 // Forward declarations
 ///////////////////////////////////////////////////////////////////////////////
-
-struct Pane_State;
 
 static bool init_sdl_globally();
 static void drop_sdl_globally();
@@ -2996,17 +3009,6 @@ static void load_environment_variables(Shell_Local* local) {
 ///////////////////////////////////////////////////////////////////////////////
 // main
 ///////////////////////////////////////////////////////////////////////////////
-
-struct Pane_State {
-    Render_State rend;
-    cz::Vector<Backlog_State*> backlogs;
-    Prompt_State command_prompt;
-    Search_State search;
-    Shell_State shell;
-
-    void init();
-    void drop();
-};
 
 int actual_main(int argc, char** argv) {
     Window_State window = {};
