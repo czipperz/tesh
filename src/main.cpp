@@ -48,6 +48,8 @@ struct Pane_State;
 
 static bool init_sdl_globally();
 static void drop_sdl_globally();
+
+static bool create_pane(cz::Vector<Pane_State*>* panes, Window_State* window);
 static void init_font(Font_State* font, double dpi_scale);
 static bool create_window(Window_State* window);
 static void destroy_window(Window_State* window);
@@ -3037,33 +3039,15 @@ int actual_main(int argc, char** argv) {
     // Create a pane
     ////////////////////////////////////////////////////////
 
-    panes.reserve(cz::heap_allocator(), 1);
-    panes.push(permanent_allocator.alloc<Pane_State>());
-
-    *panes[0] = {};
-    panes[0]->init();
-
-    Render_State* rend = &panes[0]->rend;
-    cz::Vector<Backlog_State*>* backlogs = &panes[0]->backlogs;
-    Prompt_State* command_prompt = &panes[0]->command_prompt;
-    Search_State* search = &panes[0]->search;
-    Shell_State* shell = &panes[0]->shell;
-
-    init_font(&rend->font, window.dpi_scale);
-
-    {
-        int w, h;
-        SDL_GetWindowSize(window.sdl, &w, &h);
-
-        if (!create_shell(panes[0], w, h))
-            return 1;
-    }
-
-    CZ_DEFER(save_history(command_prompt, shell));
+    if (!create_pane(&panes, &window))
+        return 1;
+    CZ_DEFER(save_history(&panes[0]->command_prompt, &panes[0]->shell));
 
     ////////////////////////////////////////////////////////
     // Main loop
     ////////////////////////////////////////////////////////
+
+    Pane_State* pane = panes[0];
 
     while (1) {
         uint32_t start_frame = SDL_GetTicks();
@@ -3071,26 +3055,29 @@ int actual_main(int argc, char** argv) {
         temp_arena.clear();
 
         try {
-            int status = process_events(backlogs, command_prompt, search, &window, rend, shell);
+            int status = process_events(&pane->backlogs, &pane->command_prompt, &pane->search,
+                                        &window, &pane->rend, &pane->shell);
             if (status < 0)
                 break;
 
             bool force_quit = false;
-            if (read_process_data(shell, *backlogs, &window, rend, command_prompt, &force_quit))
+            if (read_process_data(&pane->shell, pane->backlogs, &window, &pane->rend,
+                                  &pane->command_prompt, &force_quit))
                 status = 1;
 
             if (force_quit)
                 break;
 
-            if (rend->complete_redraw || status > 0 || shell->scripts.len > 0 ||
-                !rend->grid_is_valid)
-                render_frame(&window, rend, command_prompt, search, *backlogs, shell);
+            if (&pane->rend.complete_redraw || status > 0 || &pane->shell.scripts.len > 0 ||
+                !&pane->rend.grid_is_valid)
+                render_frame(&window, &pane->rend, &pane->command_prompt, &pane->search,
+                             pane->backlogs, &pane->shell);
         } catch (cz::PanicReachedException& ex) {
             fprintf(stderr, "Fatal error: %s\n", ex.what());
             return 1;
         }
 
-        if (shell->scripts.len > 0) {
+        if (pane->shell.scripts.len > 0) {
             // Keep 60fps while any scripts are running.
             const uint32_t frame_length = 1000 / 60;
             uint32_t wanted_end = start_frame + frame_length;
@@ -3146,6 +3133,22 @@ static void drop_sdl_globally() {
 ////////////////////////////////////////////////////////////////////////////////
 // Pane_State lifecycle
 ////////////////////////////////////////////////////////////////////////////////
+
+static bool create_pane(cz::Vector<Pane_State*>* panes, Window_State* window) {
+    panes->reserve(cz::heap_allocator(), 1);
+
+    Pane_State* pane = permanent_allocator.alloc<Pane_State>();
+    panes->push(pane);
+    *pane = {};
+    pane->init();
+
+    init_font(&pane->rend.font, window->dpi_scale);
+
+    int w, h;
+    SDL_GetWindowSize(window->sdl, &w, &h);
+
+    return create_shell(pane, w, h);
+}
 
 void Pane_State::init() {
     shell.arena.init();
