@@ -2011,12 +2011,14 @@ finish_search:
     }
 }
 
-static int process_events(cz::Vector<Backlog_State*>* backlogs,
-                          Prompt_State* command_prompt,
-                          Search_State* search,
-                          Window_State* window,
-                          Render_State* rend,
-                          Shell_State* shell) {
+static int process_events(Window_State* window, cz::Vector<Pane_State*>* panes) {
+    Pane_State* pane = panes->get(0);
+    cz::Vector<Backlog_State*>* backlogs = &pane->backlogs;
+    Prompt_State* command_prompt = &pane->command_prompt;
+    Search_State* search = &pane->search;
+    Render_State* rend = &pane->rend;
+    Shell_State* shell = &pane->shell;
+
     static uint32_t ignore_key_events_until = 0;
 
     // If previous KEYDOWN was A-* then track it.
@@ -3055,8 +3057,7 @@ int actual_main(int argc, char** argv) {
         temp_arena.clear();
 
         try {
-            int status = process_events(&pane->backlogs, &pane->command_prompt, &pane->search,
-                                        &window, &pane->rend, &pane->shell);
+            int status = process_events(&window, &panes);
             if (status < 0)
                 break;
 
