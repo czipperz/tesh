@@ -2976,19 +2976,25 @@ static void load_environment_variables(Shell_Local* local) {
 // main
 ///////////////////////////////////////////////////////////////////////////////
 
+struct Pane_State {
+    Render_State rend;
+    cz::Vector<Backlog_State*> backlogs;
+    Prompt_State command_prompt;
+    Search_State search;
+    Shell_State shell;
+
+    void init() {
+        shell.arena.init();
+        command_prompt.init();
+        search.prompt.init();
+    }
+};
+
 int actual_main(int argc, char** argv) {
     Window_State window = {};
-    Render_State rend = {};
-    cz::Vector<Backlog_State*> backlogs = {};
-    Prompt_State command_prompt = {};
-    Search_State search = {};
-    Shell_State shell = {};
+    cz::Vector<Pane_State*> panes = {};
 
     load_default_configuration();
-
-    shell.arena.init();
-    command_prompt.init();
-    search.prompt.init();
 
     cz::Buffer_Array permanent_arena;
     permanent_arena.init();
@@ -2998,22 +3004,34 @@ int actual_main(int argc, char** argv) {
     temp_arena.init();
     temp_allocator = temp_arena.allocator();
 
-    CZ_DEFER(cleanup_processes(&shell));
+    panes.reserve(cz::heap_allocator(), 1);
+    panes.push(permanent_allocator.alloc<Pane_State>());
+
+    *panes[0] = {};
+    panes[0]->init();
+
+    Render_State* rend = &panes[0]->rend;
+    cz::Vector<Backlog_State*>* backlogs = &panes[0]->backlogs;
+    Prompt_State* command_prompt = &panes[0]->command_prompt;
+    Search_State* search = &panes[0]->search;
+    Shell_State* shell = &panes[0]->shell;
+
+    CZ_DEFER(cleanup_processes(shell));
 
     set_program_name(/*fallback=*/argv[0]);
     set_program_directory();
 
-    command_prompt.prefix = " $ ";
-    search.prompt.prefix = "SEARCH> ";
-    rend.complete_redraw = true;
+    command_prompt->prefix = " $ ";
+    search->prompt.prefix = "SEARCH> ";
+    rend->complete_redraw = true;
 
     if (argc == 2) {
         cz::set_working_directory(argv[1]);
     }
 
-    inject_working_directory(&shell.local);
-    load_environment_variables(&shell.local);
-    init_history_path(&command_prompt, &shell.local);
+    inject_working_directory(&shell->local);
+    load_environment_variables(&shell->local);
+    init_history_path(command_prompt, &shell->local);
 
     create_null_file();
 
@@ -3042,24 +3060,24 @@ int actual_main(int argc, char** argv) {
 
     load_cursors(&window);
 
-    init_font(&rend.font, window.dpi_scale);
-    rend.complete_redraw = true;
+    init_font(&rend->font, window.dpi_scale);
+    rend->complete_redraw = true;
 
     {
         int w, h;
         SDL_GetWindowSize(window.sdl, &w, &h);
-        shell.width = w / rend.font.width;
-        shell.height = h / rend.font.height;
+        shell->width = w / rend->font.width;
+        shell->height = h / rend->font.height;
     }
 
     {
         // Start running ~/.teshrc.
         cz::String source_command = cz::format(temp_allocator, "source ~/.teshrc");
-        submit_prompt(&shell, &rend, &backlogs, &command_prompt, source_command, true, false);
+        submit_prompt(shell, rend, backlogs, command_prompt, source_command, true, false);
     }
 
-    load_history(&command_prompt, &shell);
-    CZ_DEFER(save_history(&command_prompt, &shell));
+    load_history(command_prompt, shell);
+    CZ_DEFER(save_history(command_prompt, shell));
 
     while (1) {
         uint32_t start_frame = SDL_GetTicks();
@@ -3068,25 +3086,25 @@ int actual_main(int argc, char** argv) {
 
         try {
             int status =
-                process_events(&backlogs, &command_prompt, &search, &window, &rend, &shell);
+                process_events(backlogs, command_prompt, search, &window, rend, shell);
             if (status < 0)
                 break;
 
             bool force_quit = false;
-            if (read_process_data(&shell, backlogs, &window, &rend, &command_prompt, &force_quit))
+            if (read_process_data(shell, *backlogs, &window, rend, command_prompt, &force_quit))
                 status = 1;
 
             if (force_quit)
                 break;
 
-            if (rend.complete_redraw || status > 0 || shell.scripts.len > 0 || !rend.grid_is_valid)
-                render_frame(&window, &rend, &command_prompt, &search, backlogs, &shell);
+            if (rend->complete_redraw || status > 0 || shell->scripts.len > 0 || !rend->grid_is_valid)
+                render_frame(&window, rend, command_prompt, search, *backlogs, shell);
         } catch (cz::PanicReachedException& ex) {
             fprintf(stderr, "Fatal error: %s\n", ex.what());
             return 1;
         }
 
-        if (shell.scripts.len > 0) {
+        if (shell->scripts.len > 0) {
             // Keep 60fps while any scripts are running.
             const uint32_t frame_length = 1000 / 60;
             uint32_t wanted_end = start_frame + frame_length;

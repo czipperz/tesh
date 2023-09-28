@@ -95,8 +95,8 @@ struct Render_State {
     // order the processes were ran in.  So store the visual order here,
     // because everything that cares about it also wants the render state.
     cz::Vector<Backlog_State*> visbacklogs;
-    uint64_t selected_outer = -1;
-    uint64_t attached_outer = -1;
+    uint64_t selected_outer = (uint64_t)-1;
+    uint64_t attached_outer = (uint64_t)-1;
 };
 
 void set_icon(SDL_Window* sdl_window);
