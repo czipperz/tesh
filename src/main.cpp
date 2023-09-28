@@ -2987,7 +2987,17 @@ struct Pane_State {
         shell.arena.init();
         command_prompt.init();
         search.prompt.init();
+
+        command_prompt.prefix = " $ ";
+        search.prompt.prefix = "SEARCH> ";
+        rend.complete_redraw = true;
+
+        inject_working_directory(&shell.local);
+        load_environment_variables(&shell.local);
+        init_history_path(&command_prompt, &shell.local);
     }
+
+    void drop() { cleanup_processes(&shell); }
 };
 
 int actual_main(int argc, char** argv) {
@@ -3004,6 +3014,15 @@ int actual_main(int argc, char** argv) {
     temp_arena.init();
     temp_allocator = temp_arena.allocator();
 
+    set_program_name(/*fallback=*/argv[0]);
+    set_program_directory();
+
+    if (argc == 2) {
+        cz::set_working_directory(argv[1]);
+    }
+
+    ////////////////////////////////////////////////////////
+
     panes.reserve(cz::heap_allocator(), 1);
     panes.push(permanent_allocator.alloc<Pane_State>());
 
@@ -3015,23 +3034,6 @@ int actual_main(int argc, char** argv) {
     Prompt_State* command_prompt = &panes[0]->command_prompt;
     Search_State* search = &panes[0]->search;
     Shell_State* shell = &panes[0]->shell;
-
-    CZ_DEFER(cleanup_processes(shell));
-
-    set_program_name(/*fallback=*/argv[0]);
-    set_program_directory();
-
-    command_prompt->prefix = " $ ";
-    search->prompt.prefix = "SEARCH> ";
-    rend->complete_redraw = true;
-
-    if (argc == 2) {
-        cz::set_working_directory(argv[1]);
-    }
-
-    inject_working_directory(&shell->local);
-    load_environment_variables(&shell->local);
-    init_history_path(command_prompt, &shell->local);
 
     create_null_file();
 
@@ -3061,7 +3063,6 @@ int actual_main(int argc, char** argv) {
     load_cursors(&window);
 
     init_font(&rend->font, window.dpi_scale);
-    rend->complete_redraw = true;
 
     {
         int w, h;
@@ -3085,8 +3086,7 @@ int actual_main(int argc, char** argv) {
         temp_arena.clear();
 
         try {
-            int status =
-                process_events(backlogs, command_prompt, search, &window, rend, shell);
+            int status = process_events(backlogs, command_prompt, search, &window, rend, shell);
             if (status < 0)
                 break;
 
@@ -3097,7 +3097,8 @@ int actual_main(int argc, char** argv) {
             if (force_quit)
                 break;
 
-            if (rend->complete_redraw || status > 0 || shell->scripts.len > 0 || !rend->grid_is_valid)
+            if (rend->complete_redraw || status > 0 || shell->scripts.len > 0 ||
+                !rend->grid_is_valid)
                 render_frame(&window, rend, command_prompt, search, *backlogs, shell);
         } catch (cz::PanicReachedException& ex) {
             fprintf(stderr, "Fatal error: %s\n", ex.what());
