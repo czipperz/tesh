@@ -148,11 +148,11 @@ static void render_frame(Window_State* window, cz::Slice<Pane_State*> panes) {
         cz::Slice<Backlog_State*> backlogs = pane->backlogs;
         Shell_State* shell = &pane->shell;
 
-        SDL_Rect rect = {0, 0, window_surface->w, window_surface->h};
+        SDL_Rect grid_rect = {0, 0, window_surface->w, window_surface->h};
 
-        rend->grid_rows = window_surface->h / rend->font.height;
-        rend->grid_rows_ru = (window_surface->h + rend->font.height - 1) / rend->font.height;
-        rend->grid_cols = window_surface->w / rend->font.width;
+        rend->grid_rows = grid_rect.h / rend->font.height;
+        rend->grid_rows_ru = (grid_rect.h + rend->font.height - 1) / rend->font.height;
+        rend->grid_cols = grid_rect.h / rend->font.width;
 
         if (rend->grid_rows != shell->height || rend->grid_cols != shell->width) {
             shell->height = rend->grid_rows;
@@ -177,7 +177,7 @@ static void render_frame(Window_State* window, cz::Slice<Pane_State*> panes) {
 
         if (rend->complete_redraw) {
             ZoneScopedN("draw_background");
-            SDL_FillRect(window_surface, &rect,
+            SDL_FillRect(window_surface, &grid_rect,
                          SDL_MapRGB(window_surface->format, 0x00, 0x00, 0x00));
             rend->backlog_end = rend->backlog_start;
         }
@@ -194,21 +194,22 @@ static void render_frame(Window_State* window, cz::Slice<Pane_State*> panes) {
                                               cfg.selection_bg_color.g, cfg.selection_bg_color.b);
 
         for (size_t i = rend->backlog_start.outer; i < rend->visbacklogs.len; ++i) {
-            if (!render_backlog(window_surface, rend, shell, command_prompt, backlogs, now,
-                                rend->visbacklogs[i], i)) {
+            if (!render_backlog(window_surface, grid_rect, rend, shell, command_prompt, backlogs,
+                                now, rend->visbacklogs[i], i)) {
                 break;
             }
         }
 
         if (rend->attached_outer == -1)
-            render_prompt(window_surface, rend, command_prompt, nullptr, backlogs, shell);
+            render_prompt(window_surface, grid_rect, rend, command_prompt, nullptr, backlogs,
+                          shell);
 
         if (search->is_searching)
-            render_prompt(window_surface, rend, command_prompt, search, backlogs, shell);
+            render_prompt(window_surface, grid_rect, rend, command_prompt, search, backlogs, shell);
 
         rend->complete_redraw = false;
 
-        updated_rects.push(rect);
+        updated_rects.push(grid_rect);
     }
 
     {

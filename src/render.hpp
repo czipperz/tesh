@@ -107,6 +107,7 @@ void resize_font(int font_size, double dpi_scale, Font_State* font);
 int coord_trans(Visual_Point* point, int num_cols, char ch);
 
 bool render_code_point(SDL_Surface* window_surface,
+                       const SDL_Rect& grid_rect,
                        Render_State* rend,
                        Visual_Point* point,
                        uint32_t background,
@@ -123,6 +124,7 @@ float get_dpi_scale(SDL_Window* sdl_window);
 void load_cursors(Window_State* window);
 
 bool render_backlog(SDL_Surface* window_surface,
+                    const SDL_Rect& grid_rect,
                     Render_State* rend,
                     Shell_State* shell,
                     Prompt_State* prompt,
@@ -131,6 +133,7 @@ bool render_backlog(SDL_Surface* window_surface,
                     Backlog_State* backlog,
                     size_t visindex);
 void render_prompt(SDL_Surface* window_surface,
+                   const SDL_Rect& grid_rect,
                    Render_State* rend,
                    Prompt_State* prompt,
                    Search_State* search,
