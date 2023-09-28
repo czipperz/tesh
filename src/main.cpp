@@ -49,6 +49,8 @@ static void init_history_path(Prompt_State* command_prompt, Shell_Local* local);
 static bool init_sdl_globally();
 static void drop_sdl_globally();
 static void init_font(Font_State* font, double dpi_scale);
+static bool create_window(Window_State* window);
+static void destroy_window(Window_State* window);
 
 static Backlog_State* push_backlog(Shell_State* shell, cz::Vector<Backlog_State*>* backlogs);
 static void scroll_down1(Render_State* rend, int lines);
@@ -3041,26 +3043,9 @@ int actual_main(int argc, char** argv) {
         return 1;
     CZ_DEFER(drop_sdl_globally());
 
-    window.dpi_scale = get_dpi_scale(NULL);
-
-    const char* window_name = "Tesh";
-#ifndef NDEBUG
-    window_name = "Tesh [DEBUG]";
-#endif
-
-    window.sdl =
-        SDL_CreateWindow(window_name, SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
-                         (int)(800 * window.dpi_scale), (int)(600 * window.dpi_scale),
-                         SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI);
-    if (!window.sdl) {
-        fprintf(stderr, "SDL_CreateWindow failed: %s\n", SDL_GetError());
+    if (!create_window(&window))
         return 1;
-    }
-    CZ_DEFER(SDL_DestroyWindow(window.sdl));
-
-    set_icon(window.sdl);
-
-    load_cursors(&window);
+    CZ_DEFER(destroy_window(&window));
 
     init_font(&rend->font, window.dpi_scale);
 
@@ -3169,6 +3154,33 @@ static void drop_sdl_globally() {
     IMG_Quit();
     TTF_Quit();
     SDL_Quit();
+}
+
+static bool create_window(Window_State* window) {
+    window->dpi_scale = get_dpi_scale(NULL);
+
+    const char* window_name = "Tesh";
+#ifndef NDEBUG
+    window_name = "Tesh [DEBUG]";
+#endif
+
+    window->sdl =
+        SDL_CreateWindow(window_name, SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
+                         (int)(800 * window->dpi_scale), (int)(600 * window->dpi_scale),
+                         SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI);
+    if (!window->sdl) {
+        fprintf(stderr, "SDL_CreateWindow failed: %s\n", SDL_GetError());
+        return false;
+    }
+
+    set_icon(window->sdl);
+
+    load_cursors(window);
+    return true;
+}
+
+static void destroy_window(Window_State* window) {
+    SDL_DestroyWindow(window->sdl);
 }
 
 static void init_font(Font_State* font, double dpi_scale) {
