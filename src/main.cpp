@@ -44,6 +44,8 @@
 // Forward declarations
 ///////////////////////////////////////////////////////////////////////////////
 
+struct Pane_State;
+
 static void inject_working_directory(Shell_Local* local);
 static void init_history_path(Prompt_State* command_prompt, Shell_Local* local);
 static bool init_sdl_globally();
@@ -51,6 +53,7 @@ static void drop_sdl_globally();
 static void init_font(Font_State* font, double dpi_scale);
 static bool create_window(Window_State* window);
 static void destroy_window(Window_State* window);
+static void create_shell(Pane_State* pane, int w, int h);
 
 static Backlog_State* push_backlog(Shell_State* shell, cz::Vector<Backlog_State*>* backlogs);
 static void scroll_down1(Render_State* rend, int lines);
@@ -3006,7 +3009,9 @@ int actual_main(int argc, char** argv) {
     Window_State window = {};
     cz::Vector<Pane_State*> panes = {};
 
-    load_default_configuration();
+    ////////////////////////////////////////////////////////
+    // Initialize global arenas
+    ////////////////////////////////////////////////////////
 
     cz::Buffer_Array permanent_arena;
     permanent_arena.init();
@@ -3016,6 +3021,12 @@ int actual_main(int argc, char** argv) {
     temp_arena.init();
     temp_allocator = temp_arena.allocator();
 
+    ////////////////////////////////////////////////////////
+    // Load globals
+    ////////////////////////////////////////////////////////
+
+    load_default_configuration();
+
     set_program_name(/*fallback=*/argv[0]);
     set_program_directory();
 
@@ -3023,6 +3034,22 @@ int actual_main(int argc, char** argv) {
         cz::set_working_directory(argv[1]);
     }
 
+    create_null_file();
+
+    ////////////////////////////////////////////////////////
+    // Initialize graphics and create the first window
+    ////////////////////////////////////////////////////////
+
+    if (!init_sdl_globally())
+        return 1;
+    CZ_DEFER(drop_sdl_globally());
+
+    if (!create_window(&window))
+        return 1;
+    CZ_DEFER(destroy_window(&window));
+
+    ////////////////////////////////////////////////////////
+    // Create a pane
     ////////////////////////////////////////////////////////
 
     panes.reserve(cz::heap_allocator(), 1);
@@ -3037,33 +3064,20 @@ int actual_main(int argc, char** argv) {
     Search_State* search = &panes[0]->search;
     Shell_State* shell = &panes[0]->shell;
 
-    create_null_file();
-
-    if (!init_sdl_globally())
-        return 1;
-    CZ_DEFER(drop_sdl_globally());
-
-    if (!create_window(&window))
-        return 1;
-    CZ_DEFER(destroy_window(&window));
-
     init_font(&rend->font, window.dpi_scale);
 
     {
         int w, h;
         SDL_GetWindowSize(window.sdl, &w, &h);
-        shell->width = w / rend->font.width;
-        shell->height = h / rend->font.height;
+
+        create_shell(panes[0], w, h);
     }
 
-    {
-        // Start running ~/.teshrc.
-        cz::String source_command = cz::format(temp_allocator, "source ~/.teshrc");
-        submit_prompt(shell, rend, backlogs, command_prompt, source_command, true, false);
-    }
-
-    load_history(command_prompt, shell);
     CZ_DEFER(save_history(command_prompt, shell));
+
+    ////////////////////////////////////////////////////////
+    // Main loop
+    ////////////////////////////////////////////////////////
 
     while (1) {
         uint32_t start_frame = SDL_GetTicks();
@@ -3181,6 +3195,22 @@ static bool create_window(Window_State* window) {
 
 static void destroy_window(Window_State* window) {
     SDL_DestroyWindow(window->sdl);
+}
+
+static void create_shell(Pane_State* pane, int w, int h) {
+    {
+        pane->shell.width = w / pane->rend.font.width;
+        pane->shell.height = h / pane->rend.font.height;
+    }
+
+    {
+        // Start running ~/.teshrc.
+        cz::String source_command = cz::format(temp_allocator, "source ~/.teshrc");
+        submit_prompt(&pane->shell, &pane->rend, &pane->backlogs, &pane->command_prompt,
+                      source_command, true, false);
+    }
+
+    load_history(&pane->command_prompt, &pane->shell);
 }
 
 static void init_font(Font_State* font, double dpi_scale) {
