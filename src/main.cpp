@@ -152,7 +152,7 @@ static void render_frame(Window_State* window, cz::Slice<Pane_State*> panes) {
 
         rend->grid_rows = grid_rect.h / rend->font.height;
         rend->grid_rows_ru = (grid_rect.h + rend->font.height - 1) / rend->font.height;
-        rend->grid_cols = grid_rect.h / rend->font.width;
+        rend->grid_cols = grid_rect.w / rend->font.width;
 
         if (rend->grid_rows != shell->height || rend->grid_cols != shell->width) {
             shell->height = rend->grid_rows;
