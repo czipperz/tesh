@@ -46,14 +46,12 @@
 
 struct Pane_State;
 
-static void inject_working_directory(Shell_Local* local);
-static void init_history_path(Prompt_State* command_prompt, Shell_Local* local);
 static bool init_sdl_globally();
 static void drop_sdl_globally();
 static void init_font(Font_State* font, double dpi_scale);
 static bool create_window(Window_State* window);
 static void destroy_window(Window_State* window);
-static void create_shell(Pane_State* pane, int w, int h);
+static bool create_shell(Pane_State* pane, int w, int h);
 
 static Backlog_State* push_backlog(Shell_State* shell, cz::Vector<Backlog_State*>* backlogs);
 static void scroll_down1(Render_State* rend, int lines);
@@ -3057,7 +3055,8 @@ int actual_main(int argc, char** argv) {
         int w, h;
         SDL_GetWindowSize(window.sdl, &w, &h);
 
-        create_shell(panes[0], w, h);
+        if (!create_shell(panes[0], w, h))
+            return 1;
     }
 
     CZ_DEFER(save_history(command_prompt, shell));
@@ -3110,23 +3109,6 @@ int actual_main(int argc, char** argv) {
     return 0;
 }
 
-static void inject_working_directory(Shell_Local* local) {
-    cz::String working_directory = {};
-    if (!cz::get_working_directory(temp_allocator, &working_directory)) {
-        fprintf(stderr, "Error: Failed to get working directory\n");
-        set_wd(local, "/");  // Hopefully this is ok lol.
-        return;
-    }
-    set_wd(local, working_directory);
-}
-
-static void init_history_path(Prompt_State* command_prompt, Shell_Local* local) {
-    cz::Str home = {};
-    if (get_var(local, "HOME", &home)) {
-        command_prompt->history_path = cz::format(permanent_allocator, home, "/.tesh_history");
-    }
-}
-
 static bool init_sdl_globally() {
 #ifdef _WIN32
     SetProcessDpiAwareness(PROCESS_PER_MONITOR_DPI_AWARE);
@@ -3165,10 +3147,6 @@ void Pane_State::init() {
     command_prompt.prefix = " $ ";
     search.prompt.prefix = "SEARCH> ";
     rend.complete_redraw = true;
-
-    inject_working_directory(&shell.local);
-    load_environment_variables(&shell.local);
-    init_history_path(&command_prompt, &shell.local);
 }
 
 void Pane_State::drop() {
@@ -3202,20 +3180,33 @@ static void destroy_window(Window_State* window) {
     SDL_DestroyWindow(window->sdl);
 }
 
-static void create_shell(Pane_State* pane, int w, int h) {
-    {
-        pane->shell.width = w / pane->rend.font.width;
-        pane->shell.height = h / pane->rend.font.height;
+static bool create_shell(Pane_State* pane, int w, int h) {
+    cz::String working_directory = {};
+    if (!cz::get_working_directory(temp_allocator, &working_directory)) {
+        fprintf(stderr, "Error: Failed to get working directory\n");
+        return false;
+    }
+    set_wd(&pane->shell.local, working_directory);
+
+    load_environment_variables(&pane->shell.local);
+
+    // Initialize history file path.
+    cz::Str home = {};
+    if (get_var(&pane->shell.local, "HOME", &home)) {
+        pane->command_prompt.history_path = cz::format(permanent_allocator, home, "/.tesh_history");
     }
 
-    {
-        // Start running ~/.teshrc.
-        cz::String source_command = cz::format(temp_allocator, "source ~/.teshrc");
-        submit_prompt(&pane->shell, &pane->rend, &pane->backlogs, &pane->command_prompt,
-                      source_command, true, false);
-    }
+    // Load dims -- must be done before we run any commands.
+    pane->shell.width = w / pane->rend.font.width;
+    pane->shell.height = h / pane->rend.font.height;
+
+    // Start running ~/.teshrc.
+    cz::String source_command = cz::format(temp_allocator, "source ~/.teshrc");
+    submit_prompt(&pane->shell, &pane->rend, &pane->backlogs, &pane->command_prompt, source_command,
+                  true, false);
 
     load_history(&pane->command_prompt, &pane->shell);
+    return true;
 }
 
 static void init_font(Font_State* font, double dpi_scale) {
