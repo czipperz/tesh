@@ -2988,21 +2988,8 @@ struct Pane_State {
     Search_State search;
     Shell_State shell;
 
-    void init() {
-        shell.arena.init();
-        command_prompt.init();
-        search.prompt.init();
-
-        command_prompt.prefix = " $ ";
-        search.prompt.prefix = "SEARCH> ";
-        rend.complete_redraw = true;
-
-        inject_working_directory(&shell.local);
-        load_environment_variables(&shell.local);
-        init_history_path(&command_prompt, &shell.local);
-    }
-
-    void drop() { cleanup_processes(&shell); }
+    void init();
+    void drop();
 };
 
 int actual_main(int argc, char** argv) {
@@ -3168,6 +3155,24 @@ static void drop_sdl_globally() {
     IMG_Quit();
     TTF_Quit();
     SDL_Quit();
+}
+
+void Pane_State::init() {
+    shell.arena.init();
+    command_prompt.init();
+    search.prompt.init();
+
+    command_prompt.prefix = " $ ";
+    search.prompt.prefix = "SEARCH> ";
+    rend.complete_redraw = true;
+
+    inject_working_directory(&shell.local);
+    load_environment_variables(&shell.local);
+    init_history_path(&command_prompt, &shell.local);
+}
+
+void Pane_State::drop() {
+    cleanup_processes(&shell);
 }
 
 static bool create_window(Window_State* window) {
