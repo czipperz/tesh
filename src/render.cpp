@@ -636,8 +636,8 @@ void render_prompt(SDL_Surface* window_surface,
         bool draw_cursor = (!drawn_cursor && i >= prompt->cursor);
         SDL_Rect cursor_rect;
         if (draw_cursor) {
-            cursor_rect = {point->x * rend->font.width - 1, point->y * rend->font.height, 2,
-                           rend->font.height};
+            cursor_rect = {grid_rect.x + point->x * rend->font.width - 1,
+                           grid_rect.y + point->y * rend->font.height, 2, rend->font.height};
             SDL_FillRect(window_surface, &cursor_rect, cursor_color);
             drawn_cursor = true;
         }
@@ -663,8 +663,8 @@ void render_prompt(SDL_Surface* window_surface,
 
     if (prompt->cursor == prompt->text.len) {
         // Draw cursor.
-        SDL_Rect cursor_rect = {eol.x * rend->font.width - 1, eol.y * rend->font.height, 2,
-                                rend->font.height};
+        SDL_Rect cursor_rect = {grid_rect.x + eol.x * rend->font.width - 1,
+                                grid_rect.y + eol.y * rend->font.height, 2, rend->font.height};
         SDL_FillRect(window_surface, &cursor_rect, cursor_color);
     }
 
