@@ -138,12 +138,12 @@ static void render_frame(Window_State* window, cz::Slice<Pane_State*> panes) {
 
     cz::Vector<SDL_Rect> updated_rects = {};
     CZ_DEFER(updated_rects.drop(cz::heap_allocator()));
-    rects.reserve(cz::heap_allocator(), panes->len);
+    updated_rects.reserve(cz::heap_allocator(), panes.len);
 
-    for (size_t i = 0; i < panes->len; ++i) {
-        Pane_State* pane = panes->get(0);
+    for (size_t i = 0; i < panes.len; ++i) {
+        Pane_State* pane = panes[0];
         Render_State* rend = &pane->rend;
-        Prompt_State* prompt = &pane->prompt;
+        Prompt_State* command_prompt = &pane->command_prompt;
         Search_State* search = &pane->search;
         cz::Slice<Backlog_State*> backlogs = pane->backlogs;
         Shell_State* shell = &pane->shell;
@@ -194,17 +194,17 @@ static void render_frame(Window_State* window, cz::Slice<Pane_State*> panes) {
                                               cfg.selection_bg_color.g, cfg.selection_bg_color.b);
 
         for (size_t i = rend->backlog_start.outer; i < rend->visbacklogs.len; ++i) {
-            if (!render_backlog(window_surface, rend, shell, prompt, backlogs, now,
+            if (!render_backlog(window_surface, rend, shell, command_prompt, backlogs, now,
                                 rend->visbacklogs[i], i)) {
                 break;
             }
         }
 
         if (rend->attached_outer == -1)
-            render_prompt(window_surface, rend, prompt, nullptr, backlogs, shell);
+            render_prompt(window_surface, rend, command_prompt, nullptr, backlogs, shell);
 
         if (search->is_searching)
-            render_prompt(window_surface, rend, prompt, search, backlogs, shell);
+            render_prompt(window_surface, rend, command_prompt, search, backlogs, shell);
 
         rend->complete_redraw = false;
 
