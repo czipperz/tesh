@@ -215,7 +215,7 @@ bool render_code_point(SDL_Surface* window_surface,
     point->inner += strlen(seq) - 1;
 
     if (point->y != old_y) {
-        rect.w = grid_rect.w - rect.x;
+        rect.w = grid_rect.w - (rect.x - grid_rect.x);
         rect.h = rend->font.height;
         SDL_FillRect(window_surface, &rect, background);
 
