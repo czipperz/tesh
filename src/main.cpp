@@ -141,7 +141,7 @@ static void render_frame(Window_State* window, cz::Slice<Pane_State*> panes) {
     updated_rects.reserve(cz::heap_allocator(), panes.len);
 
     for (size_t i = 0; i < panes.len; ++i) {
-        Pane_State* pane = panes[0];
+        Pane_State* pane = panes[i];
         Render_State* rend = &pane->rend;
         Prompt_State* command_prompt = &pane->command_prompt;
         Search_State* search = &pane->search;
@@ -149,6 +149,11 @@ static void render_frame(Window_State* window, cz::Slice<Pane_State*> panes) {
         Shell_State* shell = &pane->shell;
 
         SDL_Rect grid_rect = {0, 0, window_surface->w, window_surface->h};
+
+        if (panes.len > 1) {
+            grid_rect.x += (i * window_surface->w) / panes.len;
+            grid_rect.w /= panes.len;
+        }
 
         rend->grid_rows = grid_rect.h / rend->font.height;
         rend->grid_rows_ru = (grid_rect.h + rend->font.height - 1) / rend->font.height;
