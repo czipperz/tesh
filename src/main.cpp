@@ -3109,6 +3109,10 @@ int actual_main(int argc, char** argv) {
     return 0;
 }
 
+////////////////////////////////////////////////////////////////////////////////
+// Initialize SDL
+////////////////////////////////////////////////////////////////////////////////
+
 static bool init_sdl_globally() {
 #ifdef _WIN32
     SetProcessDpiAwareness(PROCESS_PER_MONITOR_DPI_AWARE);
@@ -3139,6 +3143,10 @@ static void drop_sdl_globally() {
     SDL_Quit();
 }
 
+////////////////////////////////////////////////////////////////////////////////
+// Pane_State lifecycle
+////////////////////////////////////////////////////////////////////////////////
+
 void Pane_State::init() {
     shell.arena.init();
     command_prompt.init();
@@ -3152,6 +3160,10 @@ void Pane_State::init() {
 void Pane_State::drop() {
     cleanup_processes(&shell);
 }
+
+////////////////////////////////////////////////////////////////////////////////
+// Window lifecycle
+////////////////////////////////////////////////////////////////////////////////
 
 static bool create_window(Window_State* window) {
     window->dpi_scale = get_dpi_scale(NULL);
@@ -3179,6 +3191,10 @@ static bool create_window(Window_State* window) {
 static void destroy_window(Window_State* window) {
     SDL_DestroyWindow(window->sdl);
 }
+
+////////////////////////////////////////////////////////////////////////////////
+// Shell initialization
+////////////////////////////////////////////////////////////////////////////////
 
 static bool create_shell(Pane_State* pane, int w, int h) {
     cz::String working_directory = {};
@@ -3209,6 +3225,10 @@ static bool create_shell(Pane_State* pane, int w, int h) {
     return true;
 }
 
+////////////////////////////////////////////////////////////////////////////////
+// Font initialization
+////////////////////////////////////////////////////////////////////////////////
+
 static void init_font(Font_State* font, double dpi_scale) {
     font->size = cfg.default_font_size;
     resize_font(font->size, dpi_scale, font);
@@ -3218,6 +3238,10 @@ static void init_font(Font_State* font, double dpi_scale) {
     font->width = 10;
     TTF_GlyphMetrics(font->sdl, ' ', nullptr, nullptr, nullptr, nullptr, &font->width);
 }
+
+////////////////////////////////////////////////////////////////////////////////
+// misc
+////////////////////////////////////////////////////////////////////////////////
 
 static Backlog_State* push_backlog(Shell_State* shell, cz::Vector<Backlog_State*>* backlogs) {
     Backlog_State* backlog = shell->arena.allocator().alloc<Backlog_State>();
