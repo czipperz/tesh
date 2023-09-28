@@ -3131,6 +3131,37 @@ static void drop_sdl_globally() {
 }
 
 ////////////////////////////////////////////////////////////////////////////////
+// Window lifecycle
+////////////////////////////////////////////////////////////////////////////////
+
+static bool create_window(Window_State* window) {
+    window->dpi_scale = get_dpi_scale(NULL);
+
+    const char* window_name = "Tesh";
+#ifndef NDEBUG
+    window_name = "Tesh [DEBUG]";
+#endif
+
+    window->sdl =
+        SDL_CreateWindow(window_name, SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
+                         (int)(800 * window->dpi_scale), (int)(600 * window->dpi_scale),
+                         SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI);
+    if (!window->sdl) {
+        fprintf(stderr, "SDL_CreateWindow failed: %s\n", SDL_GetError());
+        return false;
+    }
+
+    set_icon(window->sdl);
+
+    load_cursors(window);
+    return true;
+}
+
+static void destroy_window(Window_State* window) {
+    SDL_DestroyWindow(window->sdl);
+}
+
+////////////////////////////////////////////////////////////////////////////////
 // Pane_State lifecycle
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -3162,37 +3193,6 @@ void Pane_State::init() {
 
 void Pane_State::drop() {
     cleanup_processes(&shell);
-}
-
-////////////////////////////////////////////////////////////////////////////////
-// Window lifecycle
-////////////////////////////////////////////////////////////////////////////////
-
-static bool create_window(Window_State* window) {
-    window->dpi_scale = get_dpi_scale(NULL);
-
-    const char* window_name = "Tesh";
-#ifndef NDEBUG
-    window_name = "Tesh [DEBUG]";
-#endif
-
-    window->sdl =
-        SDL_CreateWindow(window_name, SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
-                         (int)(800 * window->dpi_scale), (int)(600 * window->dpi_scale),
-                         SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI);
-    if (!window->sdl) {
-        fprintf(stderr, "SDL_CreateWindow failed: %s\n", SDL_GetError());
-        return false;
-    }
-
-    set_icon(window->sdl);
-
-    load_cursors(window);
-    return true;
-}
-
-static void destroy_window(Window_State* window) {
-    SDL_DestroyWindow(window->sdl);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
