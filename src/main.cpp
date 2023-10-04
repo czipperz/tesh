@@ -116,18 +116,18 @@ static void stop_selecting(Render_State* rend) {
     rend->complete_redraw = true;
 }
 
-static void render_frame(Window_State* window, cz::Slice<Pane_State*> panes) {
+static void render_frame(Tesh_State* tesh) {
     ZoneScoped;
 
-    SDL_Surface* window_surface = SDL_GetWindowSurface(window->sdl);
+    SDL_Surface* window_surface = SDL_GetWindowSurface(tesh->window.sdl);
     std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
 
     cz::Vector<SDL_Rect> updated_rects = {};
     CZ_DEFER(updated_rects.drop(cz::heap_allocator()));
-    updated_rects.reserve(cz::heap_allocator(), panes.len);
+    updated_rects.reserve(cz::heap_allocator(), tesh->panes.len);
 
-    for (size_t i = 0; i < panes.len; ++i) {
-        Pane_State* pane = panes[i];
+    for (size_t i = 0; i < tesh->panes.len; ++i) {
+        Pane_State* pane = tesh->panes[i];
         Render_State* rend = &pane->rend;
         Prompt_State* command_prompt = &pane->command_prompt;
         Search_State* search = &pane->search;
@@ -136,9 +136,9 @@ static void render_frame(Window_State* window, cz::Slice<Pane_State*> panes) {
 
         SDL_Rect grid_rect = {0, 0, window_surface->w, window_surface->h};
 
-        if (panes.len > 1) {
-            grid_rect.x += (int)((i * window_surface->w) / panes.len);
-            grid_rect.w /= (int)(panes.len);
+        if (tesh->panes.len > 1) {
+            grid_rect.x += (int)((i * window_surface->w) / tesh->panes.len);
+            grid_rect.w /= (int)(tesh->panes.len);
         }
 
         rend->grid_rows = grid_rect.h / rend->font.height;
@@ -205,7 +205,7 @@ static void render_frame(Window_State* window, cz::Slice<Pane_State*> panes) {
 
     {
         ZoneScopedN("update_window_surface");
-        SDL_UpdateWindowSurfaceRects(window->sdl, updated_rects.elems, (int)updated_rects.len);
+        SDL_UpdateWindowSurfaceRects(tesh->window.sdl, updated_rects.elems, (int)updated_rects.len);
     }
 }
 
@@ -3086,7 +3086,7 @@ int actual_main(int argc, char** argv) {
             }
 
             if (redraw)
-                render_frame(&tesh.window, tesh.panes);
+                render_frame(&tesh);
         } catch (cz::PanicReachedException& ex) {
             fprintf(stderr, "Fatal error: %s\n", ex.what());
             return 1;
