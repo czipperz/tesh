@@ -137,8 +137,8 @@ static void render_frame(Window_State* window, cz::Slice<Pane_State*> panes) {
         SDL_Rect grid_rect = {0, 0, window_surface->w, window_surface->h};
 
         if (panes.len > 1) {
-            grid_rect.x += (i * window_surface->w) / panes.len;
-            grid_rect.w /= panes.len;
+            grid_rect.x += (int)((i * window_surface->w) / panes.len);
+            grid_rect.w /= (int)(panes.len);
         }
 
         rend->grid_rows = grid_rect.h / rend->font.height;
