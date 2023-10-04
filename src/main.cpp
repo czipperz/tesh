@@ -2030,8 +2030,8 @@ finish_search:
     }
 }
 
-static int process_events(Window_State* window, cz::Vector<Pane_State*>* panes) {
-    Pane_State* pane = panes->get(0);
+static int process_events(Tesh_State* tesh) {
+    Pane_State* pane = tesh->panes[0];
     cz::Vector<Backlog_State*>* backlogs = &pane->backlogs;
     Prompt_State* command_prompt = &pane->command_prompt;
     Search_State* search = &pane->search;
@@ -2075,17 +2075,17 @@ static int process_events(Window_State* window, cz::Vector<Pane_State*>* panes) 
             if (event.window.event == SDL_WINDOWEVENT_MOVED ||
                 event.window.event == SDL_WINDOWEVENT_SIZE_CHANGED) {
                 // Process dpi changes.
-                float new_dpi_scale = get_dpi_scale(window->sdl);
-                bool dpi_changed = (window->dpi_scale + 0.01f < new_dpi_scale ||  //
-                                    window->dpi_scale - 0.01f > new_dpi_scale);
+                float new_dpi_scale = get_dpi_scale(tesh->window.sdl);
+                bool dpi_changed = (tesh->window.dpi_scale + 0.01f < new_dpi_scale ||  //
+                                    tesh->window.dpi_scale - 0.01f > new_dpi_scale);
                 if (dpi_changed) {
                     int w, h;
-                    SDL_GetWindowSize(window->sdl, &w, &h);
-                    w = (int)(w * (new_dpi_scale / window->dpi_scale));
-                    h = (int)(h * (new_dpi_scale / window->dpi_scale));
-                    SDL_SetWindowSize(window->sdl, w, h);
-                    window->dpi_scale = new_dpi_scale;
-                    resize_font(rend->font.size, window->dpi_scale, &rend->font);
+                    SDL_GetWindowSize(tesh->window.sdl, &w, &h);
+                    w = (int)(w * (new_dpi_scale / tesh->window.dpi_scale));
+                    h = (int)(h * (new_dpi_scale / tesh->window.dpi_scale));
+                    SDL_SetWindowSize(tesh->window.sdl, w, h);
+                    tesh->window.dpi_scale = new_dpi_scale;
+                    resize_font(rend->font.size, tesh->window.dpi_scale, &rend->font);
                     rend->complete_redraw = true;
                 }
             }
@@ -2354,7 +2354,7 @@ static int process_events(Window_State* window, cz::Vector<Pane_State*>* panes) 
                 } else {
                     new_font_size = cz::max(new_font_size - 4, 4);
                 }
-                resize_font(new_font_size, window->dpi_scale, &rend->font);
+                resize_font(new_font_size, tesh->window.dpi_scale, &rend->font);
                 rend->complete_redraw = true;
                 rend->grid_is_valid = false;
                 ++num_events;
@@ -2365,7 +2365,7 @@ static int process_events(Window_State* window, cz::Vector<Pane_State*>* panes) 
                 // Redraw because it changes how links are drawn.
                 if (rend->grid_is_valid) {
                     Visual_Tile tile = visual_tile_at_cursor(rend);
-                    set_cursor_icon(window, rend, tile);
+                    set_cursor_icon(&tesh->window, rend, tile);
                 }
                 rend->complete_redraw = true;
                 ++num_events;
@@ -2421,7 +2421,7 @@ static int process_events(Window_State* window, cz::Vector<Pane_State*>* panes) 
                 // Redraw because it changes how links are drawn.
                 if (rend->grid_is_valid) {
                     Visual_Tile tile = visual_tile_at_cursor(rend);
-                    set_cursor_icon(window, rend, tile);
+                    set_cursor_icon(&tesh->window, rend, tile);
                 }
                 rend->complete_redraw = true;
                 ++num_events;
@@ -2657,7 +2657,7 @@ static int process_events(Window_State* window, cz::Vector<Pane_State*>* panes) 
                 } else if (event.wheel.y < 0) {
                     new_font_size = cz::max(new_font_size - 2, 2);
                 }
-                resize_font(new_font_size, window->dpi_scale, &rend->font);
+                resize_font(new_font_size, tesh->window.dpi_scale, &rend->font);
                 rend->complete_redraw = true;
                 rend->grid_is_valid = false;
             } else {
@@ -2783,7 +2783,7 @@ static int process_events(Window_State* window, cz::Vector<Pane_State*>* panes) 
                 break;
 
             Visual_Tile tile = visual_tile_at(rend, event.motion.x, event.motion.y);
-            set_cursor_icon(window, rend, tile);
+            set_cursor_icon(&tesh->window, rend, tile);
 
             if (rend->selection.type == SELECT_DISABLED || rend->selection.type == SELECT_FINISHED)
                 break;
@@ -3062,7 +3062,7 @@ int actual_main(int argc, char** argv) {
         temp_arena.clear();
 
         try {
-            int status = process_events(&tesh.window, &tesh.panes);
+            int status = process_events(&tesh);
             if (status < 0)
                 break;
 
