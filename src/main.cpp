@@ -2031,13 +2031,6 @@ finish_search:
 }
 
 static int process_events(Tesh_State* tesh) {
-    Pane_State* pane = tesh->panes[0];
-    cz::Vector<Backlog_State*>* backlogs = &pane->backlogs;
-    Prompt_State* command_prompt = &pane->command_prompt;
-    Search_State* search = &pane->search;
-    Render_State* rend = &pane->rend;
-    Shell_State* shell = &pane->shell;
-
     static uint32_t ignore_key_events_until = 0;
 
     // If previous KEYDOWN was A-* then track it.
@@ -2049,6 +2042,13 @@ static int process_events(Tesh_State* tesh) {
 
     int num_events = 0;
     for (SDL_Event event; SDL_PollEvent(&event);) {
+        Pane_State* pane = tesh->panes[tesh->selected_pane];
+        cz::Vector<Backlog_State*>* backlogs = &pane->backlogs;
+        Prompt_State* command_prompt = &pane->command_prompt;
+        Search_State* search = &pane->search;
+        Render_State* rend = &pane->rend;
+        Shell_State* shell = &pane->shell;
+
         SDL_Keycode is_alt_key = SDLK_UNKNOWN;
         bool alt_is_down = false;
         Prompt_State* prompt = (search->is_searching ? &search->prompt : command_prompt);
