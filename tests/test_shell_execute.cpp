@@ -4,10 +4,11 @@
 #include "global.hpp"
 #include "prompt.hpp"
 #include "shell.hpp"
+#include "tesh.hpp"
 
 static cz::Buffer_Array temp_arena;
+static Tesh_State tesh = {};
 static Shell_State shell = {};
-static Window_State window = {};
 static Render_State rend = {};
 static Prompt_State command_prompt = {};
 static cz::Vector<Backlog_State*> backlogs = {};
@@ -51,7 +52,7 @@ static void define_test(cz::Str command, int expected_exit_code, cz::Str expecte
 static void wait_for_scripts_to_finish() {
     bool force_quit = false;
     while (!force_quit && shell.scripts.len > 0) {
-        read_process_data(&shell, backlogs, &window, &rend, &command_prompt, &force_quit);
+        read_process_data(&tesh, &shell, backlogs, &rend, &command_prompt, &force_quit);
         SDL_Delay(1);
     }
 }

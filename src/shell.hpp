@@ -19,6 +19,7 @@ struct Running_Pipeline;
 struct Running_Program;
 struct Running_Script;
 struct Parse_Node;
+struct Tesh_State;
 
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -332,9 +333,9 @@ extern const cz::Slice<const cz::Slice<const Builtin> > builtin_levels;
 
 void recognize_builtin(Running_Program* program, const Parse_Program& parse);
 void setup_builtin(Running_Builtin* builtin, cz::Allocator allocator, Stdio_State stdio);
-bool tick_builtin(Shell_State* shell,
+bool tick_builtin(Tesh_State* tesh,
+                  Shell_State* shell,
                   Shell_Local* local,
-                  Window_State* window,
                   Render_State* rend,
                   Prompt_State* prompt,
                   Backlog_State* backlog,
@@ -414,9 +415,9 @@ void expand_arg_split(const Shell_Local* local,
 
 bool run_script(Shell_State* shell, Backlog_State* backlog, cz::Str command);
 
-bool read_process_data(Shell_State* shell,
+bool read_process_data(Tesh_State* tesh,
+                       Shell_State* shell,
                        cz::Slice<Backlog_State*> backlogs,
-                       Window_State* window,
                        Render_State* rend,
                        Prompt_State* prompt,
                        bool* force_quit);
@@ -443,8 +444,8 @@ bool finish_line(Shell_State* shell,
 
 ///////////////////////////////////////////////////////////////////////////////
 
-bool tick_running_node(Shell_State* shell,
-                       Window_State* window,
+bool tick_running_node(Tesh_State* tesh,
+                       Shell_State* shell,
                        Render_State* rend,
                        Prompt_State* prompt,
                        Running_Node* node,

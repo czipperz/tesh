@@ -1,15 +1,16 @@
 #include "shell.hpp"
 
-#include <tracy/Tracy.hpp>
 #include <cz/char_type.hpp>
 #include <cz/defer.hpp>
 #include <cz/directory.hpp>
 #include <cz/format.hpp>
 #include <cz/parse.hpp>
 #include <cz/path.hpp>
+#include <tracy/Tracy.hpp>
 #include "config.hpp"
 #include "global.hpp"
 #include "prompt.hpp"
+#include "tesh.hpp"
 
 ////////////////////////////////////////////////////////////////////////////////
 // Builtin levels
@@ -138,9 +139,9 @@ void setup_builtin(Running_Builtin* builtin, cz::Allocator allocator, Stdio_Stat
 // Tick builtin
 ////////////////////////////////////////////////////////////////////////////////
 
-bool tick_builtin(Shell_State* shell,
+bool tick_builtin(Tesh_State* tesh,
+                  Shell_State* shell,
                   Shell_Local* local,
-                  Window_State* window,
                   Render_State* rend,
                   Prompt_State* prompt,
                   Backlog_State* backlog,
@@ -378,8 +379,8 @@ bool tick_builtin(Shell_State* shell,
                 // Try not appending the "$@" just in case the user
                 // does 'alias x="if true; then echo hi; fi"'.
                 if (error == Error_Parse_ExpectedEndOfStatement) {
-                    error =
-                        parse_script(shell_allocator, shell_allocator, node, script.slice_end(script.len - 5));
+                    error = parse_script(shell_allocator, shell_allocator, node,
+                                         script.slice_end(script.len - 5));
                 }
 
                 if (error != Error_Success) {
@@ -460,7 +461,7 @@ wide_terminal  1/0   -- Turn on or off wide terminal mode.  This will lock the t
         } else if (option == "font_path") {
             cfg.font_path.drop(cz::heap_allocator());
             cfg.font_path = builtin->args[2].clone_null_terminate(cz::heap_allocator());
-            resize_font(rend->font.size, window->dpi_scale, &rend->font);
+            resize_font(rend->font.size, tesh->window.dpi_scale, &rend->font);
             rend->complete_redraw = true;
             goto finish_builtin;
         }
@@ -475,7 +476,7 @@ wide_terminal  1/0   -- Turn on or off wide terminal mode.  This will lock the t
             if (value <= 0) {
                 (void)builtin->err.write("configure: Invalid font size.\n");
             } else {
-                resize_font(value, window->dpi_scale, &rend->font);
+                resize_font(value, tesh->window.dpi_scale, &rend->font);
                 rend->complete_redraw = true;
             }
         } else if (option == "builtin_level") {

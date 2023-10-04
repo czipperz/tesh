@@ -213,9 +213,9 @@ static void render_frame(Tesh_State* tesh) {
 // Process control
 ///////////////////////////////////////////////////////////////////////////////
 
-bool read_process_data(Shell_State* shell,
+bool read_process_data(Tesh_State* tesh,
+                       Shell_State* shell,
                        cz::Slice<Backlog_State*> backlogs,
-                       Window_State* window,
                        Render_State* rend,
                        Prompt_State* prompt,
                        bool* force_quit) {
@@ -227,7 +227,7 @@ bool read_process_data(Shell_State* shell,
         Backlog_State* backlog = backlogs[script->id];
         size_t starting_length = backlog->length;
 
-        if (tick_running_node(shell, window, rend, prompt, &script->root, &script->tty, backlog,
+        if (tick_running_node(tesh, shell, rend, prompt, &script->root, &script->tty, backlog,
                               force_quit)) {
             if (*force_quit)
                 return true;
@@ -3068,7 +3068,7 @@ int actual_main(int argc, char** argv) {
 
             bool force_quit = false;
             for (Pane_State* pane : tesh.panes) {
-                if (read_process_data(&pane->shell, pane->backlogs, &tesh.window, &pane->rend,
+                if (read_process_data(&tesh, &pane->shell, pane->backlogs, &pane->rend,
                                       &pane->command_prompt, &force_quit))
                     status = 1;
             }
