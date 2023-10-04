@@ -38,22 +38,8 @@
 #include "search.hpp"
 #include "shell.hpp"
 #include "solarized_dark.hpp"
+#include "tesh.hpp"
 #include "unicode.hpp"
-
-////////////////////////////////////////////////////////////////////////////////
-// Type definitions
-////////////////////////////////////////////////////////////////////////////////
-
-struct Pane_State {
-    Render_State rend;
-    cz::Vector<Backlog_State*> backlogs;
-    Prompt_State command_prompt;
-    Search_State search;
-    Shell_State shell;
-
-    void init();
-    void drop();
-};
 
 ///////////////////////////////////////////////////////////////////////////////
 // Forward declarations
@@ -3017,8 +3003,7 @@ static void load_environment_variables(Shell_Local* local) {
 ///////////////////////////////////////////////////////////////////////////////
 
 int actual_main(int argc, char** argv) {
-    Window_State window = {};
-    cz::Vector<Pane_State*> panes = {};
+    Tesh_State tesh = {};
 
     ////////////////////////////////////////////////////////
     // Initialize global arenas
@@ -3055,23 +3040,23 @@ int actual_main(int argc, char** argv) {
         return 1;
     CZ_DEFER(drop_sdl_globally());
 
-    if (!create_window(&window))
+    if (!create_window(&tesh.window))
         return 1;
-    CZ_DEFER(destroy_window(&window));
+    CZ_DEFER(destroy_window(&tesh.window));
 
     ////////////////////////////////////////////////////////
     // Create a pane
     ////////////////////////////////////////////////////////
 
-    if (!create_pane(&panes, &window))
+    if (!create_pane(&tesh.panes, &tesh.window))
         return 1;
-    CZ_DEFER(save_history(&panes[0]->command_prompt, &panes[0]->shell));
+    CZ_DEFER(save_history(&tesh.panes[0]->command_prompt, &tesh.panes[0]->shell));
 
     ////////////////////////////////////////////////////////
     // Main loop
     ////////////////////////////////////////////////////////
 
-    Pane_State* pane = panes[0];
+    Pane_State* pane = tesh.panes[0];
 
     while (1) {
         uint32_t start_frame = SDL_GetTicks();
@@ -3079,13 +3064,13 @@ int actual_main(int argc, char** argv) {
         temp_arena.clear();
 
         try {
-            int status = process_events(&window, &panes);
+            int status = process_events(&tesh.window, &tesh.panes);
             if (status < 0)
                 break;
 
             bool force_quit = false;
-            for (Pane_State* pane : panes) {
-                if (read_process_data(&pane->shell, pane->backlogs, &window, &pane->rend,
+            for (Pane_State* pane : tesh.panes) {
+                if (read_process_data(&pane->shell, pane->backlogs, &tesh.window, &pane->rend,
                                       &pane->command_prompt, &force_quit))
                     status = 1;
             }
@@ -3094,7 +3079,7 @@ int actual_main(int argc, char** argv) {
                 break;
 
             bool redraw = (status > 0);
-            for (Pane_State* pane : panes) {
+            for (Pane_State* pane : tesh.panes) {
                 if (pane->shell.scripts.len > 0 || pane->rend.complete_redraw ||
                     !pane->rend.grid_is_valid) {
                     redraw = true;
@@ -3103,14 +3088,14 @@ int actual_main(int argc, char** argv) {
             }
 
             if (redraw)
-                render_frame(&window, panes);
+                render_frame(&tesh.window, tesh.panes);
         } catch (cz::PanicReachedException& ex) {
             fprintf(stderr, "Fatal error: %s\n", ex.what());
             return 1;
         }
 
         bool any_scripts_running = false;
-        for (Pane_State* pane : panes) {
+        for (Pane_State* pane : tesh.panes) {
             if (pane->shell.scripts.len > 0) {
                 any_scripts_running = true;
                 break;
@@ -3219,20 +3204,6 @@ static bool create_pane(cz::Vector<Pane_State*>* panes, Window_State* window) {
     SDL_GetWindowSize(window->sdl, &w, &h);
 
     return create_shell(pane, w, h);
-}
-
-void Pane_State::init() {
-    shell.arena.init();
-    command_prompt.init();
-    search.prompt.init();
-
-    command_prompt.prefix = " $ ";
-    search.prompt.prefix = "SEARCH> ";
-    rend.complete_redraw = true;
-}
-
-void Pane_State::drop() {
-    cleanup_processes(&shell);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
