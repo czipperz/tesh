@@ -251,7 +251,7 @@ enum Builtin_Command {
     FUNCDUMP,
     SHIFT,
     HISTORY,
-    SET_VAR,
+    TESH_SET_VAR,
     BUILTIN,
     MKTEMP,
 };

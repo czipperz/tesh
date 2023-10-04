@@ -40,7 +40,7 @@ static const Builtin level0[] = {
     {"dump_alias", Builtin_Command::ALIASDUMP},
     {"shift", Builtin_Command::SHIFT},
     {"history", Builtin_Command::HISTORY},
-    {"__tesh_set_var", Builtin_Command::SET_VAR},
+    {"__tesh_set_var", Builtin_Command::TESH_SET_VAR},
     {"builtin", Builtin_Command::BUILTIN},
     {"mktemp", Builtin_Command::MKTEMP},
 };
@@ -129,7 +129,7 @@ void setup_builtin(Running_Builtin* builtin, cz::Allocator allocator, Stdio_Stat
         builtin->st.cat = {};
         builtin->st.cat.buffer = (char*)allocator.alloc({4096, 1});
         builtin->st.cat.outer = 0;
-    } else if (builtin->command == Builtin_Command::SET_VAR) {
+    } else if (builtin->command == Builtin_Command::TESH_SET_VAR) {
         builtin->st.set_var = {};
     }
 }
@@ -771,7 +771,7 @@ wide_terminal  1/0   -- Turn on or off wide terminal mode.  This will lock the t
         }
     } break;
 
-    case Builtin_Command::SET_VAR: {
+    case Builtin_Command::TESH_SET_VAR: {
         auto& st = builtin->st.set_var;
 
         if (builtin->args.len != 2) {
