@@ -129,9 +129,6 @@ static void render_frame(Tesh_State* tesh) {
     for (size_t i = 0; i < tesh->panes.len; ++i) {
         Pane_State* pane = tesh->panes[i];
         Render_State* rend = &pane->rend;
-        Prompt_State* command_prompt = &pane->command_prompt;
-        Search_State* search = &pane->search;
-        cz::Slice<Backlog_State*> backlogs = pane->backlogs;
         Shell_State* shell = &pane->shell;
 
         SDL_Rect grid_rect = {0, 0, window_surface->w, window_surface->h};
@@ -185,18 +182,21 @@ static void render_frame(Tesh_State* tesh) {
                                               cfg.selection_bg_color.g, cfg.selection_bg_color.b);
 
         for (size_t i = rend->backlog_start.outer; i < rend->visbacklogs.len; ++i) {
-            if (!render_backlog(window_surface, grid_rect, rend, shell, command_prompt, backlogs,
-                                now, rend->visbacklogs[i], i)) {
+            if (!render_backlog(window_surface, grid_rect, rend, shell, &pane->command_prompt,
+                                pane->backlogs, now, rend->visbacklogs[i], i)) {
                 break;
             }
         }
 
-        if (rend->attached_outer == -1)
-            render_prompt(window_surface, grid_rect, rend, command_prompt, nullptr, backlogs,
-                          shell);
+        if (rend->attached_outer == -1) {
+            render_prompt(window_surface, grid_rect, rend, &pane->command_prompt, nullptr,
+                          pane->backlogs, shell);
+        }
 
-        if (search->is_searching)
-            render_prompt(window_surface, grid_rect, rend, command_prompt, search, backlogs, shell);
+        if (pane->search.is_searching) {
+            render_prompt(window_surface, grid_rect, rend, &pane->command_prompt, &pane->search,
+                          pane->backlogs, shell);
+        }
 
         rend->complete_redraw = false;
 
