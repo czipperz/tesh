@@ -49,7 +49,6 @@ static bool init_sdl_globally();
 static void drop_sdl_globally();
 
 static bool create_pane(cz::Vector<Pane_State*>* panes, Window_State* window);
-static void init_font(Font_State* font, double dpi_scale);
 static bool create_window(Window_State* window);
 static void destroy_window(Window_State* window);
 static bool create_shell(Pane_State* pane, int w, int h);
@@ -3241,15 +3240,6 @@ static bool create_shell(Pane_State* pane, int w, int h) {
 // Font initialization
 ////////////////////////////////////////////////////////////////////////////////
 
-static void init_font(Font_State* font, double dpi_scale) {
-    font->size = cfg.default_font_size;
-    resize_font(font->size, dpi_scale, font);
-
-    // Old versions of SDL_ttf don't parse FontLineSkip correctly so we manually set it.
-    font->height = cz::max(TTF_FontLineSkip(font->sdl), (int)(TTF_FontHeight(font->sdl) * 1.05f));
-    font->width = 10;
-    TTF_GlyphMetrics(font->sdl, ' ', nullptr, nullptr, nullptr, nullptr, &font->width);
-}
 
 ////////////////////////////////////////////////////////////////////////////////
 // misc

@@ -51,6 +51,20 @@ void set_icon(SDL_Window* sdl_window) {
     }
 }
 
+////////////////////////////////////////////////////////////////////////////////
+// Font methods
+////////////////////////////////////////////////////////////////////////////////
+
+void init_font(Font_State* font, double dpi_scale) {
+    font->size = cfg.default_font_size;
+    resize_font(font->size, dpi_scale, font);
+
+    // Old versions of SDL_ttf don't parse FontLineSkip correctly so we manually set it.
+    font->height = cz::max(TTF_FontLineSkip(font->sdl), (int)(TTF_FontHeight(font->sdl) * 1.05f));
+    font->width = 10;
+    TTF_GlyphMetrics(font->sdl, ' ', nullptr, nullptr, nullptr, nullptr, &font->width);
+}
+
 void close_font(Font_State* font) {
     ZoneScoped;
     for (int ch = 0; ch < CZ_DIM(font->caches); ch++) {
@@ -91,6 +105,10 @@ void resize_font(int font_size, double dpi_scale, Font_State* font) {
         TTF_GlyphMetrics(font->sdl, ' ', nullptr, nullptr, nullptr, nullptr, &font->width);
     }
 }
+
+////////////////////////////////////////////////////////////////////////////////
+// Drawing methods
+////////////////////////////////////////////////////////////////////////////////
 
 static SDL_Surface* rasterize_code_point(const char* text,
                                          TTF_Font* font,

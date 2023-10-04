@@ -101,6 +101,7 @@ struct Render_State {
 
 void set_icon(SDL_Window* sdl_window);
 
+void init_font(Font_State* font, double dpi_scale);
 void close_font(Font_State* font);
 void resize_font(int font_size, double dpi_scale, Font_State* font);
 
