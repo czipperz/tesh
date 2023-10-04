@@ -3056,8 +3056,6 @@ int actual_main(int argc, char** argv) {
     // Main loop
     ////////////////////////////////////////////////////////
 
-    Pane_State* pane = tesh.panes[0];
-
     while (1) {
         uint32_t start_frame = SDL_GetTicks();
 
