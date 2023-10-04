@@ -300,7 +300,6 @@ void load_cursors(Window_State* window) {
 
 static void make_info(cz::String* info,
                       Render_State* rend,
-                      Shell_State* shell,
                       Backlog_State* backlog,
                       uint64_t first_line_index,
                       std::chrono::steady_clock::time_point now) {
@@ -487,7 +486,7 @@ bool render_backlog(SDL_Surface* window_surface,
     uint32_t background = SDL_MapRGB(window_surface->format, bg_color.r, bg_color.g, bg_color.b);
 
     cz::String info = {};
-    make_info(&info, rend, shell, backlog, point->inner, now);
+    make_info(&info, rend, backlog, point->inner, now);
     bool info_has_start = false, info_has_end = false;
     Visual_Point info_start = {}, info_end = {};
     int info_y = point->y;
