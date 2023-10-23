@@ -1,0 +1,25 @@
+name: Build
+
+on:
+  push:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v2
+
+    - name: Install dependencies
+      run: |
+        git submodule init
+        git submodule update
+        sudo apt-get update
+        sudo apt-get install -y cmake g++ libsdl2-dev libsdl2-image-dev libsdl2-ttf-dev
+        cmake --version
+        g++ --version
+
+    - name: ./build-debug
+      run: |
+        ./build-debug
