@@ -1256,7 +1256,7 @@ static void expand_arg(const Shell_Local* local,
             if (index < text.len) {
                 char c2 = text[index];
                 if (c2 == '"' || c2 == '\\' || c2 == '`' || c2 == '$' || c2 == ' ' || c2 == '~' ||
-                    c2 == '&' || c2 == '*' || c2 == ':') {
+                    c2 == '&' || c2 == '*' || c2 == ':' || c2 == '(' || c2 == ')') {
                     word->reserve(allocator, 1);
                     word->push(c2);
                     ++index;

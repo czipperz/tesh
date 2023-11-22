@@ -667,7 +667,7 @@ static cz::String deescape(cz::Allocator allocator, cz::Str str) {
         if (i + 1 < str.len && str[i] == '\\') {
             char c2 = str[i + 1];
             if (c2 == '"' || c2 == '\\' || c2 == '`' || c2 == '$' || c2 == ' ' || c2 == '~' ||
-                c2 == '&' || c2 == '*' || c2 == ':') {
+                c2 == '&' || c2 == '*' || c2 == ':' || c2 == '(' || c2 == ')') {
                 string.push(c2);
                 ++i;
             } else if (c2 == '\n') {
