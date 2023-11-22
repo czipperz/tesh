@@ -1741,14 +1741,28 @@ static bool write_selected_backlog_to_file(Shell_State* shell,
 
     if (rend->selected_outer != -1) {
         Backlog_State* backlog = rend->visbacklogs[rend->selected_outer];
-        for (size_t i = 0; i + 1 < backlog->buffers.len; ++i) {
-            cz::Str buffer = {backlog->buffers[i], BACKLOG_BUFFER_SIZE};
+
+        // @PromptBacklogEventIndex
+        Backlog_Event* start = &backlog->events[3];
+        CZ_DEBUG_ASSERT(start->type == BACKLOG_EVENT_START_PROCESS);
+
+        uint64_t start_index = start->index + 1;
+
+        uint64_t outer_start = start_index / BACKLOG_BUFFER_SIZE;
+        uint64_t inner_start = start_index % BACKLOG_BUFFER_SIZE;
+        for (uint64_t outer = outer_start; outer + 1 < backlog->buffers.len; ++outer) {
+            cz::Str buffer = {backlog->buffers[outer] + inner_start,
+                              BACKLOG_BUFFER_SIZE - inner_start};
             int64_t result = file.write(buffer);
             if (result != buffer.len)
                 return false;
+            inner_start = 0;
         }
-        if (backlog->buffers.len > 0) {
-            cz::Str buffer = {backlog->buffers.last(), backlog->length % BACKLOG_BUFFER_SIZE};
+
+        if (outer_start < backlog->buffers.len &&
+            inner_start < backlog->length % BACKLOG_BUFFER_SIZE) {
+            cz::Str buffer = {backlog->buffers.last() + inner_start,
+                              backlog->length % BACKLOG_BUFFER_SIZE - inner_start};
             int64_t result = file.write(buffer);
             if (result != buffer.len)
                 return false;
@@ -2330,12 +2344,18 @@ static int process_events(Tesh_State* tesh) {
                     // Copy the selected backlog.
                     Backlog_State* backlog = rend->visbacklogs[rend->selected_outer];
 
+                    // @PromptBacklogEventIndex
+                    Backlog_Event* start = &backlog->events[3];
+                    CZ_DEBUG_ASSERT(start->type == BACKLOG_EVENT_START_PROCESS);
+
+                    uint64_t start_index = std::min(start->index + 1, backlog->length);
+
                     cz::String clip = {};
                     CZ_DEFER(clip.drop(cz::heap_allocator()));
-                    clip.reserve_exact(cz::heap_allocator(), backlog->length + 1);
+                    clip.reserve_exact(cz::heap_allocator(), backlog->length - start_index + 1);
 
                     // TODO: optimize via appending chunks.
-                    for (uint64_t i = 0; i < backlog->length; ++i) {
+                    for (uint64_t i = start_index; i < backlog->length; ++i) {
                         clip.push(backlog->get(i));
                     }
                     clip.null_terminate();
@@ -3239,7 +3259,6 @@ static bool create_shell(Pane_State* pane, int w, int h) {
 ////////////////////////////////////////////////////////////////////////////////
 // Font initialization
 ////////////////////////////////////////////////////////////////////////////////
-
 
 ////////////////////////////////////////////////////////////////////////////////
 // misc
