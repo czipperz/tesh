@@ -83,15 +83,14 @@ void close_font(Font_State* font) {
 void resize_font(int font_size, double dpi_scale, Font_State* font) {
     ZoneScoped;
     TTF_Font* new_font = NULL;
-    SDL_RWops* font_mem;
     int ptsize = (int)(font_size * dpi_scale);
     if (cfg.font_path.len > 0) {
         new_font = TTF_OpenFont(cfg.font_path.buffer, ptsize);
     }
     if (new_font == NULL) {
         // Load the default font instead.
-        font_mem = SDL_RWFromConstMem(&UbuntuMonoData[0], sizeof(UbuntuMonoData));
-        new_font = TTF_OpenFontRW(font_mem, 0, ptsize);
+        SDL_RWops* font_mem = SDL_RWFromConstMem(&UbuntuMonoData[0], sizeof(UbuntuMonoData));
+        new_font = TTF_OpenFontRW(font_mem, /*freesrc=*/true, ptsize);
     }
     if (new_font) {
         close_font(font);
